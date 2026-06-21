@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "import", "unicorn", "typescript", "oxc", "vitest"],
+  "categories": {
+    "correctness": "error"
+  },
+  "env": {
+    "browser": true,
+    "es2022": true,
+    "node": true
+  },
+  "rules": {
+    "import/no-cycle": "off",
+    "typescript/array-type": "off",
+    "typescript/require-await": "off"
+  },
+  "ignorePatterns": [
+    ".oxlintrc.json",
+    ".oxfmtrc.json",
+    "vite.config.ts",
+    "src/routeTree.gen.ts"
+  ]
+}
