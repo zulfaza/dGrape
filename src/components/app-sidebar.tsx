@@ -1,6 +1,8 @@
 import * as React from "react";
-import { BriefcaseBusiness, Building2, LayoutDashboard, UserRound } from "lucide-react";
+import { Building2, LayoutDashboard, UserRound } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { TerminalIcon } from "@hugeicons/core-free-icons";
 import type { User } from "@workos/authkit-tanstack-react-start";
 
 import { NavUser } from "@/components/nav-user";
@@ -32,11 +34,11 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <div>
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <BriefcaseBusiness className="size-4" />
+                <div className="flex aspect-square size-8 items-center justify-center bg-primary text-primary-foreground">
+                  <HugeiconsIcon icon={TerminalIcon} strokeWidth={2} className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-medium">Job Tracker</span>
+                  <span className="font-semibold tracking-tight">dGrape</span>
                 </div>
               </div>
             </SidebarMenuButton>
