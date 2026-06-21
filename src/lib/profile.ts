@@ -36,6 +36,13 @@ export type EducationEntry = {
   notes: string;
 };
 
+export type ProjectEntry = {
+  id: string;
+  title: string;
+  description: string;
+  link: string;
+};
+
 export type { ProfileLinkType };
 export { PROFILE_LINK_TYPES };
 
@@ -55,6 +62,7 @@ export type UserProfile = {
   links: ProfileLinkEntry[];
   skills: string[];
   experience: ExperienceEntry[];
+  projects: ProjectEntry[];
   educations: EducationEntry[];
 };
 
@@ -79,6 +87,11 @@ export type ImportedProfile = {
     start: string;
     end: string;
     tasks: Array<{ text: string }>;
+  }>;
+  projects?: Array<{
+    title: string;
+    description: string;
+    link?: string;
   }>;
   educations: Array<{
     institution: string;
@@ -110,6 +123,12 @@ export function profileFromImported(imported: ImportedProfile): UserProfile {
         text: task.text,
       })),
     })),
+    projects: (imported.projects ?? []).map((entry) => ({
+      id: crypto.randomUUID(),
+      title: entry.title,
+      description: entry.description,
+      link: entry.link ?? "",
+    })),
     educations: imported.educations.map((entry) => ({
       id: crypto.randomUUID(),
       institution: entry.institution,
@@ -132,6 +151,7 @@ export function emptyProfile(): UserProfile {
     links: [],
     skills: [],
     experience: [],
+    projects: [],
     educations: [],
   };
 }
@@ -221,6 +241,15 @@ export const DUMMY_PROFILE: UserProfile = {
       ],
     },
   ],
+  projects: [
+    {
+      id: "project-portfolio",
+      title: "Portfolio automation",
+      description:
+        "Built a content pipeline that turns case-study notes into polished portfolio pages.",
+      link: "https://alexrivera.dev/projects/portfolio-automation",
+    },
+  ],
   educations: [
     {
       id: "edu-berkeley",
@@ -279,6 +308,15 @@ export function createLinkEntry(usedLabels: ProfileLinkType[] = []): ProfileLink
     id: crypto.randomUUID(),
     label,
     url: "",
+  };
+}
+
+export function createProjectEntry(): ProjectEntry {
+  return {
+    id: crypto.randomUUID(),
+    title: "",
+    description: "",
+    link: "",
   };
 }
 

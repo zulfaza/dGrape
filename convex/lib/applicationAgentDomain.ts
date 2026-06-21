@@ -74,6 +74,13 @@ const educationEntrySchema = z.object({
   notes: z.string(),
 });
 
+const projectEntrySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  link: z.string(),
+});
+
 const skillGroupSchema = z.object({
   label: z.string(),
   skills: z.array(z.string()),
@@ -90,6 +97,7 @@ export const userProfileSchema = z.object({
   skills: z.array(z.string()),
   skillGroups: z.array(skillGroupSchema),
   experience: z.array(experienceEntrySchema),
+  projects: z.array(projectEntrySchema),
   educations: z.array(educationEntrySchema),
 });
 

@@ -33,12 +33,13 @@ export function MonthPickerField({
   const selectedMonth = parseMonthValue(value);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="relative w-full">
       <Popover onOpenChange={setOpen} open={open}>
         <PopoverTrigger asChild>
           <Button
             className={cn(
               "w-full justify-start text-left font-normal",
+              clearable && value && "pr-10",
               !value && "text-muted-foreground",
               className,
             )}
@@ -65,6 +66,7 @@ export function MonthPickerField({
       {clearable && value ? (
         <Button
           aria-label="Clear month"
+          className="absolute top-1/2 right-1 -translate-y-1/2"
           onClick={() => onChange("")}
           size="icon-sm"
           type="button"

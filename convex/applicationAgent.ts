@@ -69,13 +69,14 @@ export const getThread = query({
             ...draft.artifact,
             profileSnapshot: {
               ...draft.artifact.profileSnapshot,
-              experience: draft.artifact.profileSnapshot.experience.map((entry) => ({
-                ...entry,
-                role: entry.role ?? "",
-              })),
-            },
-          },
-          savedVersionId: version?._id,
+          experience: draft.artifact.profileSnapshot.experience.map((entry) => ({
+            ...entry,
+            role: entry.role ?? "",
+          })),
+          projects: draft.artifact.profileSnapshot.projects ?? [],
+        },
+      },
+      savedVersionId: version?._id,
         };
       }),
     );
@@ -268,6 +269,7 @@ export const getTailoredCvVersion = query({
           ...entry,
           role: entry.role ?? "",
         })),
+        projects: version.profileSnapshot.projects ?? [],
       },
       versionNumber: ordered.findIndex((candidate) => candidate._id === version._id) + 1,
     };
@@ -393,6 +395,7 @@ export const getGenerationContext = internalQuery({
             role: entry.role ?? "",
             position: entry.position ?? "",
           })),
+          projects: profile.projects ?? [],
           educations: profile.educations,
         }
       : null;
@@ -406,6 +409,7 @@ export const getGenerationContext = internalQuery({
               ...entry,
               role: entry.role ?? "",
             })),
+            projects: latestDraft.artifact.profileSnapshot.projects ?? [],
           }
         : savedProfile;
     const conversation = messages

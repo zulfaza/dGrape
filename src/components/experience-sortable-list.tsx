@@ -22,6 +22,7 @@ import { MonthPickerField } from "#/components/month-picker-field.tsx";
 import { Button } from "#/components/ui/button.tsx";
 import { Input } from "#/components/ui/input.tsx";
 import { Label } from "#/components/ui/label.tsx";
+import { Textarea } from "#/components/ui/textarea.tsx";
 import {
   Select,
   SelectContent,
@@ -186,70 +187,80 @@ function ExperienceCard({
         </Button>
       </div>
       <div className="grid gap-4">
-        <Field label="Company" htmlFor={`experience-company-${entry.id}`}>
-          <Input
-            className={inputClassName}
-            id={`experience-company-${entry.id}`}
-            onChange={(event) =>
-              updateExperience(setProfile, entry.id, "company", event.target.value)
-            }
-            value={entry.company}
-          />
-        </Field>
-        <Field label="Company description" htmlFor={`experience-company-description-${entry.id}`}>
-          <Input
-            className={inputClassName}
-            id={`experience-company-description-${entry.id}`}
-            onChange={(event) =>
-              updateExperience(setProfile, entry.id, "companyDescription", event.target.value)
-            }
-            placeholder="e.g. SaaS platform for remote teams"
-            value={entry.companyDescription}
-          />
-        </Field>
-        <Field label="Position" htmlFor={`experience-role-${entry.id}`}>
-          <Input
-            className={inputClassName}
-            id={`experience-role-${entry.id}`}
-            onChange={(event) => updateExperience(setProfile, entry.id, "role", event.target.value)}
-            placeholder="e.g. Full Stack Engineer"
-            value={entry.role}
-          />
-        </Field>
-        <Field label="Job type" htmlFor={`experience-position-${entry.id}`}>
-          <Select
-            onValueChange={(value) =>
-              updateExperience(setProfile, entry.id, "position", normalizeExperiencePosition(value))
-            }
-            value={entry.position || undefined}
-          >
-            <SelectTrigger
-              aria-label={`Experience ${index + 1} job type`}
-              className={`${inputClassName} w-full`}
-              id={`experience-position-${entry.id}`}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Company" htmlFor={`experience-company-${entry.id}`}>
+            <Input
+              className={inputClassName}
+              id={`experience-company-${entry.id}`}
+              onChange={(event) =>
+                updateExperience(setProfile, entry.id, "company", event.target.value)
+              }
+              placeholder="e.g. Upsell.is"
+              value={entry.company}
+            />
+          </Field>
+          <Field label="Company description" htmlFor={`experience-company-description-${entry.id}`}>
+            <Input
+              className={inputClassName}
+              id={`experience-company-description-${entry.id}`}
+              onChange={(event) =>
+                updateExperience(setProfile, entry.id, "companyDescription", event.target.value)
+              }
+              placeholder="e.g. Headless ordering platform"
+              value={entry.companyDescription}
+            />
+          </Field>
+          <Field label="Position" htmlFor={`experience-role-${entry.id}`}>
+            <Input
+              className={inputClassName}
+              id={`experience-role-${entry.id}`}
+              onChange={(event) =>
+                updateExperience(setProfile, entry.id, "role", event.target.value)
+              }
+              placeholder="e.g. Full Stack Software Engineer"
+              value={entry.role}
+            />
+          </Field>
+          <Field label="Job type" htmlFor={`experience-position-${entry.id}`}>
+            <Select
+              onValueChange={(value) =>
+                updateExperience(
+                  setProfile,
+                  entry.id,
+                  "position",
+                  normalizeExperiencePosition(value),
+                )
+              }
+              value={entry.position || undefined}
             >
-              <SelectValue placeholder="Select job type" />
-            </SelectTrigger>
-            <SelectContent>
-              {EXPERIENCE_POSITION_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {EXPERIENCE_POSITION_OPTIONS[type]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Location" htmlFor={`experience-location-${entry.id}`}>
-          <Input
-            className={inputClassName}
-            id={`experience-location-${entry.id}`}
-            onChange={(event) =>
-              updateExperience(setProfile, entry.id, "location", event.target.value)
-            }
-            placeholder="e.g. San Francisco, CA or Remote"
-            value={entry.location}
-          />
-        </Field>
+              <SelectTrigger
+                aria-label={`Experience ${index + 1} job type`}
+                className={`${inputClassName} w-full`}
+                id={`experience-position-${entry.id}`}
+              >
+                <SelectValue placeholder="Select job type" />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPERIENCE_POSITION_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {EXPERIENCE_POSITION_OPTIONS[type]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Location" htmlFor={`experience-location-${entry.id}`}>
+            <Input
+              className={inputClassName}
+              id={`experience-location-${entry.id}`}
+              onChange={(event) =>
+                updateExperience(setProfile, entry.id, "location", event.target.value)
+              }
+              placeholder="e.g. Iceland, Indonesia, or Remote"
+              value={entry.location}
+            />
+          </Field>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Start" htmlFor={`experience-start-${entry.id}`}>
             <MonthPickerField
@@ -403,13 +414,14 @@ function SortableTaskRow({
       >
         <GripVertical className="size-4" />
       </Button>
-      <Input
+      <Textarea
         aria-label={`Task ${taskIndex + 1} for ${roleLabel}`}
-        className={inputClassName}
+        className={`${inputClassName} min-h-16 resize-y py-2 leading-6`}
         onChange={(event) =>
           updateExperienceTask(setProfile, experienceId, task.id, event.target.value)
         }
         placeholder="Describe a responsibility or achievement"
+        rows={2}
         value={task.text}
       />
       <Button

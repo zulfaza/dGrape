@@ -55,6 +55,13 @@ const educationEntryValidator = v.object({
   notes: v.string(),
 });
 
+const projectEntryValidator = v.object({
+  id: v.string(),
+  title: v.string(),
+  description: v.string(),
+  link: v.string(),
+});
+
 const profileLinkEntryValidator = v.object({
   id: v.string(),
   label: profileLinkTypeValidator,
@@ -77,6 +84,7 @@ export const userProfileValidator = v.object({
   skills: v.optional(v.array(v.string())),
   skillGroups: v.optional(v.array(skillGroupValidator)),
   experience: v.array(experienceEntryValidator),
+  projects: v.optional(v.array(projectEntryValidator)),
   educations: v.array(educationEntryValidator),
 });
 
@@ -91,6 +99,7 @@ export const profileDocumentValidator = v.object({
   links: v.array(profileLinkEntryValidator),
   skills: v.optional(v.array(v.string())),
   experience: v.array(storedExperienceEntryValidator),
+  projects: v.optional(v.array(projectEntryValidator)),
   educations: v.array(educationEntryValidator),
   createdAt: v.number(),
   updatedAt: v.number(),

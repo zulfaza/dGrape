@@ -78,6 +78,7 @@ export const get = query({
         role: entry.role ?? "",
         position: entry.position ?? "",
       })),
+      projects: profile.projects ?? [],
       educations: profile.educations,
     };
   },
@@ -96,6 +97,7 @@ export const save = mutation({
 
     const storedProfile = {
       ...profile,
+      projects: (profile.projects ?? []).map(normalizeProjectEntry),
       experience: profile.experience.map((entry) => ({
         ...entry,
         role: entry.role?.trim() ?? "",
@@ -156,3 +158,22 @@ export const importFromCv = action({
     };
   },
 });
+
+function normalizeProjectEntry(entry: {
+  id: string;
+  title: string;
+  description: string;
+  link: string;
+}) {
+  const title = entry.title.trim();
+  const description = entry.description.trim();
+  if (!title || !description) {
+    throw new Error("Project title and description are required");
+  }
+  return {
+    ...entry,
+    title,
+    description,
+    link: entry.link.trim(),
+  };
+}
