@@ -34,14 +34,16 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardLayout() {
   const { user } = Route.useLoaderData()
-  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  })
   const pageTitle = pathname.startsWith("/dashboard/applications/")
     ? "Application detail"
-    : DASHBOARD_PAGE_TITLES[pathname] ?? "Dashboard"
+    : (DASHBOARD_PAGE_TITLES[pathname] ?? "Dashboard")
   return (
     <SidebarProvider>
       <AppSidebar user={user} />
-      <SidebarInset>
+      <SidebarInset className="h-svh min-h-0 overflow-x-hidden">
         <header className="flex h-16 shrink-0 items-center gap-2">
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
