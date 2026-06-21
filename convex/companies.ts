@@ -146,24 +146,26 @@ export const merge = mutation({
     ) {
       throw new Error("Company has aliases from another user")
     }
-    if (
-      sourceApplications.some((sourceApplication) =>
-        applications.some(
-          (application) =>
-            application.userId === userId &&
-            application.companyId === target._id &&
-            application.normalizedPosition ===
-              sourceApplication.normalizedPosition
-        )
-      )
-    ) {
-      throw new Error("Merge duplicate applications first")
-    }
-
     for (const application of sourceApplications) {
-      await ctx.db.patch(application._id, { companyId: target._id })
+      const targetApplication = applications.find(
+        (candidate) =>
+          candidate.userId === userId &&
+          candidate.companyId === target._id &&
+          candidate.normalizedPosition === application.normalizedPosition
+      )
+      if (targetApplication) {
+        await mergeApplicationIntoTargetCompanyApplication(
+          ctx,
+          application,
+          targetApplication,
+          target._id
+        )
+      } else {
+        await ctx.db.patch(application._id, { companyId: target._id })
+      }
     }
-    for (const alias of aliases.filter(
+    const remainingAliases = await ctx.db.query("applicationAliases").collect()
+    for (const alias of remainingAliases.filter(
       (candidate) =>
         candidate.userId === userId && candidate.companyId === source._id
     )) {
@@ -293,4 +295,144 @@ async function moveAlias(
     return
   }
   await ctx.db.patch(alias._id, { companyId: targetCompanyId })
+}
+
+async function mergeApplicationIntoTargetCompanyApplication(
+  ctx: MutationCtx,
+  source: Doc<"applications">,
+  target: Doc<"applications">,
+  targetCompanyId: Id<"companies">
+) {
+  const aliases = await ctx.db
+    .query("applicationAliases")
+    .withIndex("by_application", (q) => q.eq("applicationId", source._id))
+    .collect()
+  for (const alias of aliases) {
+    await moveApplicationAlias(ctx, alias, targetCompanyId, target._id)
+  }
+
+  const events = await ctx.db
+    .query("applicationEvents")
+    .withIndex("by_application", (q) => q.eq("applicationId", source._id))
+    .collect()
+  for (const event of events) {
+    const duplicate = await ctx.db
+      .query("applicationEvents")
+      .withIndex("by_application_source_type_date", (q) =>
+        q
+          .eq("applicationId", target._id)
+          .eq("sourceEmailId", event.sourceEmailId)
+          .eq("type", event.type)
+          .eq("date", event.date)
+      )
+      .unique()
+    if (duplicate) {
+      await ctx.db.delete(event._id)
+    } else {
+      await ctx.db.patch(event._id, { applicationId: target._id })
+    }
+  }
+
+  await reassignApplicationAgentData(ctx, source._id, target._id)
+  await ctx.db.delete(source._id)
+  await syncMergedApplication(ctx, target, source)
+}
+
+async function moveApplicationAlias(
+  ctx: MutationCtx,
+  alias: Doc<"applicationAliases">,
+  targetCompanyId: Id<"companies">,
+  targetApplicationId: Id<"applications">
+) {
+  const duplicate = await ctx.db
+    .query("applicationAliases")
+    .withIndex("by_user_company_position", (q) =>
+      q
+        .eq("userId", alias.userId)
+        .eq("companyId", targetCompanyId)
+        .eq("normalizedPosition", alias.normalizedPosition)
+    )
+    .unique()
+  if (duplicate) {
+    await ctx.db.delete(alias._id)
+    return
+  }
+  await ctx.db.patch(alias._id, {
+    applicationId: targetApplicationId,
+    companyId: targetCompanyId,
+  })
+}
+
+async function reassignApplicationAgentData(
+  ctx: MutationCtx,
+  sourceApplicationId: Id<"applications">,
+  targetApplicationId: Id<"applications">
+) {
+  const [threads, drafts, versions] = await Promise.all([
+    ctx.db
+      .query("applicationAgentThreads")
+      .withIndex("by_application", (q) =>
+        q.eq("applicationId", sourceApplicationId)
+      )
+      .collect(),
+    ctx.db
+      .query("tailoredCvDrafts")
+      .withIndex("by_application", (q) =>
+        q.eq("applicationId", sourceApplicationId)
+      )
+      .collect(),
+    ctx.db
+      .query("tailoredCvVersions")
+      .withIndex("by_application", (q) =>
+        q.eq("applicationId", sourceApplicationId)
+      )
+      .collect(),
+  ])
+  await Promise.all([
+    ...threads.map((thread) =>
+      ctx.db.patch(thread._id, { applicationId: targetApplicationId })
+    ),
+    ...drafts.map((draft) =>
+      ctx.db.patch(draft._id, { applicationId: targetApplicationId })
+    ),
+    ...versions.map((version) =>
+      ctx.db.patch(version._id, { applicationId: targetApplicationId })
+    ),
+  ])
+}
+
+async function syncMergedApplication(
+  ctx: MutationCtx,
+  target: Doc<"applications">,
+  source: Doc<"applications">
+) {
+  const events = await ctx.db
+    .query("applicationEvents")
+    .withIndex("by_application", (q) => q.eq("applicationId", target._id))
+    .collect()
+  const orderedEvents = events
+    .slice()
+    .sort((left, right) => left.date - right.date)
+  const firstEvent = orderedEvents[0]
+  const lastEvent = orderedEvents[orderedEvents.length - 1]
+  if (firstEvent && lastEvent) {
+    await ctx.db.patch(target._id, {
+      status: lastEvent.type,
+      appliedOn:
+        orderedEvents.find((event) => event.type === "Applied")?.date ??
+        firstEvent.date,
+      lastUpdate: lastEvent.date,
+    })
+    return
+  }
+
+  const latest = source.lastUpdate > target.lastUpdate ? source : target
+  const appliedDates = [target.appliedOn, source.appliedOn].flatMap((date) =>
+    date === undefined ? [] : [date]
+  )
+  await ctx.db.patch(target._id, {
+    status: latest.status,
+    appliedOn: appliedDates.length > 0 ? Math.min(...appliedDates) : undefined,
+    lastUpdate: latest.lastUpdate,
+  })
 }
