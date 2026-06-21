@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo } from "react"
 import {
   DndContext,
   type DragEndEvent,
@@ -7,83 +7,101 @@ import {
   closestCenter,
   useSensor,
   useSensors,
-} from "@dnd-kit/core";
+} from "@dnd-kit/core"
 import {
   SortableContext,
   arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { GripVertical, Plus, Trash2 } from "lucide-react"
 
-import { MonthPickerField } from "#/components/month-picker-field.tsx";
-import { Button } from "#/components/ui/button.tsx";
-import { Input } from "#/components/ui/input.tsx";
-import { Label } from "#/components/ui/label.tsx";
-import { Textarea } from "#/components/ui/textarea.tsx";
+import { MonthPickerField } from "#/components/month-picker-field.tsx"
+import { Button } from "#/components/ui/button.tsx"
+import { Input } from "#/components/ui/input.tsx"
+import { Label } from "#/components/ui/label.tsx"
+import { Textarea } from "#/components/ui/textarea.tsx"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "#/components/ui/select.tsx";
+} from "#/components/ui/select.tsx"
 import {
   EXPERIENCE_POSITION_OPTIONS,
   EXPERIENCE_POSITION_TYPES,
   normalizeExperiencePosition,
-} from "#/lib/experience-position.ts";
-import { parseMonthValue } from "#/lib/month.ts";
+} from "#/lib/experience-position.ts"
+import { parseMonthValue } from "#/lib/month.ts"
 import {
   createExperienceEntry,
   type ExperienceEntry,
   type ExperienceTask,
   type UserProfile,
-} from "#/lib/profile.ts";
+} from "#/lib/profile.ts"
+import { cn } from "@/lib/utils"
 
-const inputClassName = "bg-background";
+const inputClassName = "bg-background"
 
 function useSortableSensors() {
   return useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 }
 
 type ExperienceSortableListProps = {
-  experience: ExperienceEntry[];
-  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
-};
+  experience: ExperienceEntry[]
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>
+}
 
-export function ExperienceSortableList({ experience, setProfile }: ExperienceSortableListProps) {
-  const experienceIds = useMemo(() => experience.map((entry) => entry.id), [experience]);
-  const sensors = useSortableSensors();
+export function ExperienceSortableList({
+  experience,
+  setProfile,
+}: ExperienceSortableListProps) {
+  const experienceIds = useMemo(
+    () => experience.map((entry) => entry.id),
+    [experience]
+  )
+  const sensors = useSortableSensors()
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
+    const { active, over } = event
     if (!over || active.id === over.id) {
-      return;
+      return
     }
 
     setProfile((current) => {
-      const oldIndex = current.experience.findIndex((entry) => entry.id === active.id);
-      const newIndex = current.experience.findIndex((entry) => entry.id === over.id);
+      const oldIndex = current.experience.findIndex(
+        (entry) => entry.id === active.id
+      )
+      const newIndex = current.experience.findIndex(
+        (entry) => entry.id === over.id
+      )
       if (oldIndex === -1 || newIndex === -1) {
-        return current;
+        return current
       }
 
       return {
         ...current,
         experience: arrayMove(current.experience, oldIndex, newIndex),
-      };
-    });
-  };
+      }
+    })
+  }
 
   return (
-    <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} sensors={sensors}>
-      <SortableContext items={experienceIds} strategy={verticalListSortingStrategy}>
+    <DndContext
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+      sensors={sensors}
+    >
+      <SortableContext
+        items={experienceIds}
+        strategy={verticalListSortingStrategy}
+      >
         <div className="flex flex-col gap-4">
           {experience.map((entry, index) => (
             <SortableExperienceCard
@@ -106,7 +124,7 @@ export function ExperienceSortableList({ experience, setProfile }: ExperienceSor
         Add experience
       </Button>
     </DndContext>
-  );
+  )
 }
 
 function SortableExperienceCard({
@@ -114,18 +132,25 @@ function SortableExperienceCard({
   index,
   setProfile,
 }: {
-  entry: ExperienceEntry;
-  index: number;
-  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
+  entry: ExperienceEntry
+  index: number
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: entry.id,
-  });
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-  };
+  }
 
   return (
     <div
@@ -142,7 +167,7 @@ function SortableExperienceCard({
         setProfile={setProfile}
       />
     </div>
-  );
+  )
 }
 
 function ExperienceCard({
@@ -153,12 +178,12 @@ function ExperienceCard({
   dragHandleProps,
   dragHandleLabel,
 }: {
-  entry: ExperienceEntry;
-  index: number;
-  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
-  onRemove: () => void;
-  dragHandleProps: React.HTMLAttributes<HTMLButtonElement>;
-  dragHandleLabel: string;
+  entry: ExperienceEntry
+  index: number
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>
+  onRemove: () => void
+  dragHandleProps: React.HTMLAttributes<HTMLButtonElement>
+  dragHandleLabel: string
 }) {
   return (
     <article className="rounded-md border border-border bg-background p-4">
@@ -174,7 +199,9 @@ function ExperienceCard({
           >
             <GripVertical />
           </Button>
-          <p className="text-sm font-medium text-foreground">Role {index + 1}</p>
+          <p className="text-sm font-medium text-foreground">
+            Role {index + 1}
+          </p>
         </div>
         <Button
           aria-label={`Remove experience ${index + 1}`}
@@ -193,18 +220,31 @@ function ExperienceCard({
               className={inputClassName}
               id={`experience-company-${entry.id}`}
               onChange={(event) =>
-                updateExperience(setProfile, entry.id, "company", event.target.value)
+                updateExperience(
+                  setProfile,
+                  entry.id,
+                  "company",
+                  event.target.value
+                )
               }
               placeholder="e.g. Upsell.is"
               value={entry.company}
             />
           </Field>
-          <Field label="Company description" htmlFor={`experience-company-description-${entry.id}`}>
+          <Field
+            label="Company description"
+            htmlFor={`experience-company-description-${entry.id}`}
+          >
             <Input
               className={inputClassName}
               id={`experience-company-description-${entry.id}`}
               onChange={(event) =>
-                updateExperience(setProfile, entry.id, "companyDescription", event.target.value)
+                updateExperience(
+                  setProfile,
+                  entry.id,
+                  "companyDescription",
+                  event.target.value
+                )
               }
               placeholder="e.g. Headless ordering platform"
               value={entry.companyDescription}
@@ -215,7 +255,12 @@ function ExperienceCard({
               className={inputClassName}
               id={`experience-role-${entry.id}`}
               onChange={(event) =>
-                updateExperience(setProfile, entry.id, "role", event.target.value)
+                updateExperience(
+                  setProfile,
+                  entry.id,
+                  "role",
+                  event.target.value
+                )
               }
               placeholder="e.g. Full Stack Software Engineer"
               value={entry.role}
@@ -228,7 +273,7 @@ function ExperienceCard({
                   setProfile,
                   entry.id,
                   "position",
-                  normalizeExperiencePosition(value),
+                  normalizeExperiencePosition(value)
                 )
               }
               value={entry.position || undefined}
@@ -254,7 +299,12 @@ function ExperienceCard({
               className={inputClassName}
               id={`experience-location-${entry.id}`}
               onChange={(event) =>
-                updateExperience(setProfile, entry.id, "location", event.target.value)
+                updateExperience(
+                  setProfile,
+                  entry.id,
+                  "location",
+                  event.target.value
+                )
               }
               placeholder="e.g. Iceland, Indonesia, or Remote"
               value={entry.location}
@@ -267,7 +317,9 @@ function ExperienceCard({
               className={inputClassName}
               id={`experience-start-${entry.id}`}
               maxDate={parseMonthValue(entry.end)}
-              onChange={(value) => updateExperience(setProfile, entry.id, "start", value)}
+              onChange={(value) =>
+                updateExperience(setProfile, entry.id, "start", value)
+              }
               value={entry.start}
             />
           </Field>
@@ -277,7 +329,9 @@ function ExperienceCard({
               clearable
               id={`experience-end-${entry.id}`}
               minDate={parseMonthValue(entry.start)}
-              onChange={(value) => updateExperience(setProfile, entry.id, "end", value)}
+              onChange={(value) =>
+                updateExperience(setProfile, entry.id, "end", value)
+              }
               placeholder="Leave empty if current"
               value={entry.end}
             />
@@ -291,7 +345,7 @@ function ExperienceCard({
         />
       </div>
     </article>
-  );
+  )
 }
 
 function TaskSortableList({
@@ -300,49 +354,53 @@ function TaskSortableList({
   tasks,
   setProfile,
 }: {
-  experienceId: string;
-  company: string;
-  tasks: ExperienceTask[];
-  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
+  experienceId: string
+  company: string
+  tasks: ExperienceTask[]
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>
 }) {
-  const taskIds = useMemo(() => tasks.map((task) => task.id), [tasks]);
-  const sensors = useSortableSensors();
-  const roleLabel = company || "role";
+  const taskIds = useMemo(() => tasks.map((task) => task.id), [tasks])
+  const sensors = useSortableSensors()
+  const roleLabel = company || "role"
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
+    const { active, over } = event
     if (!over || active.id === over.id) {
-      return;
+      return
     }
 
     setProfile((current) => ({
       ...current,
       experience: current.experience.map((entry) => {
         if (entry.id !== experienceId) {
-          return entry;
+          return entry
         }
 
-        const oldIndex = entry.tasks.findIndex((task) => task.id === active.id);
-        const newIndex = entry.tasks.findIndex((task) => task.id === over.id);
+        const oldIndex = entry.tasks.findIndex((task) => task.id === active.id)
+        const newIndex = entry.tasks.findIndex((task) => task.id === over.id)
         if (oldIndex === -1 || newIndex === -1) {
-          return entry;
+          return entry
         }
 
-        return { ...entry, tasks: arrayMove(entry.tasks, oldIndex, newIndex) };
+        return { ...entry, tasks: arrayMove(entry.tasks, oldIndex, newIndex) }
       }),
-    }));
-  };
+    }))
+  }
 
   return (
     <div className="grid gap-3">
       <div>
         <Label>Tasks</Label>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Add task as much as you want, it will be selected based on job description later in CV
-          generation.
+          Add task as much as you want, it will be selected based on job
+          description later in CV generation.
         </p>
       </div>
-      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} sensors={sensors}>
+      <DndContext
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+        sensors={sensors}
+      >
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
           <ul className="flex flex-col gap-2">
             {tasks.map((task, taskIndex) => (
@@ -370,7 +428,7 @@ function TaskSortableList({
         Add task
       </Button>
     </div>
-  );
+  )
 }
 
 function SortableTaskRow({
@@ -381,62 +439,81 @@ function SortableTaskRow({
   canRemove,
   setProfile,
 }: {
-  experienceId: string;
-  task: ExperienceTask;
-  taskIndex: number;
-  roleLabel: string;
-  canRemove: boolean;
-  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
+  experienceId: string
+  task: ExperienceTask
+  taskIndex: number
+  roleLabel: string
+  canRemove: boolean
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: task.id,
-  });
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-  };
+  }
 
   return (
     <li
-      className={isDragging ? "relative z-10 flex gap-2 opacity-80" : "flex gap-2"}
+      className={cn(
+        isDragging ? "relative z-10 flex gap-2 opacity-80" : "flex gap-2",
+        "items-center"
+      )}
       ref={setNodeRef}
       style={style}
     >
-      <Button
-        {...attributes}
-        {...listeners}
-        aria-label={`Reorder task ${taskIndex + 1} for ${roleLabel}`}
-        className="mt-0.5 shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing"
-        size="icon-sm"
-        type="button"
-        variant="ghost"
-      >
-        <GripVertical className="size-4" />
-      </Button>
+      <div className="flex-0">
+        <Button
+          {...attributes}
+          {...listeners}
+          aria-label={`Reorder task ${taskIndex + 1} for ${roleLabel}`}
+          className="cursor-grab text-muted-foreground active:cursor-grabbing"
+          size="icon"
+          type="button"
+          variant="ghost"
+        >
+          <GripVertical className="size-4" />
+        </Button>
+        <Button
+          aria-label={`Remove task ${taskIndex + 1}`}
+          disabled={!canRemove}
+          onClick={() =>
+            removeExperienceTask(setProfile, experienceId, task.id)
+          }
+          size="icon"
+          type="button"
+          variant="ghost"
+        >
+          <Trash2 className="text-muted-foreground size-4" />
+        </Button>
+      </div>
       <Textarea
+        containerClassName="w-full"
         aria-label={`Task ${taskIndex + 1} for ${roleLabel}`}
-        className={`${inputClassName} min-h-16 resize-y py-2 leading-6`}
+        className={`${inputClassName} min-h-10 flex-1 resize-y py-2 leading-6`}
         onChange={(event) =>
-          updateExperienceTask(setProfile, experienceId, task.id, event.target.value)
+          updateExperienceTask(
+            setProfile,
+            experienceId,
+            task.id,
+            event.target.value
+          )
         }
         placeholder="Describe a responsibility or achievement"
         rows={2}
         value={task.text}
       />
-      <Button
-        aria-label={`Remove task ${taskIndex + 1}`}
-        className="shrink-0"
-        disabled={!canRemove}
-        onClick={() => removeExperienceTask(setProfile, experienceId, task.id)}
-        size="icon"
-        type="button"
-        variant="ghost"
-      >
-        <Trash2 className="text-muted-foreground" />
-      </Button>
     </li>
-  );
+  )
 }
 
 function Field({
@@ -444,95 +521,105 @@ function Field({
   htmlFor,
   children,
 }: {
-  label: string;
-  htmlFor: string;
-  children: React.ReactNode;
+  label: string
+  htmlFor: string
+  children: React.ReactNode
 }) {
   return (
     <div className="grid gap-2">
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
     </div>
-  );
+  )
 }
 
 function updateExperience(
   setProfile: React.Dispatch<React.SetStateAction<UserProfile>>,
   id: string,
   field: keyof Omit<ExperienceEntry, "id" | "tasks">,
-  value: string,
+  value: string
 ) {
   setProfile((current) => ({
     ...current,
     experience: current.experience.map((entry) =>
-      entry.id === id ? { ...entry, [field]: value } : entry,
+      entry.id === id ? { ...entry, [field]: value } : entry
     ),
-  }));
+  }))
 }
 
 function updateExperienceTask(
   setProfile: React.Dispatch<React.SetStateAction<UserProfile>>,
   id: string,
   taskId: string,
-  value: string,
+  value: string
 ) {
   setProfile((current) => ({
     ...current,
     experience: current.experience.map((entry) => {
       if (entry.id !== id) {
-        return entry;
+        return entry
       }
       return {
         ...entry,
-        tasks: entry.tasks.map((task) => (task.id === taskId ? { ...task, text: value } : task)),
-      };
+        tasks: entry.tasks.map((task) =>
+          task.id === taskId ? { ...task, text: value } : task
+        ),
+      }
     }),
-  }));
+  }))
 }
 
-function addExperience(setProfile: React.Dispatch<React.SetStateAction<UserProfile>>) {
+function addExperience(
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>
+) {
   setProfile((current) => ({
     ...current,
     experience: [...current.experience, createExperienceEntry()],
-  }));
+  }))
 }
 
 function removeExperience(
   setProfile: React.Dispatch<React.SetStateAction<UserProfile>>,
-  id: string,
+  id: string
 ) {
   setProfile((current) => ({
     ...current,
     experience: current.experience.filter((entry) => entry.id !== id),
-  }));
+  }))
 }
 
 function addExperienceTask(
   setProfile: React.Dispatch<React.SetStateAction<UserProfile>>,
-  id: string,
+  id: string
 ) {
   setProfile((current) => ({
     ...current,
     experience: current.experience.map((entry) =>
       entry.id === id
-        ? { ...entry, tasks: [...entry.tasks, { id: crypto.randomUUID(), text: "" }] }
-        : entry,
+        ? {
+            ...entry,
+            tasks: [...entry.tasks, { id: crypto.randomUUID(), text: "" }],
+          }
+        : entry
     ),
-  }));
+  }))
 }
 
 function removeExperienceTask(
   setProfile: React.Dispatch<React.SetStateAction<UserProfile>>,
   id: string,
-  taskId: string,
+  taskId: string
 ) {
   setProfile((current) => ({
     ...current,
     experience: current.experience.map((entry) => {
       if (entry.id !== id) {
-        return entry;
+        return entry
       }
-      return { ...entry, tasks: entry.tasks.filter((task) => task.id !== taskId) };
+      return {
+        ...entry,
+        tasks: entry.tasks.filter((task) => task.id !== taskId),
+      }
     }),
-  }));
+  }))
 }

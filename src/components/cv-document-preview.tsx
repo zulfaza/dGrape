@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react"
 
+import { parseInlineMarkdown } from "#/lib/inline-markdown.ts"
+
 type Profile = {
   name: string
   summary: string
@@ -569,57 +571,12 @@ function formatPosition(value: string): string {
 }
 
 function HighlightedText({ text }: { text: string }) {
-  return parseHighlightedText(text).map((segment) =>
-    segment.highlighted ? (
-      <strong key={segment.start}>{segment.text}</strong>
-    ) : (
-      <span key={segment.start}>{segment.text}</span>
-    )
-  )
-}
-
-function parseHighlightedText(text: string) {
-  const segments: Array<{ highlighted: boolean; start: number; text: string }> =
-    []
-  let cursor = 0
-
-  while (cursor < text.length) {
-    const opening = text.indexOf("**", cursor)
-    if (opening === -1) {
-      segments.push({
-        highlighted: false,
-        start: cursor,
-        text: text.slice(cursor),
-      })
-      break
-    }
-    if (opening > cursor) {
-      segments.push({
-        highlighted: false,
-        start: cursor,
-        text: text.slice(cursor, opening),
-      })
-    }
-
-    const closing = text.indexOf("**", opening + 2)
-    if (closing === -1) {
-      segments.push({
-        highlighted: false,
-        start: opening,
-        text: text.slice(opening),
-      })
-      break
-    }
-
-    segments.push({
-      highlighted: true,
-      start: opening,
-      text: text.slice(opening + 2, closing),
-    })
-    cursor = closing + 2
-  }
-
-  return segments
+  return parseInlineMarkdown(text).map((segment) => {
+    let content = <span>{segment.text}</span>
+    if (segment.bold) content = <strong>{content}</strong>
+    if (segment.italic) content = <em>{content}</em>
+    return <span key={segment.start}>{content}</span>
+  })
 }
 
 function formatDateRange(start: string, end: string): string {
