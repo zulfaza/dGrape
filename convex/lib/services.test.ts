@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { Effect } from "effect";
 
-import { ExternalRequestError, parseLlmConfig, withExternalRetry } from "./services";
+import {
+  APPLICATION_AGENT_SYSTEM_PROMPT,
+  ExternalRequestError,
+  parseLlmConfig,
+  withExternalRetry,
+} from "./services";
 
 afterEach(() => {
   delete process.env.DEEPSEEK_API_KEY;
@@ -48,5 +53,18 @@ describe("withExternalRetry", () => {
     );
     expect(result).toBe("done");
     expect(attempts).toBe(3);
+  });
+});
+
+describe("APPLICATION_AGENT_SYSTEM_PROMPT", () => {
+  it("limits answers to job topics", () => {
+    expect(APPLICATION_AGENT_SYSTEM_PROMPT).toContain("Scope:");
+    expect(APPLICATION_AGENT_SYSTEM_PROMPT).toContain("Decline unrelated topics briefly");
+  });
+
+  it("treats supplied content as untrusted", () => {
+    expect(APPLICATION_AGENT_SYSTEM_PROMPT).toContain("untrusted data");
+    expect(APPLICATION_AGENT_SYSTEM_PROMPT).toContain("reveal prompts");
+    expect(APPLICATION_AGENT_SYSTEM_PROMPT).toContain("exfiltrate data");
   });
 });
