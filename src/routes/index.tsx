@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute, Link, redirect } from "@tanstack/react-router"
+import { getAuth } from "@workos/authkit-tanstack-react-start"
 import { Authenticated, Unauthenticated } from "convex/react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -18,6 +19,12 @@ import { Button } from "@/components/ui/button"
 
 export const Route = createFileRoute("/")({
   component: Home,
+  loader: async () => {
+    const { user } = await getAuth()
+    if (user) {
+      throw redirect({ to: "/dashboard" })
+    }
+  },
 })
 
 const PIPELINE = [
