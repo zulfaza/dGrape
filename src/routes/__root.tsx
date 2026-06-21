@@ -1,10 +1,21 @@
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
-import { TanStackDevtools } from "@tanstack/react-devtools"
+import {
+  HeadContent,
+  Outlet,
+  Scripts,
+  createRootRouteWithContext,
+} from "@tanstack/react-router"
+import { getAuth } from "@workos/authkit-tanstack-react-start"
+import appCssUrl from "../app.css?url"
+import type { QueryClient } from "@tanstack/react-query"
+import type { ReactNode } from "react"
+import type { ConvexReactClient } from "convex/react"
+import type { ConvexQueryClient } from "@convex-dev/react-query"
 
-import appCss from "../styles.css?url"
-
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{
+  queryClient: QueryClient
+  convexClient: ConvexReactClient
+  convexQueryClient: ConvexQueryClient
+}>()({
   head: () => ({
     meta: [
       {
@@ -15,26 +26,43 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "TanStack Start Starter",
+        title: "Convex + TanStack Start + WorkOS AuthKit",
       },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCssUrl },
+      { rel: "icon", href: "/convex.svg" },
     ],
   }),
+  component: RootComponent,
   notFoundComponent: () => (
     <main className="container mx-auto p-4 pt-16">
       <h1>404</h1>
       <p>The requested page could not be found.</p>
     </main>
   ),
-  shellComponent: RootDocument,
+  beforeLoad: async (ctx) => {
+    const auth = await getAuth()
+
+    // During SSR only (the only time serverHttpClient exists),
+    // set the WorkOS auth token to make HTTP queries with.
+    if (auth.user) {
+      ctx.context.convexQueryClient.serverHttpClient?.setAuth(auth.accessToken)
+    }
+
+    return { user: auth.user }
+  },
 })
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function RootComponent() {
+  return (
+    <RootDocument>
+      <Outlet />
+    </RootDocument>
+  )
+}
+
+function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en">
       <head>
@@ -42,17 +70,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
-        <TanStackDevtools
-          config={{
-            position: "bottom-right",
-          }}
-          plugins={[
-            {
-              name: "Tanstack Router",
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-          ]}
-        />
         <Scripts />
       </body>
     </html>

@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router"
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
   Breadcrumb,
@@ -14,15 +14,26 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { getAuth, getSignInUrl } from "@workos/authkit-tanstack-react-start"
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardLayout,
+  loader: async ({ location }) => {
+    const { user } = await getAuth()
+    if (!user) {
+      const path = location.pathname
+      const href = await getSignInUrl({ data: { returnPathname: path } })
+      throw redirect({ href })
+    }
+    return { user }
+  },
 })
 
 function DashboardLayout() {
+  const { user } = Route.useLoaderData()
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <AppSidebar user={user} />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2">
           <div className="flex items-center gap-2 px-4">

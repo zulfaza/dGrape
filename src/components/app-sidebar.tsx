@@ -28,6 +28,7 @@ import {
   MapsIcon,
   CommandIcon,
 } from "@hugeicons/core-free-icons"
+import type { User } from "@workos/authkit-tanstack-react-start"
 
 const data = {
   user: {
@@ -152,7 +153,11 @@ const data = {
     },
   ],
 }
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({
+  ...props
+}: React.ComponentProps<typeof Sidebar> & {
+  user: User
+}) {
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
