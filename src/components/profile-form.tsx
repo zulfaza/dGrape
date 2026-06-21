@@ -120,6 +120,15 @@ export function ProfileForm() {
   )
 
   const handleSave = useCallback(async () => {
+    const incompleteProject = profile.projects.some((entry) => {
+      const hasTitle = entry.title.trim() !== ""
+      const hasDescription = entry.description.trim() !== ""
+      return hasTitle !== hasDescription
+    })
+    if (incompleteProject) {
+      setSaveError("Each project needs both a title and a description.")
+      return
+    }
     setSaving(true)
     setSaveError(undefined)
     try {

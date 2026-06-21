@@ -97,7 +97,11 @@ export const save = mutation({
 
     const storedProfile = {
       ...profile,
-      projects: (profile.projects ?? []).map(normalizeProjectEntry),
+      projects: (profile.projects ?? [])
+        .filter(
+          (entry) => entry.title.trim() !== "" || entry.description.trim() !== ""
+        )
+        .map(normalizeProjectEntry),
       experience: profile.experience.map((entry) => ({
         ...entry,
         role: entry.role?.trim() ?? "",
