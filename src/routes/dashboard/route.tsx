@@ -1,15 +1,20 @@
 import {
   createFileRoute,
+  Link,
   Outlet,
   redirect,
   useRouterState,
 } from "@tanstack/react-router"
+import { Fragment } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
+import { NotFound } from "@/components/not-found"
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
+  BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -21,6 +26,7 @@ import { getAuth, getSignInUrl } from "@workos/authkit-tanstack-react-start"
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardLayout,
+  notFoundComponent: () => <NotFound />,
   loader: async ({ location }) => {
     const { user } = await getAuth()
     if (!user) {
@@ -37,9 +43,7 @@ function DashboardLayout() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
-  const pageTitle = pathname.startsWith("/dashboard/applications/")
-    ? "Application detail"
-    : (DASHBOARD_PAGE_TITLES[pathname] ?? "Dashboard")
+  const crumbs = buildBreadcrumbs(pathname)
   return (
     <SidebarProvider>
       <AppSidebar user={user} />
@@ -53,9 +57,23 @@ function DashboardLayout() {
             />
             <Breadcrumb>
               <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
-                </BreadcrumbItem>
+                {crumbs.map((crumb, index) => {
+                  const isLast = index === crumbs.length - 1
+                  return (
+                    <Fragment key={crumb.href}>
+                      <BreadcrumbItem>
+                        {isLast ? (
+                          <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                        ) : (
+                          <BreadcrumbLink asChild>
+                            <Link to={crumb.href}>{crumb.label}</Link>
+                          </BreadcrumbLink>
+                        )}
+                      </BreadcrumbItem>
+                      {!isLast && <BreadcrumbSeparator />}
+                    </Fragment>
+                  )
+                })}
               </BreadcrumbList>
             </Breadcrumb>
           </div>
@@ -70,4 +88,19 @@ const DASHBOARD_PAGE_TITLES: Record<string, string> = {
   "/dashboard/applications": "Applications",
   "/dashboard/companies": "Companies",
   "/dashboard/profile": "Profile",
+}
+
+type Crumb = { label: string; href: string }
+
+function buildBreadcrumbs(pathname: string): Crumb[] {
+  const crumbs: Crumb[] = [{ label: "Dashboard", href: "/dashboard" }]
+  if (pathname.startsWith("/dashboard/applications/")) {
+    crumbs.push(
+      { label: "Applications", href: "/dashboard/applications" },
+      { label: "Application detail", href: pathname },
+    )
+  } else if (pathname !== "/dashboard" && DASHBOARD_PAGE_TITLES[pathname]) {
+    crumbs.push({ label: DASHBOARD_PAGE_TITLES[pathname], href: pathname })
+  }
+  return crumbs
 }

@@ -11,6 +11,7 @@ import type { ReactNode } from "react"
 import type { ConvexReactClient } from "convex/react"
 import type { ConvexQueryClient } from "@convex-dev/react-query"
 import { Toaster } from "@/components/ui/toast"
+import { NotFound } from "@/components/not-found"
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
@@ -94,12 +95,7 @@ export const Route = createRootRouteWithContext<{
     ],
   }),
   component: RootComponent,
-  notFoundComponent: () => (
-    <main className="container mx-auto p-4 pt-16">
-      <h1>404</h1>
-      <p>The requested page could not be found.</p>
-    </main>
-  ),
+  notFoundComponent: () => <NotFound homeHref="/" homeLabel="Back to home" />,
   beforeLoad: async (ctx) => {
     const auth = await getAuth()
 
