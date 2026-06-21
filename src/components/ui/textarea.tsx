@@ -63,7 +63,14 @@ function Textarea({
     const textarea = hiddenTextareaRef.current
     if (!textarea) return
 
-    textarea.value = nextValue
+    // Use the native value setter so React's controlled-input value tracker
+    // registers the change; assigning `textarea.value` directly would update
+    // the tracker and make the dispatched event look like a no-op to React.
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      "value"
+    )?.set
+    nativeSetter?.call(textarea, nextValue)
     textarea.dispatchEvent(new Event("input", { bubbles: true }))
   }, [])
 
