@@ -154,6 +154,7 @@ const data = {
   ],
 }
 export function AppSidebar({
+  user,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   user: User
@@ -185,7 +186,13 @@ export function AppSidebar({
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser
+          user={{
+            name: user.name || [user.firstName, user.lastName].join(" "),
+            email: user.email,
+            avatar: user.profilePictureUrl || "",
+          }}
+        />
       </SidebarFooter>
     </Sidebar>
   )

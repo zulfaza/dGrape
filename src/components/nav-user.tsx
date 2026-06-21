@@ -25,6 +25,7 @@ import {
   NotificationIcon,
   LogoutIcon,
 } from "@hugeicons/core-free-icons"
+import { useNavigate } from "@tanstack/react-router"
 
 export function NavUser({
   user,
@@ -35,6 +36,13 @@ export function NavUser({
     avatar: string
   }
 }) {
+  const navigate = useNavigate()
+  const handleLogout = () => {
+    navigate({
+      to: "/sign-out",
+      reloadDocument: true,
+    })
+  }
   const { isMobile } = useSidebar()
   return (
     <SidebarMenu>
@@ -47,7 +55,9 @@ export function NavUser({
           >
             <Avatar>
               <AvatarImage src={user.avatar} alt={user.name} />
-              <AvatarFallback>CN</AvatarFallback>
+              <AvatarFallback>
+                {user.name ? user.name[0].toUpperCase() : "G"}
+              </AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{user.name}</span>
@@ -102,7 +112,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <HugeiconsIcon icon={LogoutIcon} strokeWidth={2} />
               Log out
             </DropdownMenuItem>
