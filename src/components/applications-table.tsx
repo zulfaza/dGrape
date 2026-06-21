@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, type useQuery } from "convex/react";
+import { useMutation } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { format } from "date-fns";
 import { Merge, Trash2 } from "lucide-react";
 
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { Button } from "#/components/ui/button.tsx";
+import { Skeleton } from "#/components/ui/skeleton.tsx";
 import {
   APPLICATION_STATUSES,
   STATUS_STYLES,
@@ -18,15 +20,15 @@ import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { useSidebar } from "./ui/sidebar";
 
-type Application = NonNullable<
-  ReturnType<typeof useQuery<typeof api.applications.list>>
->[number];
+type Application = FunctionReturnType<typeof api.applications.list>[number];
 
 export function ApplicationsTable({
   applications,
+  loading,
   visibleApplications,
 }: {
   applications: Application[];
+  loading: boolean;
   visibleApplications: Application[];
 }) {
   const { isMobile, state: sidebarState } = useSidebar();
@@ -252,6 +254,7 @@ export function ApplicationsTable({
                   <Checkbox
                     aria-label="Select all visible applications"
                     checked={
+                      !loading &&
                       visibleApplications.length > 0 &&
                       selectedVisibleCount === visibleApplications.length
                         ? true
@@ -259,7 +262,7 @@ export function ApplicationsTable({
                           ? "indeterminate"
                           : false
                     }
-                    disabled={visibleApplications.length === 0}
+                    disabled={loading || visibleApplications.length === 0}
                     onCheckedChange={handleSelectAllChange}
                   />
                 </th>
@@ -270,6 +273,27 @@ export function ApplicationsTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
+              {loading
+                ? Array.from({ length: 5 }, (_, index) => (
+                    <tr className="bg-background" key={index}>
+                      <td className="px-4 py-4">
+                        <Skeleton className="size-4" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-4 w-56 max-w-full" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-4 w-36 max-w-full" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-5 w-20" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-4 w-24" />
+                      </td>
+                    </tr>
+                  ))
+                : null}
               {visibleApplications.map((application) => (
                 <tr
                   className="bg-background transition-colors hover:bg-muted/30"
@@ -309,7 +333,7 @@ export function ApplicationsTable({
             </tbody>
           </table>
         </div>
-        {visibleApplications.length === 0 ? (
+        {!loading && visibleApplications.length === 0 ? (
           <p className="border-t border-border px-4 py-8 text-center text-sm text-muted-foreground">
             No applications match this filter.
           </p>

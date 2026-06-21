@@ -1,6 +1,7 @@
 import { type ChangeEvent, useCallback, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
+import { convexQuery } from "@convex-dev/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 
 import { api } from "../../../../convex/_generated/api";
@@ -20,7 +21,11 @@ function ApplicationsPage() {
     () => new Set<ApplicationStatus>(DEFAULT_STATUS_FILTER),
   );
   const [query, setQuery] = useState("");
-  const applications = useQuery(api.applications.list);
+  const {
+    data: applications,
+    error: applicationsError,
+    isPending: applicationsLoading,
+  } = useQuery(convexQuery(api.applications.list));
   const applicationList = useMemo(() => applications ?? [], [applications]);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredApplications = useMemo(
@@ -71,8 +76,13 @@ function ApplicationsPage() {
         />
       </div>
 
+      {applicationsError ? (
+        <p className="text-sm text-red-300">{applicationsError.message}</p>
+      ) : null}
+
       <ApplicationsTable
         applications={applicationList}
+        loading={applicationsLoading}
         visibleApplications={filteredApplications}
       />
     </main>

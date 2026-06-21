@@ -1,123 +1,161 @@
-import { type ChangeEvent, type FormEvent, useCallback, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
-import { z } from "zod";
-import { ArrowLeft, ExternalLink } from "lucide-react";
-import { format } from "date-fns";
+import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
+import { convexQuery } from "@convex-dev/react-query"
+import { useQuery } from "@tanstack/react-query"
+import { useMutation } from "convex/react"
+import type { FunctionReturnType } from "convex/server"
+import { z } from "zod"
+import { ArrowLeft, ExternalLink } from "lucide-react"
+import { format } from "date-fns"
 
-import { api } from "../../../../convex/_generated/api";
-import { ApplicationActivitySection } from "#/components/application-activity-section.tsx";
-import { ApplicationAgentWorkspace } from "#/components/application-agent-workspace.tsx";
-import { ApplicationCompanySection } from "#/components/application-company-section.tsx";
-import { ApplicationDetailHeader } from "#/components/application-detail-header.tsx";
-import { ApplicationStatusProgress } from "#/components/application-status-progress.tsx";
-import { Button } from "#/components/ui/button.tsx";
-import { Input } from "#/components/ui/input.tsx";
-import { Label } from "#/components/ui/label.tsx";
-import { Textarea } from "#/components/ui/textarea.tsx";
-import { Skeleton } from "#/components/ui/skeleton.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs.tsx";
+import { api } from "../../../../convex/_generated/api"
+import { ApplicationActivitySection } from "#/components/application-activity-section.tsx"
+import { ApplicationAgentWorkspace } from "#/components/application-agent-workspace.tsx"
+import { ApplicationCompanySection } from "#/components/application-company-section.tsx"
+import { ApplicationDetailHeader } from "#/components/application-detail-header.tsx"
+import { ApplicationStatusProgress } from "#/components/application-status-progress.tsx"
+import { Button } from "#/components/ui/button.tsx"
+import { Input } from "#/components/ui/input.tsx"
+import { Label } from "#/components/ui/label.tsx"
+import { Textarea } from "#/components/ui/textarea.tsx"
+import { Skeleton } from "#/components/ui/skeleton.tsx"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "#/components/ui/tabs.tsx"
 import {
   APPLICATION_STATUSES,
   STATUS_STYLES,
   toApplicationStatus,
   type ApplicationStatus,
-} from "#/lib/applications.ts";
+} from "#/lib/applications.ts"
 
 const searchSchema = z.object({
   tab: z.enum(["details", "chat"]).optional(),
   threadId: z.string().optional(),
-});
+})
 
 export const Route = createFileRoute("/dashboard/applications/$applicationId")({
   validateSearch: searchSchema,
   component: ApplicationDetailPage,
-});
+})
 
 type FormValues = {
-  position: string;
-  status: ApplicationStatus;
-  appliedOn: string;
-  sourceUrl: string;
-  jobDescription: string;
-};
+  position: string
+  status: ApplicationStatus
+  appliedOn: string
+  sourceUrl: string
+  jobDescription: string
+}
+
+type Application = NonNullable<FunctionReturnType<typeof api.applications.get>>
 
 function ApplicationDetailPage() {
-  const { applicationId } = Route.useParams();
-  const navigate = useNavigate();
-  const routeNavigate = Route.useNavigate();
-  const { tab = "details", threadId } = Route.useSearch();
-  const application = useQuery(api.applications.get, { applicationId });
-  const updateApplication = useMutation(api.applications.update);
-  const removeApplication = useMutation(api.applications.remove);
-  const [editing, setEditing] = useState(false);
-  const [values, setValues] = useState<FormValues>();
-  const [error, setError] = useState<string>();
-  const [submitting, setSubmitting] = useState(false);
+  const { applicationId } = Route.useParams()
+  const navigate = useNavigate()
+  const routeNavigate = Route.useNavigate()
+  const { tab = "details", threadId } = Route.useSearch()
+  const {
+    data: application,
+    error: applicationError,
+    isPending: applicationLoading,
+  } = useQuery(convexQuery(api.applications.get, { applicationId }))
+  const updateApplication = useMutation(api.applications.update)
+  const removeApplication = useMutation(api.applications.remove)
+  const [editing, setEditing] = useState(false)
+  const [values, setValues] = useState<FormValues>()
+  const [error, setError] = useState<string>()
+  const [submitting, setSubmitting] = useState(false)
 
   const handleTabChange = useCallback(
     (value: string) => {
-      const nextTab = value === "details" || value === "chat" ? value : "details";
+      const nextTab =
+        value === "details" || value === "chat" ? value : "details"
       void routeNavigate({
         search: (prev) => ({ ...prev, tab: nextTab }),
-      });
+      })
     },
-    [routeNavigate],
-  );
+    [routeNavigate]
+  )
 
   const handleSelectThread = useCallback(
     (id: string | undefined) => {
       void routeNavigate({
         to: ".",
         search: (prev) => ({ ...prev, threadId: id }),
-      });
+      })
     },
-    [routeNavigate],
-  );
+    [routeNavigate]
+  )
 
   const handleEdit = useCallback(() => {
-    if (!application) return;
+    if (!application) return
     setValues({
       position: application.position,
       status: application.status,
-      appliedOn: application.appliedOn ? format(application.appliedOn, "yyyy-MM-dd") : "",
+      appliedOn: application.appliedOn
+        ? format(application.appliedOn, "yyyy-MM-dd")
+        : "",
       sourceUrl: application.sourceUrl ?? "",
       jobDescription: application.jobDescription ?? "",
-    });
-    setError(undefined);
-    setEditing(true);
+    })
+    setError(undefined)
+    setEditing(true)
     void routeNavigate({
       search: (prev) => ({ ...prev, tab: "details" }),
-    });
-  }, [application, routeNavigate]);
+    })
+  }, [application, routeNavigate])
   const handleCancel = useCallback(() => {
-    setEditing(false);
-    setError(undefined);
-  }, []);
-  const handlePositionChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    setValues((current) => (current ? { ...current, position: event.target.value } : current));
-  }, []);
-  const handleStatusChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
-    const status = toApplicationStatus(event.target.value);
-    setValues((current) => (current ? { ...current, status } : current));
-  }, []);
-  const handleAppliedOnChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    setValues((current) => (current ? { ...current, appliedOn: event.target.value } : current));
-  }, []);
-  const handleSourceUrlChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    setValues((current) => (current ? { ...current, sourceUrl: event.target.value } : current));
-  }, []);
-  const handleJobDescriptionChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
-    setValues((current) =>
-      current ? { ...current, jobDescription: event.target.value } : current,
-    );
-  }, []);
+    setEditing(false)
+    setError(undefined)
+  }, [])
+  const handlePositionChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setValues((current) =>
+        current ? { ...current, position: event.target.value } : current
+      )
+    },
+    []
+  )
+  const handleStatusChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const status = toApplicationStatus(event.target.value)
+      setValues((current) => (current ? { ...current, status } : current))
+    },
+    []
+  )
+  const handleAppliedOnChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setValues((current) =>
+        current ? { ...current, appliedOn: event.target.value } : current
+      )
+    },
+    []
+  )
+  const handleSourceUrlChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setValues((current) =>
+        current ? { ...current, sourceUrl: event.target.value } : current
+      )
+    },
+    []
+  )
+  const handleJobDescriptionChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      setValues((current) =>
+        current ? { ...current, jobDescription: event.target.value } : current
+      )
+    },
+    []
+  )
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (!values) return;
-      setSubmitting(true);
-      setError(undefined);
+      event.preventDefault()
+      if (!values) return
+      setSubmitting(true)
+      setError(undefined)
       try {
         await updateApplication({
           applicationId,
@@ -126,40 +164,54 @@ function ApplicationDetailPage() {
           ...(toOptionalTimestamp(values.appliedOn) === undefined
             ? {}
             : { appliedOn: toOptionalTimestamp(values.appliedOn) }),
-          ...(values.sourceUrl.trim() ? { sourceUrl: values.sourceUrl.trim() } : {}),
-          ...(values.jobDescription.trim() ? { jobDescription: values.jobDescription.trim() } : {}),
-        });
-        setEditing(false);
+          ...(values.sourceUrl.trim()
+            ? { sourceUrl: values.sourceUrl.trim() }
+            : {}),
+          ...(values.jobDescription.trim()
+            ? { jobDescription: values.jobDescription.trim() }
+            : {}),
+        })
+        setEditing(false)
       } catch (cause) {
-        setError(toErrorMessage(cause));
+        setError(toErrorMessage(cause))
       } finally {
-        setSubmitting(false);
+        setSubmitting(false)
       }
     },
-    [applicationId, updateApplication, values],
-  );
+    [applicationId, updateApplication, values]
+  )
   const handleDelete = useCallback(async () => {
     if (
       !application ||
       !window.confirm(
-        `Delete ${application.position} at ${application.company?.name ?? "Unknown"}?`,
+        `Delete ${application.position} at ${application.company?.name ?? "Unknown"}?`
       )
     ) {
-      return;
+      return
     }
-    setSubmitting(true);
-    setError(undefined);
+    setSubmitting(true)
+    setError(undefined)
     try {
-      await removeApplication({ applicationId });
-      await navigate({ to: "/dashboard/applications" });
+      await removeApplication({ applicationId })
+      await navigate({ to: "/dashboard/applications" })
     } catch (cause) {
-      setError(toErrorMessage(cause));
-      setSubmitting(false);
+      setError(toErrorMessage(cause))
+      setSubmitting(false)
     }
-  }, [application, applicationId, navigate, removeApplication]);
+  }, [application, applicationId, navigate, removeApplication])
 
-  if (application === undefined) {
-    return <ApplicationDetailSkeleton />;
+  if (applicationLoading) {
+    return <ApplicationDetailSkeleton />
+  }
+  if (applicationError) {
+    return (
+      <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+        <p className="text-sm text-red-300">{applicationError.message}</p>
+        <Button asChild className="w-fit" variant="outline">
+          <Link to="/dashboard/applications">Back to applications</Link>
+        </Button>
+      </main>
+    )
   }
   if (application === null) {
     return (
@@ -169,13 +221,18 @@ function ApplicationDetailPage() {
           <Link to="/dashboard/applications">Back to applications</Link>
         </Button>
       </main>
-    );
+    )
   }
 
-  const sourceUrl = toExternalUrl(application.sourceUrl);
+  const sourceUrl = toExternalUrl(application.sourceUrl)
 
   return (
-    <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <main
+      className={`flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6 ${
+        tab === "chat" ? "min-h-0 overflow-hidden" : ""
+      }`}
+      style={tab === "chat" ? { height: "calc(100svh - 4rem)" } : undefined}
+    >
       <Button asChild className="-mb-2 w-fit" size="sm" variant="ghost">
         <Link to="/dashboard/applications">
           <ArrowLeft />
@@ -194,7 +251,11 @@ function ApplicationDetailPage() {
 
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
 
-      <Tabs onValueChange={handleTabChange} value={tab}>
+      <Tabs
+        className={tab === "chat" ? "min-h-0 min-w-0 flex-1" : "min-w-0"}
+        onValueChange={handleTabChange}
+        value={tab}
+      >
         <TabsList aria-label="Application sections">
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="chat">Chat</TabsTrigger>
@@ -218,18 +279,29 @@ function ApplicationDetailPage() {
           ) : (
             <>
               <div className="grid items-start gap-4 lg:grid-cols-2">
-                <ApplicationDetails application={application} sourceUrl={sourceUrl} />
+                <ApplicationDetails
+                  application={application}
+                  sourceUrl={sourceUrl}
+                />
                 <ApplicationCompanySection company={application.company} />
               </div>
 
-              <JobDescriptionSection jobDescription={application.jobDescription} />
+              <JobDescriptionSection
+                jobDescription={application.jobDescription}
+              />
             </>
           )}
 
-          <ApplicationActivitySection applicationId={applicationId} events={application.events} />
+          <ApplicationActivitySection
+            applicationId={applicationId}
+            events={application.events}
+          />
         </TabsContent>
 
-        <TabsContent className="flex flex-1 flex-col" value="chat">
+        <TabsContent
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+          value="chat"
+        >
           <ApplicationAgentWorkspace
             applicationId={applicationId}
             companyName={application.company?.name ?? "Unknown"}
@@ -240,7 +312,7 @@ function ApplicationDetailPage() {
         </TabsContent>
       </Tabs>
     </main>
-  );
+  )
 }
 
 function ApplicationDetailSkeleton() {
@@ -276,15 +348,15 @@ function ApplicationDetailSkeleton() {
         <Skeleton className="h-32 w-full rounded-lg" />
       </section>
     </main>
-  );
+  )
 }
 
 function ApplicationDetails({
   application,
   sourceUrl,
 }: {
-  application: NonNullable<ReturnType<typeof useQuery<typeof api.applications.get>>>;
-  sourceUrl: string | undefined;
+  application: Application
+  sourceUrl: string | undefined
 }) {
   return (
     <section className="flex flex-col rounded-lg border border-border bg-card">
@@ -299,7 +371,9 @@ function ApplicationDetails({
             {application.status}
           </span>
         </SummaryItem>
-        <SummaryItem label="Applied on">{formatOptionalDate(application.appliedOn)}</SummaryItem>
+        <SummaryItem label="Applied on">
+          {formatOptionalDate(application.appliedOn)}
+        </SummaryItem>
         <SummaryItem label="Last update">
           {format(application.lastUpdate, "MMM d, yyyy")}
         </SummaryItem>
@@ -323,10 +397,14 @@ function ApplicationDetails({
         <ApplicationStatusProgress status={application.status} />
       </div>
     </section>
-  );
+  )
 }
 
-function JobDescriptionSection({ jobDescription }: { jobDescription: string | undefined }) {
+function JobDescriptionSection({
+  jobDescription,
+}: {
+  jobDescription: string | undefined
+}) {
   return (
     <section className="rounded-lg border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
@@ -338,11 +416,13 @@ function JobDescriptionSection({ jobDescription }: { jobDescription: string | un
             <p className="whitespace-pre-wrap leading-7">{jobDescription}</p>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No job description saved.</p>
+          <p className="text-sm text-muted-foreground">
+            No job description saved.
+          </p>
         )}
       </div>
     </section>
-  );
+  )
 }
 
 function EditForm({
@@ -356,15 +436,15 @@ function EditForm({
   submitting,
   values,
 }: {
-  onAppliedOnChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onCancel: () => void;
-  onJobDescriptionChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
-  onPositionChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onSourceUrlChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onStatusChange: (event: ChangeEvent<HTMLSelectElement>) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  submitting: boolean;
-  values: FormValues;
+  onAppliedOnChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onCancel: () => void
+  onJobDescriptionChange: (event: ChangeEvent<HTMLTextAreaElement>) => void
+  onPositionChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onSourceUrlChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onStatusChange: (event: ChangeEvent<HTMLSelectElement>) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  submitting: boolean
+  values: FormValues
 }) {
   return (
     <form className="p-4" onSubmit={onSubmit}>
@@ -372,7 +452,12 @@ function EditForm({
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2 sm:col-span-2">
           <Label htmlFor="position">Position</Label>
-          <Input id="position" onChange={onPositionChange} required value={values.position} />
+          <Input
+            id="position"
+            onChange={onPositionChange}
+            required
+            value={values.position}
+          />
         </div>
         <div className="grid gap-2 sm:col-span-2">
           <Label htmlFor="source-url">Job URL</Label>
@@ -420,41 +505,54 @@ function EditForm({
         <Button disabled={submitting} type="submit">
           Save changes
         </Button>
-        <Button disabled={submitting} onClick={onCancel} type="button" variant="outline">
+        <Button
+          disabled={submitting}
+          onClick={onCancel}
+          type="button"
+          variant="outline"
+        >
           Cancel
         </Button>
       </div>
     </form>
-  );
+  )
 }
 
-function SummaryItem({ children, label }: { children: React.ReactNode; label: string }) {
+function SummaryItem({
+  children,
+  label,
+}: {
+  children: React.ReactNode
+  label: string
+}) {
   return (
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-1 text-sm text-foreground">{children}</dd>
     </div>
-  );
+  )
 }
 
 function toOptionalTimestamp(value: string): number | undefined {
-  return value ? new Date(`${value}T00:00:00`).getTime() : undefined;
+  return value ? new Date(`${value}T00:00:00`).getTime() : undefined
 }
 
 function formatOptionalDate(value: number | undefined): string {
-  return value === undefined ? "Not set" : format(value, "MMM d, yyyy");
+  return value === undefined ? "Not set" : format(value, "MMM d, yyyy")
 }
 
 function toExternalUrl(value: string | undefined): string | undefined {
-  if (!value) return undefined;
+  if (!value) return undefined
   try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : undefined;
+    const url = new URL(value)
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.toString()
+      : undefined
   } catch {
-    return undefined;
+    return undefined
   }
 }
 
 function toErrorMessage(cause: unknown): string {
-  return cause instanceof Error ? cause.message : "Request failed";
+  return cause instanceof Error ? cause.message : "Request failed"
 }
