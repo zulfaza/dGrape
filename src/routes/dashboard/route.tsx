@@ -1,12 +1,15 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useRouterState,
+} from "@tanstack/react-router"
 import { AppSidebar } from "@/components/app-sidebar"
 import {
   Breadcrumb,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
-  BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -31,6 +34,10 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardLayout() {
   const { user } = Route.useLoaderData()
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const pageTitle = pathname.startsWith("/dashboard/applications/")
+    ? "Application detail"
+    : DASHBOARD_PAGE_TITLES[pathname] ?? "Dashboard"
   return (
     <SidebarProvider>
       <AppSidebar user={user} />
@@ -44,14 +51,8 @@ function DashboardLayout() {
             />
             <Breadcrumb>
               <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="#">
-                    Build Your Application
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Data Fetching</BreadcrumbPage>
+                  <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -61,4 +62,10 @@ function DashboardLayout() {
       </SidebarInset>
     </SidebarProvider>
   )
+}
+
+const DASHBOARD_PAGE_TITLES: Record<string, string> = {
+  "/dashboard/applications": "Applications",
+  "/dashboard/companies": "Companies",
+  "/dashboard/profile": "Profile",
 }

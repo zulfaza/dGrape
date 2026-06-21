@@ -10,6 +10,7 @@ import type { QueryClient } from "@tanstack/react-query"
 import type { ReactNode } from "react"
 import type { ConvexReactClient } from "convex/react"
 import type { ConvexQueryClient } from "@convex-dev/react-query"
+import { Toaster } from "@/components/ui/toast"
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
@@ -26,12 +27,70 @@ export const Route = createRootRouteWithContext<{
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Convex + TanStack Start + WorkOS AuthKit",
+        title: "dGrape",
+      },
+      {
+        name: "description",
+        content:
+          "AI-assisted job tracker for tracking applications, tailoring resumes, and learning from outcomes.",
+      },
+      {
+        property: "og:title",
+        content: "dGrape - Job Search OS",
+      },
+      {
+        property: "og:description",
+        content:
+          "Run your job search like an OS with AI-assisted tracking and insight.",
+      },
+      {
+        property: "og:type",
+        content: "website",
+      },
+      {
+        property: "og:image",
+        content: "/og-image.png",
+      },
+      {
+        property: "og:image:width",
+        content: "1200",
+      },
+      {
+        property: "og:image:height",
+        content: "630",
+      },
+      {
+        property: "og:image:alt",
+        content: "dGrape job tracker preview",
+      },
+      {
+        name: "twitter:card",
+        content: "summary_large_image",
+      },
+      {
+        name: "twitter:title",
+        content: "dGrape - Job Search OS",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "Run your job search like an OS with AI-assisted tracking and insight.",
+      },
+      {
+        name: "twitter:image",
+        content: "/og-image.png",
+      },
+      {
+        name: "twitter:image:alt",
+        content: "dGrape job tracker preview",
       },
     ],
     links: [
       { rel: "stylesheet", href: appCssUrl },
-      { rel: "icon", href: "/convex.svg" },
+      { rel: "icon", href: "/favicon.ico", sizes: "any" },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      { rel: "manifest", href: "/manifest.json" },
     ],
   }),
   component: RootComponent,
@@ -70,6 +129,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       </head>
       <body>
         {children}
+        <Toaster />
         <Scripts />
       </body>
     </html>

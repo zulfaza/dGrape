@@ -16,6 +16,10 @@ import { Route as CallbackRouteImport } from './routes/callback'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardProfileRouteImport } from './routes/dashboard/profile'
+import { Route as DashboardCompaniesRouteImport } from './routes/dashboard/companies'
+import { Route as DashboardApplicationsIndexRouteImport } from './routes/dashboard/applications/index'
+import { Route as DashboardApplicationsApplicationIdRouteImport } from './routes/dashboard/applications/$applicationId'
 
 const SignUpRoute = SignUpRouteImport.update({
   id: '/sign-up',
@@ -52,6 +56,28 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardProfileRoute = DashboardProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardCompaniesRoute = DashboardCompaniesRouteImport.update({
+  id: '/companies',
+  path: '/companies',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardApplicationsIndexRoute =
+  DashboardApplicationsIndexRouteImport.update({
+    id: '/applications/',
+    path: '/applications/',
+    getParentRoute: () => DashboardRouteRoute,
+  } as any)
+const DashboardApplicationsApplicationIdRoute =
+  DashboardApplicationsApplicationIdRouteImport.update({
+    id: '/applications/$applicationId',
+    path: '/applications/$applicationId',
+    getParentRoute: () => DashboardRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -60,7 +86,11 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof SignInRoute
   '/sign-out': typeof SignOutRoute
   '/sign-up': typeof SignUpRoute
+  '/dashboard/companies': typeof DashboardCompaniesRoute
+  '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/applications/$applicationId': typeof DashboardApplicationsApplicationIdRoute
+  '/dashboard/applications/': typeof DashboardApplicationsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -68,7 +98,11 @@ export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/sign-out': typeof SignOutRoute
   '/sign-up': typeof SignUpRoute
+  '/dashboard/companies': typeof DashboardCompaniesRoute
+  '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/applications/$applicationId': typeof DashboardApplicationsApplicationIdRoute
+  '/dashboard/applications': typeof DashboardApplicationsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -78,7 +112,11 @@ export interface FileRoutesById {
   '/sign-in': typeof SignInRoute
   '/sign-out': typeof SignOutRoute
   '/sign-up': typeof SignUpRoute
+  '/dashboard/companies': typeof DashboardCompaniesRoute
+  '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/applications/$applicationId': typeof DashboardApplicationsApplicationIdRoute
+  '/dashboard/applications/': typeof DashboardApplicationsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -89,9 +127,23 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-out'
     | '/sign-up'
+    | '/dashboard/companies'
+    | '/dashboard/profile'
     | '/dashboard/'
+    | '/dashboard/applications/$applicationId'
+    | '/dashboard/applications/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/callback' | '/sign-in' | '/sign-out' | '/sign-up' | '/dashboard'
+  to:
+    | '/'
+    | '/callback'
+    | '/sign-in'
+    | '/sign-out'
+    | '/sign-up'
+    | '/dashboard/companies'
+    | '/dashboard/profile'
+    | '/dashboard'
+    | '/dashboard/applications/$applicationId'
+    | '/dashboard/applications'
   id:
     | '__root__'
     | '/'
@@ -100,7 +152,11 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-out'
     | '/sign-up'
+    | '/dashboard/companies'
+    | '/dashboard/profile'
     | '/dashboard/'
+    | '/dashboard/applications/$applicationId'
+    | '/dashboard/applications/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -163,15 +219,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/profile': {
+      id: '/dashboard/profile'
+      path: '/profile'
+      fullPath: '/dashboard/profile'
+      preLoaderRoute: typeof DashboardProfileRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/companies': {
+      id: '/dashboard/companies'
+      path: '/companies'
+      fullPath: '/dashboard/companies'
+      preLoaderRoute: typeof DashboardCompaniesRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/applications/': {
+      id: '/dashboard/applications/'
+      path: '/applications'
+      fullPath: '/dashboard/applications/'
+      preLoaderRoute: typeof DashboardApplicationsIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/applications/$applicationId': {
+      id: '/dashboard/applications/$applicationId'
+      path: '/applications/$applicationId'
+      fullPath: '/dashboard/applications/$applicationId'
+      preLoaderRoute: typeof DashboardApplicationsApplicationIdRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
   }
 }
 
 interface DashboardRouteRouteChildren {
+  DashboardCompaniesRoute: typeof DashboardCompaniesRoute
+  DashboardProfileRoute: typeof DashboardProfileRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardApplicationsApplicationIdRoute: typeof DashboardApplicationsApplicationIdRoute
+  DashboardApplicationsIndexRoute: typeof DashboardApplicationsIndexRoute
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
+  DashboardCompaniesRoute: DashboardCompaniesRoute,
+  DashboardProfileRoute: DashboardProfileRoute,
   DashboardIndexRoute: DashboardIndexRoute,
+  DashboardApplicationsApplicationIdRoute:
+    DashboardApplicationsApplicationIdRoute,
+  DashboardApplicationsIndexRoute: DashboardApplicationsIndexRoute,
 }
 
 const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(

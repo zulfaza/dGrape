@@ -8,7 +8,15 @@
  * @module
  */
 
-import type * as myFunctions from "../myFunctions.js";
+import type * as applicationAgent from "../applicationAgent.js";
+import type * as applications from "../applications.js";
+import type * as companies from "../companies.js";
+import type * as lib_applicationAgentDomain from "../lib/applicationAgentDomain.js";
+import type * as lib_auth from "../lib/auth.js";
+import type * as lib_domain from "../lib/domain.js";
+import type * as lib_profileDomain from "../lib/profileDomain.js";
+import type * as lib_services from "../lib/services.js";
+import type * as profile from "../profile.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +25,15 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  myFunctions: typeof myFunctions;
+  applicationAgent: typeof applicationAgent;
+  applications: typeof applications;
+  companies: typeof companies;
+  "lib/applicationAgentDomain": typeof lib_applicationAgentDomain;
+  "lib/auth": typeof lib_auth;
+  "lib/domain": typeof lib_domain;
+  "lib/profileDomain": typeof lib_profileDomain;
+  "lib/services": typeof lib_services;
+  profile: typeof profile;
 }>;
 
 /**
