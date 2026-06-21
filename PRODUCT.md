@@ -10,7 +10,7 @@ Job seekers managing applications, profile data, CV tailoring, and company resea
 
 ## Product Purpose
 
-applytrack turns a messy job search into a structured pipeline: store profile data, track applications, tailor CVs with AI, and learn from outcomes.
+dGrape turns a messy job search into a structured pipeline: store profile data, track applications, tailor CVs with AI, and learn from outcomes.
 
 ## Brand Personality
 

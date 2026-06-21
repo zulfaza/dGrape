@@ -1,6 +1,6 @@
-# applytrack\_
+# dGrape
 
-Run your job search like an operating system. `applytrack` turns a messy spreadsheet
+Run your job search like an operating system. `dGrape` turns a messy spreadsheet
 of applications into a structured pipeline — feed it your CV and any job description,
 tailor your application with AI, track every stage, and learn why you advanced (or
 didn't).
