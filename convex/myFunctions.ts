@@ -16,12 +16,11 @@ export const listNumbers = query({
       .order("desc")
       .take(args.count)
 
-    const name =
-      identity["properties.name"] ||
+    const name = (identity["properties.name"] ||
       [
         identity["properties.first_name"],
         identity["properties.last_name"],
-      ].join(" ")
+      ].join(" ")) as string
 
     return {
       viewer: name,
