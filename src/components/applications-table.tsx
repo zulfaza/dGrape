@@ -11,7 +11,6 @@ import { Button } from "#/components/ui/button.tsx";
 import { Skeleton } from "#/components/ui/skeleton.tsx";
 import {
   APPLICATION_STATUSES,
-  STATUS_STYLES,
   toApplicationStatus,
   type ApplicationStatus,
 } from "#/lib/applications.ts";
@@ -268,7 +267,9 @@ export function ApplicationsTable({
                 </th>
                 <th className="px-4 py-3 font-medium">Position</th>
                 <th className="px-4 py-3 font-medium">Company</th>
-                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Preparation</th>
+                <th className="px-4 py-3 font-medium">Hiring</th>
+                <th className="px-4 py-3 font-medium">Fit</th>
                 <th className="px-4 py-3 font-medium">Applied on</th>
               </tr>
             </thead>
@@ -284,6 +285,12 @@ export function ApplicationsTable({
                       </td>
                       <td className="px-4 py-4">
                         <Skeleton className="h-4 w-36 max-w-full" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-5 w-20" />
+                      </td>
+                      <td className="px-4 py-4">
+                        <Skeleton className="h-5 w-16" />
                       </td>
                       <td className="px-4 py-4">
                         <Skeleton className="h-5 w-20" />
@@ -319,11 +326,20 @@ export function ApplicationsTable({
                   </td>
                   <td className="px-4 py-4 text-muted-foreground">{application.company}</td>
                   <td className="px-4 py-4">
-                    <span
-                      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[application.status]}`}
-                    >
-                      {application.status}
-                    </span>
+                    <WorkflowBadge kind="preparation" value={application.preparationStatus} />
+                  </td>
+                  <td className="px-4 py-4">
+                    <WorkflowBadge kind="hiring" value={application.hiringStatus} />
+                  </td>
+                  <td className="px-4 py-4">
+                    {application.fitBand ? (
+                      <FitBadge
+                        band={application.fitBand}
+                        eligibility={application.eligibility}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Not assessed</span>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-muted-foreground">
                     {formatOptionalDate(application.appliedOn)}
@@ -345,4 +361,42 @@ export function ApplicationsTable({
 
 function formatOptionalDate(value: number | undefined): string {
   return value === undefined ? "Not set" : format(value, "MMM d, yyyy");
+}
+
+function WorkflowBadge({
+  kind,
+  value,
+}: {
+  kind: "preparation" | "hiring";
+  value: string;
+}) {
+  const terminal = value === "offer" || value === "ready";
+  const negative = value === "rejected" || value === "withdrawn" || value === "archived";
+  const className = terminal
+    ? "border-emerald-700/80 bg-emerald-950/60 text-emerald-200"
+    : negative
+      ? "border-red-800/80 bg-red-950/60 text-red-200"
+      : kind === "preparation"
+        ? "border-sky-700/80 bg-sky-950/60 text-sky-200"
+        : "border-zinc-600 bg-zinc-800 text-zinc-200";
+  return (
+    <span className={`inline-flex border px-2 py-0.5 text-xs font-medium capitalize ${className}`}>
+      {value.replaceAll("_", " ")}
+    </span>
+  );
+}
+
+function FitBadge({ band, eligibility }: { band: string; eligibility: string | undefined }) {
+  const value = eligibility === "ineligible" ? "ineligible" : `${band} fit`;
+  const className =
+    band === "high" && eligibility !== "ineligible"
+      ? "border-emerald-700/80 bg-emerald-950/60 text-emerald-200"
+      : band === "medium" && eligibility !== "ineligible"
+        ? "border-amber-700/80 bg-amber-950/60 text-amber-200"
+        : "border-red-800/80 bg-red-950/60 text-red-200";
+  return (
+    <span className={`inline-flex border px-2 py-0.5 text-xs font-medium capitalize ${className}`}>
+      {value}
+    </span>
+  );
 }

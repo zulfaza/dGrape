@@ -146,16 +146,16 @@ export function ApplicationCreateSheet() {
       <SheetTrigger asChild>
         <Button type="button">
           <Plus />
-          Add application
+          Capture role
         </Button>
       </SheetTrigger>
       <SheetContent className="overflow-y-auto sm:max-w-xl">
         <form className="flex min-h-full flex-col" onSubmit={handleSubmit}>
           <SheetHeader>
-            <SheetTitle>Add application</SheetTitle>
+            <SheetTitle>Capture role</SheetTitle>
             <SheetDescription>
-              Fill it manually, or paste a job link or description and let AI draft the fields
-              first.
+              Add one role from a URL or posting text. Repeated captures attach a new source
+              observation to the existing role.
             </SheetDescription>
           </SheetHeader>
 
@@ -268,7 +268,7 @@ export function ApplicationCreateSheet() {
 
           <SheetFooter>
             <Button disabled={busy} type="submit">
-              {submitting ? "Saving..." : "Save application"}
+              {submitting ? "Saving..." : "Save to inbox"}
             </Button>
             <Button
               disabled={busy}

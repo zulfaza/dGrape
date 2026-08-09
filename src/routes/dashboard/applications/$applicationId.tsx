@@ -14,6 +14,11 @@ import { ApplicationAgentWorkspace } from "#/components/application-agent-worksp
 import { ApplicationCompanySection } from "#/components/application-company-section.tsx"
 import { ApplicationDetailHeader } from "#/components/application-detail-header.tsx"
 import { ApplicationStatusProgress } from "#/components/application-status-progress.tsx"
+import {
+  ApplicationArtifacts,
+  ApplicationJobBrief,
+  ApplicationWorkflowOverview,
+} from "#/components/application-workflow-sections.tsx"
 import { Button } from "#/components/ui/button.tsx"
 import { Input } from "#/components/ui/input.tsx"
 import { Label } from "#/components/ui/label.tsx"
@@ -33,7 +38,7 @@ import {
 } from "#/lib/applications.ts"
 
 const searchSchema = z.object({
-  tab: z.enum(["details", "chat"]).optional(),
+  tab: z.enum(["overview", "job", "artifacts", "activity", "chat"]).optional(),
   threadId: z.string().optional(),
 })
 
@@ -56,7 +61,7 @@ function ApplicationDetailPage() {
   const { applicationId } = Route.useParams()
   const navigate = useNavigate()
   const routeNavigate = Route.useNavigate()
-  const { tab = "details", threadId } = Route.useSearch()
+  const { tab = "overview", threadId } = Route.useSearch()
   const {
     data: application,
     error: applicationError,
@@ -71,8 +76,9 @@ function ApplicationDetailPage() {
 
   const handleTabChange = useCallback(
     (value: string) => {
-      const nextTab =
-        value === "details" || value === "chat" ? value : "details"
+      const nextTab = ["overview", "job", "artifacts", "activity", "chat"].includes(value)
+        ? (value as "overview" | "job" | "artifacts" | "activity" | "chat")
+        : "overview"
       void routeNavigate({
         search: (prev) => ({ ...prev, tab: nextTab }),
       })
@@ -104,7 +110,7 @@ function ApplicationDetailPage() {
     setError(undefined)
     setEditing(true)
     void routeNavigate({
-      search: (prev) => ({ ...prev, tab: "details" }),
+      search: (prev) => ({ ...prev, tab: "job" }),
     })
   }, [application, routeNavigate])
   const handleCancel = useCallback(() => {
@@ -257,11 +263,18 @@ function ApplicationDetailPage() {
         value={tab}
       >
         <TabsList aria-label="Application sections">
-          <TabsTrigger value="details">Details</TabsTrigger>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="job">Job</TabsTrigger>
+          <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
           <TabsTrigger value="chat">Chat</TabsTrigger>
         </TabsList>
 
-        <TabsContent className="flex flex-col gap-6" value="details">
+        <TabsContent className="flex flex-col gap-6" value="overview">
+          <ApplicationWorkflowOverview applicationId={applicationId} />
+        </TabsContent>
+
+        <TabsContent className="flex flex-col gap-6" value="job">
           {editing && values ? (
             <section className="rounded-lg border border-border bg-card">
               <EditForm
@@ -289,13 +302,17 @@ function ApplicationDetailPage() {
               <JobDescriptionSection
                 jobDescription={application.jobDescription}
               />
+              <ApplicationJobBrief applicationId={applicationId} />
             </>
           )}
+        </TabsContent>
 
-          <ApplicationActivitySection
-            applicationId={applicationId}
-            events={application.events}
-          />
+        <TabsContent className="flex flex-col gap-6" value="artifacts">
+          <ApplicationArtifacts applicationId={applicationId} />
+        </TabsContent>
+
+        <TabsContent className="flex flex-col gap-6" value="activity">
+          <ApplicationActivitySection applicationId={applicationId} events={application.events} />
         </TabsContent>
 
         <TabsContent

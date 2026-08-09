@@ -49,10 +49,10 @@ export function AppSidebar({
         <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Applications">
+              <SidebarMenuButton asChild tooltip="Role inbox">
                 <Link activeProps={ACTIVE_LINK_PROPS} to="/dashboard/applications">
                   <LayoutDashboard />
-                  <span>Applications</span>
+                  <span>Role inbox</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -65,10 +65,10 @@ export function AppSidebar({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Profile">
+              <SidebarMenuButton asChild tooltip="Memory">
                 <Link activeProps={ACTIVE_LINK_PROPS} to="/dashboard/profile">
                   <UserRound />
-                  <span>Profile</span>
+                  <span>Memory</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

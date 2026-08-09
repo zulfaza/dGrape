@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 
 import { api } from "../../../../convex/_generated/api";
 import { ApplicationCreateSheet } from "#/components/application-create-sheet.tsx";
+import { ApplicationBatchImportSheet } from "#/components/application-batch-import-sheet.tsx";
 import { ApplicationStatusFilter } from "#/components/application-status-filter.tsx";
 import { ApplicationsTable } from "#/components/applications-table.tsx";
 import { Input } from "#/components/ui/input.tsx";
@@ -21,6 +22,7 @@ function ApplicationsPage() {
     () => new Set<ApplicationStatus>(DEFAULT_STATUS_FILTER),
   );
   const [query, setQuery] = useState("");
+  const [sortMode, setSortMode] = useState<"ranked" | "recent">("ranked");
   const {
     data: applications,
     error: applicationsError,
@@ -30,15 +32,21 @@ function ApplicationsPage() {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredApplications = useMemo(
     () =>
-      applicationList.filter((application) => {
-        const matchesStatus = selectedStatuses.has(application.status);
-        const matchesQuery =
-          normalizedQuery.length === 0 ||
-          application.position.toLocaleLowerCase().includes(normalizedQuery) ||
-          application.company.toLocaleLowerCase().includes(normalizedQuery);
-        return matchesStatus && matchesQuery;
-      }),
-    [applicationList, normalizedQuery, selectedStatuses],
+      applicationList
+        .filter((application) => {
+          const matchesStatus = selectedStatuses.has(application.status);
+          const matchesQuery =
+            normalizedQuery.length === 0 ||
+            application.position.toLocaleLowerCase().includes(normalizedQuery) ||
+            application.company.toLocaleLowerCase().includes(normalizedQuery);
+          return matchesStatus && matchesQuery;
+        })
+        .sort((left, right) =>
+          sortMode === "recent"
+            ? right.lastUpdate - left.lastUpdate
+            : fitRank(right) - fitRank(left) || right.lastUpdate - left.lastUpdate,
+        ),
+    [applicationList, normalizedQuery, selectedStatuses, sortMode],
   );
 
   const handleQueryChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
@@ -49,12 +57,15 @@ function ApplicationsPage() {
     <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Applications</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Role inbox</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Track roles, parse job posts, and tailor CV drafts per application.
+            Capture, deduplicate, qualify, and prepare roles before applying.
           </p>
         </div>
-        <ApplicationCreateSheet />
+        <div className="flex flex-wrap gap-2">
+          <ApplicationBatchImportSheet />
+          <ApplicationCreateSheet />
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -74,6 +85,17 @@ function ApplicationsPage() {
           onSelectedStatusesChange={setSelectedStatuses}
           selectedStatuses={selectedStatuses}
         />
+        <select
+          aria-label="Sort roles"
+          className="h-9 border border-input bg-background px-3 text-sm"
+          onChange={(event) =>
+            setSortMode(event.target.value === "recent" ? "recent" : "ranked")
+          }
+          value={sortMode}
+        >
+          <option value="ranked">Ranked by fit</option>
+          <option value="recent">Most recent</option>
+        </select>
       </div>
 
       {applicationsError ? (
@@ -87,4 +109,14 @@ function ApplicationsPage() {
       />
     </main>
   );
+}
+
+function fitRank(application: {
+  fitBand?: "high" | "medium" | "low";
+  eligibility?: "eligible" | "risk" | "ineligible" | "unknown";
+}): number {
+  if (application.eligibility === "ineligible") return -1;
+  const band = application.fitBand === "high" ? 3 : application.fitBand === "medium" ? 2 : 1;
+  const eligibility = application.eligibility === "eligible" ? 2 : application.eligibility === "risk" ? 0 : 1;
+  return application.fitBand ? band * 10 + eligibility : 0;
 }

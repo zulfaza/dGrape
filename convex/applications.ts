@@ -6,6 +6,7 @@ import { action, mutation, query, type MutationCtx } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 import { applicationStatusValidator, normalize } from "./lib/domain";
 import { LlmService, LlmServiceLive } from "./lib/services";
+import { workflowStateFromLegacy } from "./lib/workflowDomain";
 
 const applicationInput = {
   companyName: v.string(),
@@ -27,6 +28,15 @@ const jobPostingPreview = v.object({
   appliedOn: v.string(),
 });
 
+const batchRolePreview = v.object({
+  companyName: v.string(),
+  companyWebsite: v.string(),
+  sourceUrl: v.string(),
+  position: v.string(),
+  jobDescription: v.string(),
+  parseConfidence: v.number(),
+});
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -35,22 +45,40 @@ export const list = query({
       .query("applications")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
+    const [companyRows, fitRows] = await Promise.all([
+      Promise.all(applications.map((application) => ctx.db.get(application.companyId))),
+      Promise.all(
+        applications.map((application) =>
+          ctx.db
+            .query("fitAssessments")
+            .withIndex("by_application", (q) => q.eq("applicationId", application._id))
+            .order("desc")
+            .first(),
+        ),
+      ),
+    ]);
     const companies = new Map(
-      (
-        await Promise.all(
-          applications.map((application) => ctx.db.get(application.companyId)),
-        )
-      ).flatMap((company) => (company ? [[company._id, company]] : [])),
+      companyRows.flatMap((company) => (company ? [[company._id, company]] : [])),
+    );
+    const fits = new Map(
+      fitRows.flatMap((fit) => (fit ? [[fit.applicationId, fit.assessment]] : [])),
     );
     return applications
       .map((application) => {
         const company = companies.get(application.companyId);
+        const fit = fits.get(application._id);
+        const workflow = workflowStateFromLegacy(application.status);
         return {
           id: application._id,
           company: company?.name ?? "Unknown",
           companyLogo: company?.logo ?? "",
           position: application.position,
           status: application.status,
+          preparationStatus: application.preparationStatus ?? workflow.preparationStatus,
+          hiringStatus: application.hiringStatus ?? workflow.hiringStatus,
+          fitDecision: fit?.decision,
+          fitBand: fit?.scoreBand,
+          eligibility: fit?.eligibility,
           appliedOn: application.appliedOn,
           lastUpdate: application.lastUpdate,
         };
@@ -74,10 +102,14 @@ export const get = query({
         .withIndex("by_application", (q) => q.eq("applicationId", normalizedApplicationId))
         .collect(),
     ]);
+    const workflow = workflowStateFromLegacy(application.status);
     return {
       id: application._id,
       position: application.position,
       status: application.status,
+      preparationStatus: application.preparationStatus ?? workflow.preparationStatus,
+      hiringStatus: application.hiringStatus ?? workflow.hiringStatus,
+      archiveReason: application.archiveReason ?? "",
       appliedOn: application.appliedOn,
       lastUpdate: application.lastUpdate,
       sourceUrl: application.sourceUrl,
@@ -111,6 +143,144 @@ export const previewFromUrl = action({
       jobDescription: preview.jobDescription,
       status: preview.status,
       appliedOn: isDateInputValue(preview.appliedOn) ? preview.appliedOn : "",
+    };
+  },
+});
+
+export const previewBatch = action({
+  args: { rawText: v.string() },
+  returns: v.array(batchRolePreview),
+  handler: async (ctx, { rawText }) => {
+    await requireUserId(ctx);
+    const trimmed = rawText.trim();
+    if (!trimmed) throw new Error("Paste one or more job postings");
+    if (trimmed.length > 60_000) throw new Error("Pasted role list is too long");
+    const roles = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LlmService;
+        return yield* llm.extractBatchJobPostings(trimmed, formatDateInput(Date.now()));
+      }).pipe(Effect.provide(LlmServiceLive)),
+    );
+    return roles.map((role) => ({
+      companyName: role.companyName,
+      companyWebsite: sanitizePreviewUrl(role.companyWebsite),
+      sourceUrl: sanitizePreviewUrl(role.sourceUrl),
+      position: role.position,
+      jobDescription: role.jobDescription,
+      parseConfidence: role.parseConfidence,
+    }));
+  },
+});
+
+export const createBatch = mutation({
+  args: { rawText: v.string(), roles: v.array(batchRolePreview) },
+  returns: v.object({
+    applicationIds: v.array(v.id("applications")),
+    createdCount: v.number(),
+    duplicateCount: v.number(),
+  }),
+  handler: async (ctx, { rawText, roles }) => {
+    const userId = await requireUserId(ctx);
+    if (roles.length === 0 || roles.length > 50) throw new Error("Select 1 to 50 roles");
+    const now = Date.now();
+    const importRunId = await ctx.db.insert("importRuns", {
+      userId,
+      mode: "batch",
+      status: "processing",
+      rawSnapshot: rawText.trim().slice(0, 60_000),
+      discoveredRoleCount: roles.length,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const applicationIds: Id<"applications">[] = [];
+    let createdCount = 0;
+    let duplicateCount = 0;
+    for (const role of roles) {
+      const companyName = role.companyName.trim();
+      const position = role.position.trim();
+      const normalizedCompanyName = normalize(companyName);
+      const normalizedPosition = normalize(position);
+      if (!normalizedCompanyName || !normalizedPosition) continue;
+      const companyId = await findOrCreateCompany(ctx, {
+        name: companyName,
+        normalizedName: normalizedCompanyName,
+        website: sanitizeOptionalUrl(role.companyWebsite, "Company website") ?? "",
+      });
+      const existing = await ctx.db
+        .query("applications")
+        .withIndex("by_user_company_position", (q) =>
+          q
+            .eq("userId", userId)
+            .eq("companyId", companyId)
+            .eq("normalizedPosition", normalizedPosition),
+        )
+        .unique();
+      const alias = existing
+        ? null
+        : await ctx.db
+            .query("applicationAliases")
+            .withIndex("by_user_company_position", (q) =>
+              q
+                .eq("userId", userId)
+                .eq("companyId", companyId)
+                .eq("normalizedPosition", normalizedPosition),
+            )
+            .unique();
+      const existingId = existing?._id ?? alias?.applicationId;
+      const sourceUrl = sanitizeOptionalUrl(role.sourceUrl, "Job URL");
+      const jobDescription = sanitizeOptionalText(role.jobDescription);
+      let applicationId: Id<"applications">;
+      if (existingId) {
+        duplicateCount += 1;
+        applicationId = existingId;
+        const currentApplication = existing ?? (await ctx.db.get(existingId));
+        await ctx.db.patch(applicationId, {
+          sourceUrl: sourceUrl ?? currentApplication?.sourceUrl,
+          jobDescription: jobDescription ?? currentApplication?.jobDescription,
+          lastUpdate: now,
+        });
+      } else {
+        createdCount += 1;
+        applicationId = await ctx.db.insert("applications", {
+          userId,
+          companyId,
+          normalizedPosition,
+          position,
+          status: "Saved",
+          ...workflowStateFromLegacy("Saved"),
+          lastUpdate: now,
+          sourceUrl,
+          jobDescription,
+        });
+      }
+      applicationIds.push(applicationId);
+      await ctx.db.insert("jobSources", {
+        userId,
+        applicationId,
+        importRunId,
+        sourceType: sourceUrl ? "url" : "text",
+        sourceUrl,
+        rawSnapshot: [
+          `Company: ${companyName}`,
+          `Position: ${position}`,
+          sourceUrl ? `URL: ${sourceUrl}` : "",
+          jobDescription ?? "",
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+          .slice(0, 60_000),
+        fetchedAt: now,
+      });
+    }
+    await ctx.db.patch(importRunId, {
+      status: "complete",
+      discoveredRoleCount: applicationIds.length,
+      updatedAt: Date.now(),
+    });
+    return {
+      applicationIds: [...new Set(applicationIds)],
+      createdCount,
+      duplicateCount,
     };
   },
 });
@@ -167,10 +337,32 @@ export const create = mutation({
     };
     const applicationId = existing?._id ?? alias?.applicationId;
     if (applicationId) {
-      await ctx.db.patch(applicationId, values);
-      return applicationId;
+      const currentApplication = existing ?? (await ctx.db.get(applicationId));
+      await ctx.db.patch(applicationId, {
+        ...values,
+        status: currentApplication?.status ?? args.status,
+        appliedOn: currentApplication?.appliedOn ?? args.appliedOn,
+      });
+    } else {
+      const createdId = await ctx.db.insert("applications", {
+        ...values,
+        ...workflowStateFromLegacy(args.status),
+      });
+      await recordJobSource(ctx, userId, createdId, {
+        sourceUrl,
+        jobDescription: values.jobDescription,
+        companyName,
+        position,
+      });
+      return createdId;
     }
-    return await ctx.db.insert("applications", values);
+    await recordJobSource(ctx, userId, applicationId, {
+      sourceUrl,
+      jobDescription: values.jobDescription,
+      companyName,
+      position,
+    });
+    return applicationId;
   },
 });
 
@@ -225,10 +417,20 @@ export const update = mutation({
       normalizedPosition,
       position: position.trim(),
       status,
+      ...workflowStateFromLegacy(status),
       appliedOn,
       sourceUrl: sanitizeOptionalUrl(sourceUrl, "Job URL"),
       jobDescription: sanitizeOptionalText(jobDescription),
     });
+    if (sourceUrl !== application.sourceUrl || jobDescription !== application.jobDescription) {
+      const company = await ctx.db.get(application.companyId);
+      await recordJobSource(ctx, userId, normalizedApplicationId, {
+        sourceUrl: sanitizeOptionalUrl(sourceUrl, "Job URL"),
+        jobDescription: sanitizeOptionalText(jobDescription),
+        companyName: company?.name ?? "Unknown",
+        position: position.trim(),
+      });
+    }
   },
 });
 
@@ -252,7 +454,11 @@ export const updateStatus = mutation({
   handler: async (ctx, { applicationIds, status }) => {
     const userId = await requireUserId(ctx);
     const applications = await getOwnedApplications(ctx, userId, applicationIds);
-    await Promise.all(applications.map((application) => ctx.db.patch(application._id, { status })));
+    await Promise.all(
+      applications.map((application) =>
+        ctx.db.patch(application._id, { status, ...workflowStateFromLegacy(status) }),
+      ),
+    );
   },
 });
 
@@ -344,6 +550,7 @@ export const merge = mutation({
     if (firstEvent && lastEvent) {
       await ctx.db.patch(targetId, {
         status: lastEvent.type,
+        ...workflowStateFromLegacy(lastEvent.type),
         appliedOn: orderedEvents.find((event) => event.type === "Applied")?.date ?? firstEvent.date,
         lastUpdate: lastEvent.date,
       });
@@ -357,6 +564,7 @@ export const merge = mutation({
       );
       await ctx.db.patch(targetId, {
         status: latestApplication.status,
+        ...workflowStateFromLegacy(latestApplication.status),
         appliedOn: appliedDates.length > 0 ? Math.min(...appliedDates) : undefined,
         lastUpdate: latestApplication.lastUpdate,
       });
@@ -487,13 +695,15 @@ async function syncApplicationFromEvents(ctx: MutationCtx, applicationId: Id<"ap
   if (!firstEvent || !lastEvent) return;
   await ctx.db.patch(applicationId, {
     status: lastEvent.type,
+    ...workflowStateFromLegacy(lastEvent.type),
     appliedOn: orderedEvents.find((event) => event.type === "Applied")?.date ?? firstEvent.date,
     lastUpdate: lastEvent.date,
   });
 }
 
 async function deleteApplication(ctx: MutationCtx, applicationId: Id<"applications">) {
-  const [events, aliases, threads, drafts, versions] = await Promise.all([
+  const [events, aliases, threads, drafts, versions, sources, briefs, fits, artifacts, tasks] =
+    await Promise.all([
     ctx.db
       .query("applicationEvents")
       .withIndex("by_application", (q) => q.eq("applicationId", applicationId))
@@ -514,6 +724,26 @@ async function deleteApplication(ctx: MutationCtx, applicationId: Id<"applicatio
       .query("tailoredCvVersions")
       .withIndex("by_application", (q) => q.eq("applicationId", applicationId))
       .collect(),
+    ctx.db
+      .query("jobSources")
+      .withIndex("by_application", (q) => q.eq("applicationId", applicationId))
+      .collect(),
+    ctx.db
+      .query("jobBriefs")
+      .withIndex("by_application", (q) => q.eq("applicationId", applicationId))
+      .collect(),
+    ctx.db
+      .query("fitAssessments")
+      .withIndex("by_application", (q) => q.eq("applicationId", applicationId))
+      .collect(),
+    ctx.db
+      .query("applicationArtifacts")
+      .withIndex("by_application", (q) => q.eq("applicationId", applicationId))
+      .collect(),
+    ctx.db
+      .query("applicationTasks")
+      .withIndex("by_application", (q) => q.eq("applicationId", applicationId))
+      .collect(),
   ]);
   const messages = (
     await Promise.all(
@@ -532,7 +762,22 @@ async function deleteApplication(ctx: MutationCtx, applicationId: Id<"applicatio
     ...versions.map((version) => ctx.db.delete(version._id)),
     ...drafts.map((draft) => ctx.db.delete(draft._id)),
     ...threads.map((thread) => ctx.db.delete(thread._id)),
+    ...sources.map((source) => ctx.db.delete(source._id)),
+    ...briefs.map((brief) => ctx.db.delete(brief._id)),
+    ...fits.map((fit) => ctx.db.delete(fit._id)),
+    ...artifacts.map((artifact) => ctx.db.delete(artifact._id)),
+    ...tasks.map((task) => ctx.db.delete(task._id)),
   ]);
+  const importRunIds = [
+    ...new Set(sources.flatMap((source) => (source.importRunId ? [source.importRunId] : []))),
+  ];
+  for (const importRunId of importRunIds) {
+    const remainingSources = await ctx.db
+      .query("jobSources")
+      .withIndex("by_import_run", (q) => q.eq("importRunId", importRunId))
+      .collect();
+    if (remainingSources.length === 0) await ctx.db.delete(importRunId);
+  }
   await ctx.db.delete(applicationId);
 }
 
@@ -541,7 +786,8 @@ async function reassignApplicationAgentData(
   sourceApplicationId: Id<"applications">,
   targetApplicationId: Id<"applications">,
 ) {
-  const [threads, drafts, versions] = await Promise.all([
+  const [threads, drafts, versions, sources, sourceBrief, targetBrief, fits, artifacts, tasks] =
+    await Promise.all([
     ctx.db
       .query("applicationAgentThreads")
       .withIndex("by_application", (q) => q.eq("applicationId", sourceApplicationId))
@@ -554,10 +800,88 @@ async function reassignApplicationAgentData(
       .query("tailoredCvVersions")
       .withIndex("by_application", (q) => q.eq("applicationId", sourceApplicationId))
       .collect(),
+    ctx.db
+      .query("jobSources")
+      .withIndex("by_application", (q) => q.eq("applicationId", sourceApplicationId))
+      .collect(),
+    ctx.db
+      .query("jobBriefs")
+      .withIndex("by_application", (q) => q.eq("applicationId", sourceApplicationId))
+      .unique(),
+    ctx.db
+      .query("jobBriefs")
+      .withIndex("by_application", (q) => q.eq("applicationId", targetApplicationId))
+      .unique(),
+    ctx.db
+      .query("fitAssessments")
+      .withIndex("by_application", (q) => q.eq("applicationId", sourceApplicationId))
+      .collect(),
+    ctx.db
+      .query("applicationArtifacts")
+      .withIndex("by_application", (q) => q.eq("applicationId", sourceApplicationId))
+      .collect(),
+    ctx.db
+      .query("applicationTasks")
+      .withIndex("by_application", (q) => q.eq("applicationId", sourceApplicationId))
+      .collect(),
   ]);
   await Promise.all([
     ...threads.map((thread) => ctx.db.patch(thread._id, { applicationId: targetApplicationId })),
     ...drafts.map((draft) => ctx.db.patch(draft._id, { applicationId: targetApplicationId })),
     ...versions.map((version) => ctx.db.patch(version._id, { applicationId: targetApplicationId })),
+    ...sources.map((source) => ctx.db.patch(source._id, { applicationId: targetApplicationId })),
+    ...fits.map((fit) => ctx.db.patch(fit._id, { applicationId: targetApplicationId })),
+    ...artifacts.map((artifact) =>
+      ctx.db.patch(artifact._id, { applicationId: targetApplicationId }),
+    ),
+    ...tasks.map((task) => ctx.db.patch(task._id, { applicationId: targetApplicationId })),
+    ...(sourceBrief
+      ? [
+          targetBrief
+            ? ctx.db.delete(sourceBrief._id)
+            : ctx.db.patch(sourceBrief._id, { applicationId: targetApplicationId }),
+        ]
+      : []),
   ]);
+}
+
+async function recordJobSource(
+  ctx: MutationCtx,
+  userId: string,
+  applicationId: Id<"applications">,
+  source: {
+    sourceUrl: string | undefined;
+    jobDescription: string | undefined;
+    companyName: string;
+    position: string;
+  },
+) {
+  const now = Date.now();
+  const rawSnapshot = [
+    `Company: ${source.companyName}`,
+    `Position: ${source.position}`,
+    source.sourceUrl ? `URL: ${source.sourceUrl}` : "",
+    source.jobDescription ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, 60_000);
+  const importRunId = await ctx.db.insert("importRuns", {
+    userId,
+    mode: "single",
+    status: "complete",
+    rawSnapshot,
+    discoveredRoleCount: 1,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await ctx.db.insert("jobSources", {
+    userId,
+    applicationId,
+    importRunId,
+    sourceType: source.sourceUrl ? "url" : source.jobDescription ? "text" : "manual",
+    sourceUrl: source.sourceUrl,
+    rawSnapshot,
+    fetchedAt: now,
+  });
 }
