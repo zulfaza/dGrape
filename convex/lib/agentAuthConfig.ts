@@ -20,3 +20,8 @@ export function appOrigin() {
 export function codeKey() {
   return required("AGENT_AUTH_CODE_KEY")
 }
+
+/** The WorkOS API key, used to read the verified email of a signed-in user. */
+export function workosApiKey() {
+  return required("WORKOS_API_KEY")
+}
