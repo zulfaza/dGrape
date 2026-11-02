@@ -11,7 +11,10 @@ import {
   type QueryCtx,
 } from "./_generated/server"
 import { requireMembership } from "./lib/auth"
-import { collectionFieldValidator } from "./lib/collectionDomain"
+import {
+  collectionFieldValidator,
+  recordValuesValidator,
+} from "./lib/collectionDomain"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_ACTIVE_GRANTS = 10
@@ -195,7 +198,7 @@ const record = v.object({
   collectionId: v.id("collections"),
   schemaVersion: v.literal(1),
   revision: v.number(),
-  values: v.record(v.string(), v.union(v.string(), v.number(), v.boolean())),
+  values: recordValuesValidator,
 })
 export const read = internalQuery({
   args: {
