@@ -69,7 +69,17 @@ The current direction is the simple sloth in public/brand/sloth-concept.png. The
 
 Use flat warm-brown shapes, a pale face, clear sloth eye patches, simple dark outlines, and minimal prop accents. Keep shapes readable at small sizes. Avoid fur detail, glossy 3D eyes, pouches, jewelry, and elaborate props. The initial sheet shows welcome, organizing, and report poses with earlier lilac props; that does not require a lilac UI theme. A final production asset set can follow after selection.
 
-Use the mascot in welcome/setup, helpful empty states, and occasional completion moments. It does not replace a status label, act as a progress indicator, cover data, or celebrate a failed operation. No endless idle movement. Reduced-motion users receive a static equivalent.
+Production poses are individual transparent 512×512 PNGs in public/brand/mascot, rendered through the Mascot component (src/components/mascot.tsx) as decorative images:
+
+| Pose | Use |
+| --- | --- |
+| wave | Landing hero, first workspace, first collection |
+| laptop | Connect your agent, landing call to action |
+| chart | Empty collection: add your first record |
+| celebrate | A new credential, other completion moments |
+| thinking | Not-found and nothing-matches states |
+
+Generate a new pose from the model reference rather than editing an existing pose, and record its prompt. Use the mascot in welcome/setup, helpful empty states, and occasional completion moments. It does not replace a status label, act as a progress indicator, cover data, or celebrate a failed operation. No endless idle movement. Reduced-motion users receive a static equivalent.
 
 ## Feature explanations
 
@@ -86,6 +96,6 @@ Explain the five capabilities through one concrete workflow: create a collection
 
 Check keyboard interaction, focus order, dialog closing/return focus, contrast pairs in both themes, form errors, long values, empty/error/loading states, mobile overflow, and reduced motion. Build the standalone specimen and run tsrs against it.
 
-The original three-pose mascot sheet has a light background. Additional transparent model-reference and six-pose sheets are available at public/brand/mascot-reference.png and public/brand/mascot-poses.png, with prompts in architecture/design/assets/mascot-library.md. All remain concept artwork for curation. The full authenticated app still has its old theme until curation is complete. Do not claim backend, connection, scheduler, or production chart functionality from this local specimen.
+The original three-pose mascot sheet has a light background. The transparent model reference (public/brand/mascot-reference.png) is the character reference for new poses; prompts are in architecture/design/assets/mascot-library.md. The full authenticated app still has its old theme until curation is complete. Do not claim backend, connection, scheduler, or production chart functionality from this local specimen.
 
 Geometry is shared through src/styles/geometry.css and imported by both app and specimen stylesheets. The live sample was checked after the component feedback: dialog 8px, input/buttons 6px in the portaled form; 40×40px file markers; one recipe toast and no duplicate result line; labeled chart tooltips on keyboard focus and touch. These are regression checks, not reasons to introduce per-screen CSS exceptions.
