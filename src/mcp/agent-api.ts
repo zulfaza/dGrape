@@ -19,7 +19,7 @@ export class AgentApiError extends Schema.TaggedError<AgentApiError>()(
   { message: Schema.String }
 ) {}
 
-const Field = Schema.Struct({
+export const Field = Schema.Struct({
   id: Schema.String,
   label: Schema.String,
   type: Schema.Literals(["text", "number", "boolean"]),
@@ -37,21 +37,33 @@ export const WorkspaceDescription = Schema.Struct({
   collectionsTruncated: Schema.Boolean,
 })
 
+const RecordValue = Schema.Union([Schema.String, Schema.Number, Schema.Boolean])
+export const RecordValues = Schema.Record(Schema.String, RecordValue)
+
 export const RecordPage = Schema.Struct({
   page: Schema.Array(
     Schema.Struct({
       _id: Schema.String,
       _creationTime: Schema.Number,
       revision: Schema.Number,
-      values: Schema.Record(
-        Schema.String,
-        Schema.Union([Schema.String, Schema.Number, Schema.Boolean])
-      ),
+      values: RecordValues,
     })
   ),
   isDone: Schema.Boolean,
   continueCursor: Schema.String,
 })
+
+export const CreatedCollection = Schema.Struct({ id: Schema.String })
+
+export const CreatedRecord = Schema.Struct({
+  id: Schema.String,
+  revision: Schema.Number,
+  status: Schema.Literals(["created", "existing"]),
+})
+
+export const UpdatedRecord = Schema.Struct({ revision: Schema.Number })
+
+const ErrorBody = Schema.Struct({ error: Schema.String })
 
 export interface ListRecordsInput {
   readonly collectionId: string
@@ -59,26 +71,54 @@ export interface ListRecordsInput {
   readonly cursor?: string | undefined
 }
 
+export interface CreateCollectionInput {
+  readonly name: string
+  readonly fields: ReadonlyArray<typeof Field.Type>
+}
+
+export interface CreateRecordInput {
+  readonly collectionId: string
+  readonly values: typeof RecordValues.Type
+  readonly idempotencyKey?: string | undefined
+}
+
+export interface UpdateRecordInput {
+  readonly collectionId: string
+  readonly recordId: string
+  readonly expectedRevision: number
+  readonly values: typeof RecordValues.Type
+}
+
+type Call<A> = Effect.Effect<A, AgentApiError, AgentCredential>
+
 export class AgentApi extends Context.Service<
   AgentApi,
   {
-    readonly describeWorkspace: Effect.Effect<
-      typeof WorkspaceDescription.Type,
-      AgentApiError,
-      AgentCredential
-    >
+    readonly describeWorkspace: Call<typeof WorkspaceDescription.Type>
     readonly listRecords: (
       input: ListRecordsInput
-    ) => Effect.Effect<typeof RecordPage.Type, AgentApiError, AgentCredential>
+    ) => Call<typeof RecordPage.Type>
+    readonly createCollection: (
+      input: CreateCollectionInput
+    ) => Call<typeof CreatedCollection.Type>
+    readonly createRecord: (
+      input: CreateRecordInput
+    ) => Call<typeof CreatedRecord.Type>
+    readonly updateRecord: (
+      input: UpdateRecordInput
+    ) => Call<typeof UpdatedRecord.Type>
   }
 >()("dfe/AgentApi") {}
 
+const UNAVAILABLE = "DFE is unavailable. Try again later."
+
+/** A fallback for error responses that carry no message of their own. */
 function statusMessage(status: number) {
   if (status === 401 || status === 403)
-    return "The credential is missing, expired, or revoked, or it cannot read this collection."
+    return "The credential is missing, expired, or revoked, or it cannot access this collection."
   if (status === 400)
     return "The request is invalid. Check collectionId, limit (1 to 50), and cursor."
-  return "DFE is unavailable. Try again later."
+  return UNAVAILABLE
 }
 
 /** Builds the client for the agent API at `baseUrl` (the Convex site URL). */
@@ -87,44 +127,75 @@ export const layer = (baseUrl: string) =>
     AgentApi,
     Effect.gen(function* () {
       const http = yield* HttpClient.HttpClient
-      const get = <A>(
-        path: string,
-        params: Record<string, string>,
+      const url = (path: string) => new URL(path, baseUrl).toString()
+
+      /**
+       * Sends `request` with the caller's credential. A 2xx body decodes with
+       * `schema`; any other status becomes an AgentApiError that carries the
+       * API's own reason when it gives one.
+       */
+      const send = <A>(
+        request: HttpClientRequest.HttpClientRequest,
         schema: Schema.Codec<A, unknown>
-      ) =>
+      ): Call<A> =>
         Effect.gen(function* () {
           const { token } = yield* AgentCredential
-          const request = HttpClientRequest.get(
-            new URL(path, baseUrl).toString()
-          ).pipe(
-            HttpClientRequest.setUrlParams(params),
-            HttpClientRequest.bearerToken(token)
+          const response = yield* http.execute(
+            HttpClientRequest.bearerToken(request, token)
           )
-          const response = yield* http.execute(request)
-          if (response.status !== 200)
-            return yield* new AgentApiError({
-              message: statusMessage(response.status),
-            })
-          return yield* HttpClientResponse.schemaBodyJson(schema)(response)
+          if (response.status >= 200 && response.status < 300)
+            return yield* HttpClientResponse.schemaBodyJson(schema)(response)
+          const reason = yield* HttpClientResponse.schemaBodyJson(ErrorBody)(
+            response
+          ).pipe(
+            Effect.map((body) => body.error),
+            Effect.orElseSucceed(() => statusMessage(response.status))
+          )
+          return yield* new AgentApiError({ message: reason })
         }).pipe(
           Effect.catchTags({
             HttpClientError: () =>
-              Effect.fail(new AgentApiError({ message: statusMessage(503) })),
+              Effect.fail(new AgentApiError({ message: UNAVAILABLE })),
             SchemaError: () =>
-              Effect.fail(new AgentApiError({ message: statusMessage(503) })),
+              Effect.fail(new AgentApiError({ message: UNAVAILABLE })),
           })
         )
+
+      const json = (
+        request: HttpClientRequest.HttpClientRequest,
+        body: unknown
+      ) => HttpClientRequest.bodyJsonUnsafe(request, body)
+
       return {
-        describeWorkspace: get("/agent/workspace", {}, WorkspaceDescription),
+        describeWorkspace: send(
+          HttpClientRequest.get(url("/agent/workspace")),
+          WorkspaceDescription
+        ),
         listRecords: ({ collectionId, limit, cursor }) =>
-          get(
-            "/agent/records",
-            {
-              collectionId,
-              ...(limit === undefined ? {} : { limit: String(limit) }),
-              ...(cursor === undefined ? {} : { cursor }),
-            },
+          send(
+            HttpClientRequest.get(url("/agent/records")).pipe(
+              HttpClientRequest.setUrlParams({
+                collectionId,
+                ...(limit === undefined ? {} : { limit: String(limit) }),
+                ...(cursor === undefined ? {} : { cursor }),
+              })
+            ),
             RecordPage
+          ),
+        createCollection: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/collections")), input),
+            CreatedCollection
+          ),
+        createRecord: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/records")), input),
+            CreatedRecord
+          ),
+        updateRecord: (input) =>
+          send(
+            json(HttpClientRequest.patch(url("/agent/records")), input),
+            UpdatedRecord
           ),
       }
     })
