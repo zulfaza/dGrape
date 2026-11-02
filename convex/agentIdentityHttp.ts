@@ -93,8 +93,6 @@ export const register = httpAction(async (ctx, request) => {
         "This email has too many registrations waiting. Finish or wait for one of them."
       )
     const siteUrl = issuer()
-    const verificationUri = new URL("/claim", appOrigin())
-    verificationUri.searchParams.set("claim_attempt_token", attemptToken)
     return Response.json(
       {
         registration_id: result.registrationId,
@@ -103,12 +101,86 @@ export const register = httpAction(async (ctx, request) => {
         claim_token: claimToken,
         claim_token_expires: new Date(result.claimExpiresAt).toISOString(),
         post_claim_scopes: SCOPES.readwrite,
-        claim: {
-          user_code: userCode,
-          expires_in: CLAIM_ATTEMPT_MS / 1000,
-          verification_uri: verificationUri.toString(),
-          interval: POLL_INTERVAL_SECONDS,
-        },
+        claim: claimBlock(attemptToken, userCode),
+      },
+      { headers: noStore }
+    )
+  } catch {
+    return oauthError(503, "temporarily_unavailable", "Try again later.")
+  }
+})
+
+/** The claim link and code for one claim attempt, as auth.md returns them. */
+function claimBlock(attemptToken: string, userCode: string) {
+  const verificationUri = new URL("/claim", appOrigin())
+  verificationUri.searchParams.set("claim_attempt_token", attemptToken)
+  return {
+    user_code: userCode,
+    expires_in: CLAIM_ATTEMPT_MS / 1000,
+    verification_uri: verificationUri.toString(),
+    interval: POLL_INTERVAL_SECONDS,
+  }
+}
+
+/**
+ * `POST /agent/identity/claim`: a new code and link for a pending
+ * registration, for example after `expired_token`.
+ */
+export const newClaim = httpAction(async (ctx, request) => {
+  const body = await readJson(request)
+  if (!isObject(body) || typeof body.claim_token !== "string")
+    return oauthError(400, "invalid_request", "Send { claim_token, email }.")
+  const email = parseLoginHint(body.email)
+  if (!email)
+    return oauthError(
+      400,
+      "invalid_request",
+      "Send the same email you registered with."
+    )
+  const attemptToken = randomToken("cat")
+  const userCode = randomUserCode()
+  try {
+    const result = await ctx.runMutation(
+      internal.agentRegistrations.newClaimAttempt,
+      {
+        claimTokenDigest: await sha256(body.claim_token),
+        email,
+        attemptTokenDigest: await sha256(attemptToken),
+        userCodeDigest: await keyedDigest(codeKey(), userCode),
+        now: Date.now(),
+      }
+    )
+    if (result.status === "invalid_claim_token")
+      return oauthError(
+        400,
+        "invalid_claim_token",
+        "The claim token is not valid for this email."
+      )
+    if (result.status === "claimed_or_in_flight")
+      return oauthError(
+        409,
+        "claimed_or_in_flight",
+        "This registration is already claimed. Poll /oauth2/token or exchange your identity_assertion."
+      )
+    if (result.status === "claim_expired")
+      return oauthError(
+        410,
+        "claim_expired",
+        "The claim window closed. Register again."
+      )
+    if (result.status === "rate_limited")
+      return oauthError(
+        429,
+        "rate_limited",
+        "Too many codes for this registration. Register again."
+      )
+    return Response.json(
+      {
+        registration_id: result.registrationId,
+        claim_attempt_id: result.claimAttemptId,
+        status: "initiated",
+        expires_at: new Date(result.expiresAt).toISOString(),
+        claim_attempt: claimBlock(attemptToken, userCode),
       },
       { headers: noStore }
     )

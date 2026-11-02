@@ -11,6 +11,7 @@ import {
   ACCESS_TOKEN_LIFETIME_MS,
   CLAIM_ATTEMPT_MS,
   CLAIM_WINDOW_MS,
+  MAX_CLAIM_ATTEMPTS,
   MAX_CODE_TRIES,
   MAX_PENDING_PER_EMAIL,
   POLL_INTERVAL_SECONDS,
@@ -376,5 +377,74 @@ export const revokeAccessToken = internalMutation({
     if (grant?.state === "active")
       await ctx.db.patch(grant._id, { state: "revoked" })
     return null
+  },
+})
+
+const newAttemptResult = v.union(
+  v.object({ status: v.literal("invalid_claim_token") }),
+  v.object({ status: v.literal("claimed_or_in_flight") }),
+  v.object({ status: v.literal("claim_expired") }),
+  v.object({ status: v.literal("rate_limited") }),
+  v.object({
+    status: v.literal("initiated"),
+    registrationId: v.id("agentRegistrations"),
+    claimAttemptId: v.id("agentClaimAttempts"),
+    expiresAt: v.number(),
+  })
+)
+
+/**
+ * Starts a new claim attempt with a new code and link, for example after
+ * the previous code expired. The previous link stops working. The email
+ * must be the one the registration was made for: a different email needs
+ * a new registration.
+ */
+export const newClaimAttempt = internalMutation({
+  args: {
+    claimTokenDigest: v.string(),
+    email: v.string(),
+    attemptTokenDigest: v.string(),
+    userCodeDigest: v.string(),
+    now: v.number(),
+  },
+  returns: newAttemptResult,
+  handler: async (ctx, args): Promise<Infer<typeof newAttemptResult>> => {
+    const registration = await ctx.db
+      .query("agentRegistrations")
+      .withIndex("by_claimTokenDigest", (q) =>
+        q.eq("claimTokenDigest", args.claimTokenDigest)
+      )
+      .unique()
+    if (!registration || registration.loginHint !== args.email)
+      return { status: "invalid_claim_token" }
+    if (registration.status !== "pending")
+      return { status: "claimed_or_in_flight" }
+    if (registration.claimExpiresAt <= args.now)
+      return { status: "claim_expired" }
+    const attempts = await ctx.db
+      .query("agentClaimAttempts")
+      .withIndex("by_registrationId", (q) =>
+        q.eq("registrationId", registration._id)
+      )
+      .take(MAX_CLAIM_ATTEMPTS)
+    if (attempts.length >= MAX_CLAIM_ATTEMPTS) return { status: "rate_limited" }
+    for (const attempt of attempts)
+      if (attempt.state === "open")
+        await ctx.db.patch(attempt._id, { state: "replaced" })
+    const expiresAt = args.now + CLAIM_ATTEMPT_MS
+    const claimAttemptId = await ctx.db.insert("agentClaimAttempts", {
+      registrationId: registration._id,
+      attemptTokenDigest: args.attemptTokenDigest,
+      userCodeDigest: args.userCodeDigest,
+      expiresAt,
+      failedTries: 0,
+      state: "open",
+    })
+    return {
+      status: "initiated",
+      registrationId: registration._id,
+      claimAttemptId,
+      expiresAt,
+    }
   },
 })

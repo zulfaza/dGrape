@@ -18,6 +18,8 @@ export const POLL_INTERVAL_SECONDS = 5
 export const ACCESS_TOKEN_LIFETIME_MS = 60 * 60 * 1000
 /** Wrong codes allowed for one claim attempt before it locks. */
 export const MAX_CODE_TRIES = 5
+/** Claim attempts (codes) allowed for one registration. */
+export const MAX_CLAIM_ATTEMPTS = 10
 /** Pending registrations allowed for one email at a time. */
 export const MAX_PENDING_PER_EMAIL = 5
 
@@ -63,10 +65,12 @@ export const agentClaimAttemptValidator = v.object({
   userCodeDigest: v.string(),
   expiresAt: v.number(),
   failedTries: v.number(),
+  /** "replaced": the agent asked for a new code, so this one stopped working. */
   state: v.union(
     v.literal("open"),
     v.literal("completed"),
-    v.literal("locked")
+    v.literal("locked"),
+    v.literal("replaced")
   ),
 })
 

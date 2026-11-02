@@ -4,6 +4,7 @@ import { internal } from "./_generated/api"
 import { digestToken } from "./agentAccess"
 import {
   jwks,
+  newClaim as newAgentClaim,
   register as registerAgent,
   revoke as revokeAgentToken,
   token as agentToken,
@@ -328,6 +329,16 @@ http.route({
 })
 http.route({ path: "/agent/identity", method: "OPTIONS", handler: preflight })
 http.route({ path: "/agent/identity", method: "POST", handler: registerAgent })
+http.route({
+  path: "/agent/identity/claim",
+  method: "OPTIONS",
+  handler: preflight,
+})
+http.route({
+  path: "/agent/identity/claim",
+  method: "POST",
+  handler: newAgentClaim,
+})
 http.route({ path: "/oauth2/token", method: "OPTIONS", handler: preflight })
 http.route({ path: "/oauth2/token", method: "POST", handler: agentToken })
 http.route({ path: "/oauth2/revoke", method: "OPTIONS", handler: preflight })
