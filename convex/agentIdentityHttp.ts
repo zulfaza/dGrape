@@ -9,6 +9,15 @@ import {
 } from "./lib/agentAuthCrypto"
 import { appOrigin, codeKey, issuer } from "./lib/agentAuthConfig"
 import {
+  CLAIM_GRANT,
+  JWT_BEARER_GRANT,
+  apiResource,
+  authMd,
+  authorizationServerMetadata,
+  endpoints,
+  protectedResourceMetadata,
+} from "./lib/agentAuthDiscovery"
+import {
   publicJwks,
   signAssertion,
   verifyAssertion,
@@ -189,9 +198,6 @@ export const newClaim = httpAction(async (ctx, request) => {
   }
 })
 
-const CLAIM_GRANT = "urn:workos:agent-auth:grant-type:claim"
-const JWT_BEARER_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer"
-
 /** Reads an `application/x-www-form-urlencoded` body of at most 16 KiB. */
 async function readForm(request: Request) {
   const text = await request.text()
@@ -326,3 +332,43 @@ export const jwks = httpAction(async () =>
     },
   })
 )
+
+const publicJson = {
+  "Cache-Control": "public, max-age=300",
+  "Access-Control-Allow-Origin": "*",
+}
+
+/** `GET /.well-known/oauth-authorization-server` (RFC 8414 + auth.md). */
+export const authorizationServer = httpAction(async () =>
+  Response.json(authorizationServerMetadata(), { headers: publicJson })
+)
+
+/** `GET /.well-known/oauth-protected-resource` for the agent HTTP API. */
+export const protectedResource = httpAction(async () =>
+  Response.json(protectedResourceMetadata(apiResource()), {
+    headers: publicJson,
+  })
+)
+
+/** `GET /auth.md`: registration instructions for agents. */
+export const skill = httpAction(
+  async () =>
+    new Response(authMd(), {
+      headers: {
+        ...publicJson,
+        "Content-Type": "text/markdown; charset=utf-8",
+      },
+    })
+)
+
+/** A 401 that points agents to the discovery metadata. */
+export function unauthorized() {
+  return new Response("Unauthorized", {
+    status: 401,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Expose-Headers": "WWW-Authenticate",
+      "WWW-Authenticate": `Bearer resource_metadata="${endpoints().protectedResource}"`,
+    },
+  })
+}
