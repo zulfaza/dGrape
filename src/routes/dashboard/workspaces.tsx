@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { useMutation, usePaginatedQuery } from "convex/react"
 import { useState, type FormEvent } from "react"
 import { toast } from "@/components/ui/toast"
@@ -109,7 +109,13 @@ function WorkspacesPage() {
               key={workspace._id}
               className="rounded-lg border bg-card p-4 font-medium"
             >
-              {workspace.name}
+              <Link
+                to="/dashboard/workspaces/$workspaceId"
+                params={{ workspaceId: workspace._id }}
+                className="block"
+              >
+                {workspace.name}
+              </Link>
             </li>
           ))}
         </ul>

@@ -9,32 +9,23 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SignUpRouteImport } from './routes/sign-up'
-import { Route as SignOutRouteImport } from './routes/sign-out'
-import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as CallbackRouteImport } from './routes/callback'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SignOutRouteImport } from './routes/sign-out'
+import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
-import { Route as DashboardWorkspacesRouteImport } from './routes/dashboard/workspaces'
-import { Route as DashboardProfileRouteImport } from './routes/dashboard/profile'
 import { Route as DashboardCompaniesRouteImport } from './routes/dashboard/companies'
+import { Route as DashboardProfileRouteImport } from './routes/dashboard/profile'
+import { Route as DashboardWorkspacesRouteImport } from './routes/dashboard/workspaces'
 import { Route as DashboardApplicationsIndexRouteImport } from './routes/dashboard/applications/index'
 import { Route as DashboardApplicationsApplicationIdRouteImport } from './routes/dashboard/applications/$applicationId'
+import { Route as DashboardWorkspacesWorkspaceIdRouteImport } from './routes/dashboard/workspaces_.$workspaceId'
 
-const SignUpRoute = SignUpRouteImport.update({
-  id: '/sign-up',
-  path: '/sign-up',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignOutRoute = SignOutRouteImport.update({
-  id: '/sign-out',
-  path: '/sign-out',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignInRoute = SignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CallbackRoute = CallbackRouteImport.update({
@@ -47,9 +38,19 @@ const DashboardRouteRoute = DashboardRouteRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignOutRoute = SignOutRouteImport.update({
+  id: '/sign-out',
+  path: '/sign-out',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
@@ -57,9 +58,9 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
-const DashboardWorkspacesRoute = DashboardWorkspacesRouteImport.update({
-  id: '/workspaces',
-  path: '/workspaces',
+const DashboardCompaniesRoute = DashboardCompaniesRouteImport.update({
+  id: '/companies',
+  path: '/companies',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardProfileRoute = DashboardProfileRouteImport.update({
@@ -67,9 +68,9 @@ const DashboardProfileRoute = DashboardProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
-const DashboardCompaniesRoute = DashboardCompaniesRouteImport.update({
-  id: '/companies',
-  path: '/companies',
+const DashboardWorkspacesRoute = DashboardWorkspacesRouteImport.update({
+  id: '/workspaces',
+  path: '/workspaces',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardApplicationsIndexRoute =
@@ -82,6 +83,12 @@ const DashboardApplicationsApplicationIdRoute =
   DashboardApplicationsApplicationIdRouteImport.update({
     id: '/applications/$applicationId',
     path: '/applications/$applicationId',
+    getParentRoute: () => DashboardRouteRoute,
+  } as any)
+const DashboardWorkspacesWorkspaceIdRoute =
+  DashboardWorkspacesWorkspaceIdRouteImport.update({
+    id: '/workspaces_/$workspaceId',
+    path: '/workspaces/$workspaceId',
     getParentRoute: () => DashboardRouteRoute,
   } as any)
 
@@ -97,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/workspaces': typeof DashboardWorkspacesRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/applications/$applicationId': typeof DashboardApplicationsApplicationIdRoute
+  '/dashboard/workspaces/$workspaceId': typeof DashboardWorkspacesWorkspaceIdRoute
   '/dashboard/applications/': typeof DashboardApplicationsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -110,6 +118,7 @@ export interface FileRoutesByTo {
   '/dashboard/workspaces': typeof DashboardWorkspacesRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/applications/$applicationId': typeof DashboardApplicationsApplicationIdRoute
+  '/dashboard/workspaces/$workspaceId': typeof DashboardWorkspacesWorkspaceIdRoute
   '/dashboard/applications': typeof DashboardApplicationsIndexRoute
 }
 export interface FileRoutesById {
@@ -125,6 +134,7 @@ export interface FileRoutesById {
   '/dashboard/workspaces': typeof DashboardWorkspacesRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/applications/$applicationId': typeof DashboardApplicationsApplicationIdRoute
+  '/dashboard/workspaces_/$workspaceId': typeof DashboardWorkspacesWorkspaceIdRoute
   '/dashboard/applications/': typeof DashboardApplicationsIndexRoute
 }
 export interface FileRouteTypes {
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/dashboard/workspaces'
     | '/dashboard/'
     | '/dashboard/applications/$applicationId'
+    | '/dashboard/workspaces/$workspaceId'
     | '/dashboard/applications/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/dashboard/workspaces'
     | '/dashboard'
     | '/dashboard/applications/$applicationId'
+    | '/dashboard/workspaces/$workspaceId'
     | '/dashboard/applications'
   id:
     | '__root__'
@@ -168,6 +180,7 @@ export interface FileRouteTypes {
     | '/dashboard/workspaces'
     | '/dashboard/'
     | '/dashboard/applications/$applicationId'
+    | '/dashboard/workspaces_/$workspaceId'
     | '/dashboard/applications/'
   fileRoutesById: FileRoutesById
 }
@@ -182,25 +195,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sign-up': {
-      id: '/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof SignUpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-out': {
-      id: '/sign-out'
-      path: '/sign-out'
-      fullPath: '/sign-out'
-      preLoaderRoute: typeof SignOutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-in': {
-      id: '/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof SignInRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/callback': {
@@ -217,11 +216,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-out': {
+      id: '/sign-out'
+      path: '/sign-out'
+      fullPath: '/sign-out'
+      preLoaderRoute: typeof SignOutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/': {
@@ -231,11 +244,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
-    '/dashboard/workspaces': {
-      id: '/dashboard/workspaces'
-      path: '/workspaces'
-      fullPath: '/dashboard/workspaces'
-      preLoaderRoute: typeof DashboardWorkspacesRouteImport
+    '/dashboard/companies': {
+      id: '/dashboard/companies'
+      path: '/companies'
+      fullPath: '/dashboard/companies'
+      preLoaderRoute: typeof DashboardCompaniesRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/profile': {
@@ -245,11 +258,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardProfileRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
-    '/dashboard/companies': {
-      id: '/dashboard/companies'
-      path: '/companies'
-      fullPath: '/dashboard/companies'
-      preLoaderRoute: typeof DashboardCompaniesRouteImport
+    '/dashboard/workspaces': {
+      id: '/dashboard/workspaces'
+      path: '/workspaces'
+      fullPath: '/dashboard/workspaces'
+      preLoaderRoute: typeof DashboardWorkspacesRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/applications/': {
@@ -266,6 +279,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardApplicationsApplicationIdRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/workspaces_/$workspaceId': {
+      id: '/dashboard/workspaces_/$workspaceId'
+      path: '/workspaces/$workspaceId'
+      fullPath: '/dashboard/workspaces/$workspaceId'
+      preLoaderRoute: typeof DashboardWorkspacesWorkspaceIdRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
   }
 }
 
@@ -275,6 +295,7 @@ interface DashboardRouteRouteChildren {
   DashboardWorkspacesRoute: typeof DashboardWorkspacesRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardApplicationsApplicationIdRoute: typeof DashboardApplicationsApplicationIdRoute
+  DashboardWorkspacesWorkspaceIdRoute: typeof DashboardWorkspacesWorkspaceIdRoute
   DashboardApplicationsIndexRoute: typeof DashboardApplicationsIndexRoute
 }
 
@@ -285,6 +306,7 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardApplicationsApplicationIdRoute:
     DashboardApplicationsApplicationIdRoute,
+  DashboardWorkspacesWorkspaceIdRoute: DashboardWorkspacesWorkspaceIdRoute,
   DashboardApplicationsIndexRoute: DashboardApplicationsIndexRoute,
 }
 
