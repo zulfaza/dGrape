@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Building2, LayoutDashboard, UserRound, PanelsTopLeft } from "lucide-react";
+import { PanelsTopLeft } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TerminalIcon } from "@hugeicons/core-free-icons";
@@ -53,30 +53,6 @@ export function AppSidebar({
                 <Link activeProps={ACTIVE_LINK_PROPS} to="/dashboard/workspaces">
                   <PanelsTopLeft />
                   <span>Workspaces</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Applications">
-                <Link activeProps={ACTIVE_LINK_PROPS} to="/dashboard/applications">
-                  <LayoutDashboard />
-                  <span>Applications</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Companies">
-                <Link activeProps={ACTIVE_LINK_PROPS} to="/dashboard/companies">
-                  <Building2 />
-                  <span>Companies</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Profile">
-                <Link activeProps={ACTIVE_LINK_PROPS} to="/dashboard/profile">
-                  <UserRound />
-                  <span>Profile</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

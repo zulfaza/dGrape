@@ -10,8 +10,8 @@ type NotFoundProps = {
 }
 
 export function NotFound({
-  homeHref = "/dashboard/applications",
-  homeLabel = "Back to applications",
+  homeHref = "/dashboard/workspaces",
+  homeLabel = "Back to workspaces",
 }: NotFoundProps) {
   return (
     <main className="relative flex min-h-[60svh] flex-1 items-center justify-center overflow-hidden p-6">
