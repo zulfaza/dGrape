@@ -10,6 +10,7 @@ import {
   query,
   type QueryCtx,
 } from "./_generated/server"
+import { agentScopeValidator } from "./lib/agentScope"
 import { requireMembership } from "./lib/auth"
 import {
   collectionFieldValidator,
@@ -25,7 +26,7 @@ const metadata = v.object({
   _creationTime: v.number(),
   expiresAt: v.number(),
   state: v.union(v.literal("active"), v.literal("revoked")),
-  scope: v.literal("readonly"),
+  scope: agentScopeValidator,
 })
 
 export const insert = internalMutation({
@@ -34,6 +35,7 @@ export const insert = internalMutation({
     owner: v.string(),
     digest: v.string(),
     days: v.number(),
+    scope: agentScopeValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -67,7 +69,7 @@ export const insert = internalMutation({
       workspaceId: args.workspaceId,
       owner: args.owner,
       digest: args.digest,
-      scope: "readonly",
+      scope: args.scope,
       state: "active",
       expiresAt: now + args.days * DAY_MS,
     })
@@ -126,8 +128,8 @@ export const revoke = mutation({
   },
 })
 /**
- * Returns the workspace a credential may read, or null when the credential is
- * unknown, revoked, expired, or its owner has lost the workspace.
+ * Returns the workspace and scope of a credential, or null when the credential
+ * is unknown, revoked, expired, or its owner has lost the workspace.
  */
 async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
   const grant = await ctx.db
@@ -137,7 +139,6 @@ async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
   if (
     !grant ||
     grant.state !== "active" ||
-    grant.scope !== "readonly" ||
     grant.expiresAt <= now
   )
     return null
@@ -148,7 +149,7 @@ async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
     )
     .unique()
   if (!member || member.role !== "owner") return null
-  return grant.workspaceId
+  return { workspaceId: grant.workspaceId, scope: grant.scope }
 }
 
 const MAX_DESCRIBED_COLLECTIONS = 100
@@ -170,8 +171,9 @@ export const describe = internalQuery({
     })
   ),
   handler: async (ctx, { digest, now }) => {
-    const workspaceId = await resolveGrant(ctx, digest, now)
-    if (!workspaceId) return "denied"
+    const grant = await resolveGrant(ctx, digest, now)
+    if (!grant) return "denied"
+    const { workspaceId } = grant
     const workspace = await ctx.db.get(workspaceId)
     if (!workspace) return "denied"
     const collections = await ctx.db
@@ -215,8 +217,9 @@ export const read = internalQuery({
   ),
   // Callers (convex/http.ts) validate limit and cursor size at the boundary.
   handler: async (ctx, args) => {
-    const workspaceId = await resolveGrant(ctx, args.digest, args.now)
-    if (!workspaceId) return "denied"
+    const grant = await resolveGrant(ctx, args.digest, args.now)
+    if (!grant) return "denied"
+    const { workspaceId } = grant
     const id = ctx.db.normalizeId("collections", args.collectionId)
     if (!id) return "invalid"
     const collection = await ctx.db.get(id)

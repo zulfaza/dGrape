@@ -11,6 +11,7 @@
 import type * as agentAccess from "../agentAccess.js";
 import type * as agentGrants from "../agentGrants.js";
 import type * as http from "../http.js";
+import type * as lib_agentScope from "../lib/agentScope.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_collectionDomain from "../lib/collectionDomain.js";
 import type * as workspaces from "../workspaces.js";
@@ -25,6 +26,7 @@ declare const fullApi: ApiFromModules<{
   agentAccess: typeof agentAccess;
   agentGrants: typeof agentGrants;
   http: typeof http;
+  "lib/agentScope": typeof lib_agentScope;
   "lib/auth": typeof lib_auth;
   "lib/collectionDomain": typeof lib_collectionDomain;
   workspaces: typeof workspaces;

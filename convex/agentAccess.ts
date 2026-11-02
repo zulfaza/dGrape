@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import { action } from "./_generated/server"
 import { internal } from "./_generated/api"
+import { agentScopeValidator } from "./lib/agentScope"
 import { requireUserId } from "./lib/auth"
 
 function toHex(bytes: ArrayBuffer | Uint8Array) {
@@ -16,7 +17,11 @@ export async function digestToken(token: string) {
   )
 }
 export const create = action({
-  args: { workspaceId: v.id("workspaces"), days: v.number() },
+  args: {
+    workspaceId: v.id("workspaces"),
+    days: v.number(),
+    scope: agentScopeValidator,
+  },
   returns: v.string(),
   handler: async (ctx, args): Promise<string> => {
     const owner = await requireUserId(ctx)

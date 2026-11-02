@@ -2,9 +2,18 @@ import { useAction, useMutation, usePaginatedQuery } from "convex/react"
 import { Component, useState, type FormEvent, type ReactNode } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
+import type { AgentScope } from "../../convex/lib/agentScope"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { toast } from "@/components/ui/toast"
 
 export class AgentAccessBoundary extends Component<
@@ -35,6 +44,11 @@ export class AgentAccessBoundary extends Component<
   }
 }
 
+const SCOPE_LABELS: Record<AgentScope, string> = {
+  readonly: "Read only",
+  readwrite: "Read and write",
+}
+
 /** The Claude Code command that connects this app's `/mcp` endpoint. */
 function mcpCommand(token: string) {
   return `claude mcp add --transport http dfe ${window.location.origin}/mcp --header "Authorization: Bearer ${token}"`
@@ -53,6 +67,7 @@ export function AgentAccess({
     { initialNumItems: 20 }
   )
   const [days, setDays] = useState("30")
+  const [scope, setScope] = useState<AgentScope>("readonly")
   const [token, setToken] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -71,7 +86,7 @@ export function AgentAccess({
     if (saving) return
     setSaving(true)
     try {
-      setToken(await create({ workspaceId, days: duration }))
+      setToken(await create({ workspaceId, days: duration, scope }))
     } catch {
       toast.error("Could not create credential")
     } finally {
@@ -94,8 +109,9 @@ export function AgentAccess({
     <section className="flex flex-col gap-4">
       <h2 className="text-xl font-semibold">Agent access</h2>
       <p>
-        Credentials allow read-only access to records in this workspace. Each
-        credential expires after the selected number of days.
+        Credentials let an agent read this workspace, or also create collections
+        and write records. Each credential expires after the selected number of
+        days.
       </p>
       <p>
         Connect an MCP client to /mcp, or open a collection to copy its HTTP API
@@ -141,8 +157,30 @@ export function AgentAccess({
             disabled={saving}
             inputMode="numeric"
           />
+          <Label htmlFor="grant-scope">Access</Label>
+          <Select
+            value={scope}
+            disabled={saving}
+            onValueChange={(value) => {
+              if (value === "readonly" || value === "readwrite") setScope(value)
+            }}
+          >
+            <SelectTrigger id="grant-scope" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="readonly">
+                  {SCOPE_LABELS.readonly}
+                </SelectItem>
+                <SelectItem value="readwrite">
+                  {SCOPE_LABELS.readwrite}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
           <Button type="submit" disabled={saving}>
-            Create readonly credential
+            Create credential
           </Button>
         </form>
       )}
@@ -155,8 +193,9 @@ export function AgentAccess({
         {results.map((grant) => (
           <li key={grant._id} className="flex items-center gap-2">
             <span>
-              Created {new Date(grant._creationTime).toLocaleDateString()} ·
-              Expires {new Date(grant.expiresAt).toLocaleDateString()} ·{" "}
+              {SCOPE_LABELS[grant.scope]} · Created{" "}
+              {new Date(grant._creationTime).toLocaleDateString()} · Expires{" "}
+              {new Date(grant.expiresAt).toLocaleDateString()} ·{" "}
               {grant.state === "revoked"
                 ? "Revoked"
                 : grant.expiresAt <= Date.now()
