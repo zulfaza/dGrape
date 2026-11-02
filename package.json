@@ -14,7 +14,8 @@
     "lint:fix": "oxlint --fix",
     "format": "oxfmt --write \"**/*.{ts,tsx,js,jsx,json,jsonc}\"",
     "check": "oxfmt --check \"**/*.{ts,tsx,js,jsx,json,jsonc}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit",
+    "typecheck:backend": "tsrs --noEmit -p convex/tsconfig.json"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.39",
@@ -73,6 +74,7 @@
     "jsdom": "^28",
     "oxfmt": "^0.55.0",
     "oxlint": "^1.70.0",
+    "tsrs": "0.20.1-ts7.1.0-beta",
     "typescript": "^6",
     "vite": "^8",
     "vitest": "^4"
