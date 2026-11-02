@@ -33,6 +33,7 @@ export default defineSchema({
   /** auth.md user-claimed registrations; see convex/lib/agentRegistration.ts. */
   agentRegistrations: defineTable(agentRegistrationValidator)
     .index("by_claimTokenDigest", ["claimTokenDigest"])
+    .index("by_workspaceId_and_owner", ["workspaceId", "owner"])
     .index("by_loginHint_and_status_and_claimExpiresAt", [
       "loginHint",
       "status",

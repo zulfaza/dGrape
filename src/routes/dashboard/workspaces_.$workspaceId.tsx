@@ -5,6 +5,7 @@ import { useState } from "react"
 import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { AgentAccess, AgentAccessBoundary } from "@/components/agent-access"
+import { ConnectedAgents } from "@/components/connected-agents"
 import { CollectionRecords } from "@/components/collection-records"
 import { CreateCollectionDialog } from "@/components/create-collection-dialog"
 import { Mascot } from "@/components/mascot"
@@ -165,6 +166,7 @@ function WorkspacePage() {
         {workspace && (
           <AgentAccessBoundary key={workspace._id}>
             <AgentAccess workspaceId={workspace._id} />
+            <ConnectedAgents workspaceId={workspace._id} />
           </AgentAccessBoundary>
         )}
       </div>

@@ -1,12 +1,16 @@
+import {
+  paginationOptsValidator,
+  paginationResultValidator,
+} from "convex/server"
 import { v, type Infer } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Doc } from "./_generated/dataModel"
-import type { QueryCtx } from "./_generated/server"
-import { action, internalMutation, query } from "./_generated/server"
+import type { MutationCtx, QueryCtx } from "./_generated/server"
+import { action, internalMutation, mutation, query } from "./_generated/server"
 import { keyedDigest, sha256 } from "./lib/agentAuthCrypto"
 import { codeKey, workosApiKey } from "./lib/agentAuthConfig"
 import { agentScopeValidator } from "./lib/agentScope"
-import { requireUserId } from "./lib/auth"
+import { requireMembership, requireUserId } from "./lib/auth"
 import {
   ACCESS_TOKEN_LIFETIME_MS,
   CLAIM_ATTEMPT_MS,
@@ -16,7 +20,6 @@ import {
   MAX_PENDING_PER_EMAIL,
   POLL_INTERVAL_SECONDS,
 } from "./lib/agentRegistration"
-import type { MutationCtx } from "./_generated/server"
 
 /**
  * auth.md registration state changes. convex/http.ts calls these after it
@@ -446,5 +449,99 @@ export const newClaimAttempt = internalMutation({
       claimAttemptId,
       expiresAt,
     }
+  },
+})
+
+const connectedAgentValidator = v.object({
+  _id: v.id("agentRegistrations"),
+  email: v.string(),
+  status: v.union(v.literal("claimed"), v.literal("revoked")),
+  scope: v.optional(agentScopeValidator),
+  claimedAt: v.optional(v.number()),
+  revokedAt: v.optional(v.number()),
+})
+
+/** The agents the signed-in user connected to a workspace, newest first. */
+export const listForWorkspace = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(connectedAgentValidator),
+  handler: async (ctx, { workspaceId, paginationOpts }) => {
+    const member = await requireMembership(ctx, workspaceId)
+    if (
+      !Number.isInteger(paginationOpts.numItems) ||
+      paginationOpts.numItems < 1 ||
+      paginationOpts.numItems > 50
+    )
+      throw new Error("Invalid page size")
+    const result = await ctx.db
+      .query("agentRegistrations")
+      .withIndex("by_workspaceId_and_owner", (q) =>
+        q.eq("workspaceId", workspaceId).eq("owner", member.userId)
+      )
+      .order("desc")
+      .paginate(paginationOpts)
+    return {
+      ...result,
+      page: result.page.flatMap(
+        (r): Array<Infer<typeof connectedAgentValidator>> => {
+          if (r.status === "claimed")
+            return [
+              {
+                _id: r._id,
+                email: r.loginHint,
+                status: "claimed",
+                scope: r.scope,
+                claimedAt: r.claimedAt,
+              },
+            ]
+          if (r.status === "revoked")
+            return [
+              {
+                _id: r._id,
+                email: r.loginHint,
+                status: "revoked",
+                revokedAt: r.revokedAt,
+              },
+            ]
+          return []
+        }
+      ),
+    }
+  },
+})
+
+/**
+ * Revokes a connected agent. Its identity assertion and every access token
+ * issued to it stop working (see convex/lib/agentGrant.ts).
+ */
+export const revokeRegistration = mutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    registrationId: v.id("agentRegistrations"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { workspaceId, registrationId }) => {
+    const member = await requireMembership(ctx, workspaceId)
+    const registration = await ctx.db.get(registrationId)
+    if (
+      !registration ||
+      registration.status !== "claimed" ||
+      registration.workspaceId !== workspaceId ||
+      registration.owner !== member.userId
+    )
+      throw new Error("Agent not found")
+    await ctx.db.replace(registration._id, {
+      status: "revoked",
+      loginHint: registration.loginHint,
+      claimTokenDigest: registration.claimTokenDigest,
+      claimExpiresAt: registration.claimExpiresAt,
+      owner: registration.owner,
+      workspaceId: registration.workspaceId,
+      revokedAt: Date.now(),
+    })
+    return null
   },
 })

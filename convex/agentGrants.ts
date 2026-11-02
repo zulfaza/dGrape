@@ -63,6 +63,8 @@ export const insert = internalMutation({
           .eq("state", "active")
           .gt("expiresAt", now)
       )
+      // Tokens of agent registrations are managed with the registration.
+      .filter((q) => q.eq(q.field("registrationId"), undefined))
       .take(MAX_ACTIVE_GRANTS)
     if (active.length >= MAX_ACTIVE_GRANTS)
       throw new Error("Grant limit reached")
@@ -96,6 +98,7 @@ export const list = query({
       .withIndex("by_workspace_owner", (q) =>
         q.eq("workspaceId", workspaceId).eq("owner", member.userId)
       )
+      .filter((q) => q.eq(q.field("registrationId"), undefined))
       .order("desc")
       .paginate(paginationOpts)
     return {
