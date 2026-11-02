@@ -28,62 +28,38 @@ export const Route = createRootRouteWithContext<{
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "dGrape",
+        title: "DFE — Dashboard for Everything",
       },
       {
         name: "description",
         content:
-          "AI-assisted job tracker for tracking applications, tailoring resumes, and learning from outcomes.",
+          "Dashboard for Everything: an agent-first workspace for data, recipes, artifacts, and reports.",
       },
       {
         property: "og:title",
-        content: "dGrape - Job Search OS",
+        content: "DFE — Dashboard for Everything",
       },
       {
         property: "og:description",
         content:
-          "Run your job search like an OS with AI-assisted tracking and insight.",
+          "An agent-first workspace for data, recipes, artifacts, and reports at dfe.makarima.dev.",
       },
       {
         property: "og:type",
         content: "website",
       },
       {
-        property: "og:image",
-        content: "/og-image.png",
-      },
-      {
-        property: "og:image:width",
-        content: "1200",
-      },
-      {
-        property: "og:image:height",
-        content: "630",
-      },
-      {
-        property: "og:image:alt",
-        content: "dGrape job tracker preview",
-      },
-      {
         name: "twitter:card",
-        content: "summary_large_image",
+        content: "summary",
       },
       {
         name: "twitter:title",
-        content: "dGrape - Job Search OS",
+        content: "DFE — Dashboard for Everything",
       },
       {
         name: "twitter:description",
         content:
-          "Run your job search like an OS with AI-assisted tracking and insight.",
-      },
-      {
-        name: "twitter:image",
-        content: "/og-image.png",
-      },
-      {
-        name: "twitter:image:alt",
-        content: "dGrape job tracker preview",
+          "An agent-first workspace for data, recipes, artifacts, and reports at dfe.makarima.dev.",
       },
     ],
     links: [
