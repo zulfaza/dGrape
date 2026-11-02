@@ -17,6 +17,11 @@ import {
   recordValuesValidator,
   type RecordValues,
 } from "./lib/collectionDomain"
+import {
+  deleteRecord as removeRecord,
+  insertRecord,
+  replaceRecordValues,
+} from "./lib/records"
 
 export const list = query({
   args: { paginationOpts: paginationOptsValidator },
@@ -187,12 +192,7 @@ export const createRecord = mutation({
   handler: async (ctx, { collectionId, values }) => {
     const collection = await collectionForRecords(ctx, collectionId)
     validateRecord(collection.definition.fields, values)
-    return ctx.db.insert("collectionRecords", {
-      collectionId,
-      schemaVersion: collection.definition.version,
-      revision: 1,
-      values,
-    })
+    return insertRecord(ctx, collection, values)
   },
 })
 
@@ -216,11 +216,7 @@ export const updateRecord = mutation({
       throw new Error("Invalid revision")
     if (record.revision !== expectedRevision) return "conflict"
     validateRecord(collection.definition.fields, values)
-    await ctx.db.patch(recordId, {
-      values,
-      revision: record.revision + 1,
-      schemaVersion: collection.definition.version,
-    })
+    await replaceRecordValues(ctx, collection, record, values)
     return "updated"
   },
 })
@@ -242,7 +238,7 @@ export const deleteRecord = mutation({
     if (!record || record.collectionId !== collectionId)
       throw new Error("Record not found")
     if (record.revision !== expectedRevision) return "conflict"
-    await ctx.db.delete(recordId)
+    await removeRecord(ctx, recordId)
     return "deleted"
   },
 })

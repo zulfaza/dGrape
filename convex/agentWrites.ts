@@ -9,6 +9,11 @@ import {
   collectionFieldValidator,
   recordValuesValidator,
 } from "./lib/collectionDomain"
+import {
+  deleteRecord as removeRecord,
+  insertRecord,
+  replaceRecordValues,
+} from "./lib/records"
 
 /**
  * Writes made with a "readwrite" agent credential. convex/http.ts calls these
@@ -162,13 +167,12 @@ export const createRecord = internalMutation({
     }
     const checked = checkRecordValues(collection.definition.fields, values)
     if (!checked.ok) return reject(checked.message)
-    const id = await ctx.db.insert("collectionRecords", {
-      collectionId: collection._id,
-      schemaVersion: collection.definition.version,
-      revision: 1,
-      values: checked.value,
-      idempotencyKey,
-    })
+    const id = await insertRecord(
+      ctx,
+      collection,
+      checked.value,
+      idempotencyKey
+    )
     return { status: "created", id, revision: 1 }
   },
 })
@@ -201,12 +205,12 @@ export const updateRecord = internalMutation({
       return { status: "conflict", revision: record.revision }
     const checked = checkRecordValues(collection.definition.fields, args.values)
     if (!checked.ok) return reject(checked.message)
-    const revision = record.revision + 1
-    await ctx.db.patch(record._id, {
-      values: checked.value,
-      revision,
-      schemaVersion: collection.definition.version,
-    })
+    const revision = await replaceRecordValues(
+      ctx,
+      collection,
+      record,
+      checked.value
+    )
     return { status: "updated", revision }
   },
 })
@@ -235,7 +239,7 @@ export const deleteRecord = internalMutation({
       return deny("The record does not exist in this collection.")
     if (record.revision !== args.expectedRevision)
       return { status: "conflict", revision: record.revision }
-    await ctx.db.delete(record._id)
+    await removeRecord(ctx, record._id)
     return { status: "deleted" }
   },
 })

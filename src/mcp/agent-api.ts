@@ -24,6 +24,7 @@ export const Field = Schema.Struct({
   label: Schema.String,
   type: Schema.Literals(["text", "number", "boolean"]),
   optional: Schema.optionalKey(Schema.Literal(true)),
+  indexed: Schema.optionalKey(Schema.Literal(true)),
 })
 
 export const WorkspaceDescription = Schema.Struct({
