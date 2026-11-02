@@ -13,6 +13,7 @@ import type * as agentGrants from "../agentGrants.js";
 import type * as agentIdentityHttp from "../agentIdentityHttp.js";
 import type * as agentRegistrations from "../agentRegistrations.js";
 import type * as agentWrites from "../agentWrites.js";
+import type * as artifacts from "../artifacts.js";
 import type * as http from "../http.js";
 import type * as lib_agentAuthConfig from "../lib/agentAuthConfig.js";
 import type * as lib_agentAuthCrypto from "../lib/agentAuthCrypto.js";
@@ -21,9 +22,11 @@ import type * as lib_agentGrant from "../lib/agentGrant.js";
 import type * as lib_agentRegistration from "../lib/agentRegistration.js";
 import type * as lib_agentRequests from "../lib/agentRequests.js";
 import type * as lib_agentScope from "../lib/agentScope.js";
+import type * as lib_artifactDomain from "../lib/artifactDomain.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_collectionDomain from "../lib/collectionDomain.js";
 import type * as lib_identityAssertion from "../lib/identityAssertion.js";
+import type * as lib_r2 from "../lib/r2.js";
 import type * as lib_recordQuery from "../lib/recordQuery.js";
 import type * as lib_records from "../lib/records.js";
 import type * as workspaces from "../workspaces.js";
@@ -40,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   agentIdentityHttp: typeof agentIdentityHttp;
   agentRegistrations: typeof agentRegistrations;
   agentWrites: typeof agentWrites;
+  artifacts: typeof artifacts;
   http: typeof http;
   "lib/agentAuthConfig": typeof lib_agentAuthConfig;
   "lib/agentAuthCrypto": typeof lib_agentAuthCrypto;
@@ -48,9 +52,11 @@ declare const fullApi: ApiFromModules<{
   "lib/agentRegistration": typeof lib_agentRegistration;
   "lib/agentRequests": typeof lib_agentRequests;
   "lib/agentScope": typeof lib_agentScope;
+  "lib/artifactDomain": typeof lib_artifactDomain;
   "lib/auth": typeof lib_auth;
   "lib/collectionDomain": typeof lib_collectionDomain;
   "lib/identityAssertion": typeof lib_identityAssertion;
+  "lib/r2": typeof lib_r2;
   "lib/recordQuery": typeof lib_recordQuery;
   "lib/records": typeof lib_records;
   workspaces: typeof workspaces;
@@ -82,4 +88,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  r2: import("@convex-dev/r2/_generated/component.js").ComponentApi<"r2">;
+};

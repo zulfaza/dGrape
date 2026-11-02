@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 import { agentScopeValidator } from "./lib/agentScope";
+import { artifactCreatorValidator } from "./lib/artifactDomain";
 import {
   agentClaimAttemptValidator,
   agentRegistrationValidator,
@@ -42,6 +43,23 @@ export default defineSchema({
   agentClaimAttempts: defineTable(agentClaimAttemptValidator)
     .index("by_attemptTokenDigest", ["attemptTokenDigest"])
     .index("by_registrationId", ["registrationId"]),
+  /** Uploads waiting for their file; see convex/lib/artifacts.ts. */
+  artifactUploads: defineTable({
+    workspaceId: v.id("workspaces"),
+    key: v.string(),
+    name: v.string(),
+    createdBy: artifactCreatorValidator,
+    expiresAt: v.number(),
+  }).index("by_key", ["key"]),
+  /** Private files in R2, with their provenance. */
+  artifacts: defineTable({
+    workspaceId: v.id("workspaces"),
+    key: v.string(),
+    name: v.string(),
+    contentType: v.string(),
+    size: v.number(),
+    createdBy: artifactCreatorValidator,
+  }).index("by_workspaceId", ["workspaceId"]),
   workspaces: defineTable({ name: v.string() }),
   workspaceMembers: defineTable({
     workspaceId: v.id("workspaces"),
