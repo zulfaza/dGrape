@@ -1,0 +1,129 @@
+/* Shared geometry for the app, standalone specimen, and portaled shadcn UI. */
+:root {
+  --dfe-radius-small: 4px;
+  --dfe-radius-control: 6px;
+  --dfe-radius-panel: 8px;
+  --dfe-radius-note: 12px;
+  --dfe-shadow-overlay: 0 2px 8px rgb(0 0 0 / 0.12);
+  --radius: var(--dfe-radius-panel);
+}
+
+:is(
+  [data-slot="button"],
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"],
+  [data-slot="combobox-trigger"],
+  [data-slot="combobox-input"],
+  [data-slot="input-group"]
+) {
+  border-radius: var(--dfe-radius-control);
+}
+
+:is([data-slot="checkbox"], [data-slot="dialog-close"]) {
+  border-radius: var(--dfe-radius-small);
+}
+
+:is(
+  [data-slot="card"],
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="popover-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="context-menu-content"],
+  [data-slot="select-content"],
+  [data-slot="combobox-content"],
+  [data-slot="sheet-content"],
+  [data-slot="drawer-content"]
+) {
+  border-radius: var(--dfe-radius-panel);
+}
+
+:is(
+  [data-slot="card"],
+  [data-slot="button"],
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"]
+):not(:focus-visible) {
+  box-shadow: none;
+}
+
+:is(
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="popover-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="context-menu-content"],
+  [data-slot="select-content"]
+) {
+  box-shadow: var(--dfe-shadow-overlay);
+}
+
+/* Shared segmented tabs: Radix owns selection, focus, and arrow-key navigation. */
+[data-slot="tabs-list"] {
+  isolation: isolate;
+  border-radius: var(--dfe-radius-panel);
+}
+[data-slot="tabs-list"][data-orientation="vertical"] {
+  flex-direction: column;
+  align-items: stretch;
+}
+[data-slot="tabs-trigger"] {
+  z-index: 1;
+  border-radius: var(--dfe-radius-control);
+}
+[data-slot="tabs-trigger"][data-state="active"] {
+  background: var(--card);
+}
+[data-slot="tabs-list"][data-indicator-ready] [data-slot="tabs-trigger"] {
+  background: transparent;
+}
+[data-slot="tabs-indicator"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tabs-indicator-width, 0px);
+  height: var(--tabs-indicator-height, 0px);
+  transform: translate(
+    var(--tabs-indicator-left, 0px),
+    var(--tabs-indicator-top, 0px)
+  );
+  border: 1px solid var(--border);
+  border-radius: var(--dfe-radius-control);
+  background: var(--card);
+  pointer-events: none;
+  opacity: 0;
+}
+[data-slot="tabs-list"][data-indicator-ready] [data-slot="tabs-indicator"] {
+  opacity: 1;
+  transition:
+    transform 200ms ease,
+    width 200ms ease,
+    height 200ms ease;
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  font-family: var(--font-sans);
+  box-shadow: var(--dfe-shadow-overlay);
+  border-radius: var(--dfe-radius-panel);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="tabs-list"][data-indicator-ready] [data-slot="tabs-indicator"],
+  [data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* Keep an explicit focus indicator when routine control shadows are absent. */
+:is(
+  [data-slot="button"],
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"],
+  [data-slot="combobox-input"],
+  [data-slot="combobox-trigger"]
+):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

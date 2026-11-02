@@ -1,0 +1,4 @@
+{
+  "extends": "../tsconfig.json",
+  "include": ["../src/design-system/**/*.ts", "../src/design-system/**/*.tsx", "../design-system.vite.config.ts"]
+}

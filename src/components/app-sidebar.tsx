@@ -38,7 +38,7 @@ export function AppSidebar({
                   <HugeiconsIcon icon={TerminalIcon} strokeWidth={2} className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold tracking-tight">dGrape</span>
+                  <span className="font-semibold tracking-tight">DFE</span>
                 </div>
               </div>
             </SidebarMenuButton>

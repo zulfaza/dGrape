@@ -7,7 +7,7 @@
   "trailingComma": "es5",
   "ignorePatterns": ["src/routeTree.gen.ts"],
   "sortTailwindcss": {
-    "stylesheet": "./src/styles.css",
+    "stylesheet": "./src/app.css",
     "functions": ["cn", "cva"]
   }
 }
