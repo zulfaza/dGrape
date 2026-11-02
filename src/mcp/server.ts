@@ -53,6 +53,22 @@ const CreateCollection = Tool.make("collections_create", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Destructive, false)
 
+const AddField = Tool.make("collections_add_field", {
+  description:
+    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, and a `type`: "text", "number", or "boolean". Returns the new schema version. Needs a read-and-write credential.',
+  parameters: Schema.Struct({
+    collectionId: Schema.String,
+    field: Schema.Struct({
+      id: Schema.String,
+      label: Schema.String,
+      type: Schema.Literals(["text", "number", "boolean"]),
+    }),
+  }),
+  success: AgentApi.AddedField,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
 const CreateRecord = Tool.make("records_create", {
   description:
     'Create a record. `values` must have one value for each required field of the collection, keyed by field id, with the field\'s type. Optional fields may be left out. Send an `idempotencyKey` (for example a source ID) so a retry returns the existing record instead of a duplicate (status "existing"). Needs a read-and-write credential.',
@@ -84,6 +100,7 @@ const DfeToolkit = Toolkit.make(
   DescribeWorkspace,
   ListRecords,
   CreateCollection,
+  AddField,
   CreateRecord,
   UpdateRecord
 )
@@ -95,6 +112,7 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       workspace_describe: () => api.describeWorkspace,
       records_list: (input) => api.listRecords(input),
       collections_create: (input) => api.createCollection(input),
+      collections_add_field: (input) => api.addField(input),
       records_create: (input) => api.createRecord(input),
       records_update: (input) => api.updateRecord(input),
     }
@@ -130,7 +148,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, and records_list to read records. With a read-and-write credential, collections_create, records_create, and records_update change data.",
+      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, and records_list to read records. With a read-and-write credential, collections_create, collections_add_field, records_create, and records_update change data.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)
     ),

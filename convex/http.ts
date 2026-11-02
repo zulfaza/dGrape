@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { digestToken } from "./agentAccess"
 import {
+  parseAddField,
   parseCreateCollection,
   parseCreateRecord,
   parseUpdateRecord,
@@ -215,6 +216,35 @@ http.route({
         { digest: await digestToken(token), ...body }
       )
       if (result.status !== "created") return writeFailure(result)
+      return replyJson(201, result)
+    } catch {
+      return reply(503, "Service unavailable")
+    }
+  }),
+})
+http.route({
+  path: "/agent/collections/fields",
+  method: "OPTIONS",
+  handler: preflight,
+})
+http.route({
+  path: "/agent/collections/fields",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const token = bearerToken(request)
+    if (!token) return reply(401, "Unauthorized")
+    const body = parseAddField(await readJson(request))
+    if (!body)
+      return replyJson(400, {
+        error:
+          'Send JSON: { collectionId, field: { id, label, type } }. type is "text", "number", or "boolean".',
+      })
+    try {
+      const result = await ctx.runMutation(internal.agentWrites.addField, {
+        digest: await digestToken(token),
+        ...body,
+      })
+      if (result.status !== "added") return writeFailure(result)
       return replyJson(201, result)
     } catch {
       return reply(503, "Service unavailable")

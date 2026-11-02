@@ -15,6 +15,10 @@ export type CreateRecordBody = {
   values: RecordValues
   idempotencyKey?: string
 }
+export type AddFieldBody = {
+  collectionId: string
+  field: Omit<CollectionField, "optional">
+}
 export type UpdateRecordBody = {
   collectionId: string
   recordId: string
@@ -63,6 +67,14 @@ export function parseCreateCollection(
     fields.push(field)
   }
   return { name: body.name, fields }
+}
+
+export function parseAddField(body: unknown): AddFieldBody | null {
+  if (!isObject(body) || typeof body.collectionId !== "string") return null
+  if (!isObject(body.field) || body.field.optional !== undefined) return null
+  const field = parseField(body.field)
+  if (!field) return null
+  return { collectionId: body.collectionId, field }
 }
 
 export function parseCreateRecord(body: unknown): CreateRecordBody | null {

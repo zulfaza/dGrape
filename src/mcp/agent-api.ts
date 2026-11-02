@@ -56,6 +56,8 @@ export const RecordPage = Schema.Struct({
 
 export const CreatedCollection = Schema.Struct({ id: Schema.String })
 
+export const AddedField = Schema.Struct({ version: Schema.Number })
+
 export const CreatedRecord = Schema.Struct({
   id: Schema.String,
   revision: Schema.Number,
@@ -75,6 +77,11 @@ export interface ListRecordsInput {
 export interface CreateCollectionInput {
   readonly name: string
   readonly fields: ReadonlyArray<typeof Field.Type>
+}
+
+export interface AddFieldInput {
+  readonly collectionId: string
+  readonly field: Omit<typeof Field.Type, "optional">
 }
 
 export interface CreateRecordInput {
@@ -102,6 +109,7 @@ export class AgentApi extends Context.Service<
     readonly createCollection: (
       input: CreateCollectionInput
     ) => Call<typeof CreatedCollection.Type>
+    readonly addField: (input: AddFieldInput) => Call<typeof AddedField.Type>
     readonly createRecord: (
       input: CreateRecordInput
     ) => Call<typeof CreatedRecord.Type>
@@ -187,6 +195,14 @@ export const layer = (baseUrl: string) =>
           send(
             json(HttpClientRequest.post(url("/agent/collections")), input),
             CreatedCollection
+          ),
+        addField: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/collections/fields")),
+              input
+            ),
+            AddedField
           ),
         createRecord: (input) =>
           send(
