@@ -9,9 +9,10 @@ import {
 import * as AgentApi from "./agent-api"
 
 /**
- * The read-only DFE MCP server at `/mcp`. It is stateless (MCP 2026-07-28):
- * each POST runs in its own request scope, as Cloudflare Workers require.
- * Every tool call forwards the caller's Bearer credential to the agent API.
+ * The DFE MCP server at `/mcp`. It is stateless (MCP 2026-07-28): each POST
+ * runs in its own request scope, as Cloudflare Workers require. Every tool
+ * call forwards the caller's Bearer credential to the agent API, which
+ * decides what the credential may read or write.
  */
 
 const MAX_PAGE_SIZE = 50
@@ -25,7 +26,7 @@ const DescribeWorkspace = Tool.make("workspace_describe", {
 }).annotate(Tool.Readonly, true)
 
 const ListRecords = Tool.make("records_list", {
-  description: `List records of one collection, newest first. Returns up to \`limit\` records (1 to ${MAX_PAGE_SIZE}, default ${MAX_PAGE_SIZE}). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\` to get the next page.`,
+  description: `List records of one collection, oldest first. Returns up to \`limit\` records (1 to ${MAX_PAGE_SIZE}, default ${MAX_PAGE_SIZE}). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\` to get the next page.`,
   parameters: Schema.Struct({
     collectionId: Schema.String,
     limit: Schema.optionalKey(
@@ -38,7 +39,54 @@ const ListRecords = Tool.make("records_list", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Readonly, true)
 
-const DfeToolkit = Toolkit.make(DescribeWorkspace, ListRecords)
+const FieldsDescription =
+  'Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", or "boolean".'
+
+const CreateCollection = Tool.make("collections_create", {
+  description: `Create a collection in the workspace. Needs a read-and-write credential. ${FieldsDescription} Give 1 to 50 fields.`,
+  parameters: Schema.Struct({
+    name: Schema.String,
+    fields: Schema.Array(AgentApi.Field),
+  }),
+  success: AgentApi.CreatedCollection,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const CreateRecord = Tool.make("records_create", {
+  description:
+    'Create a record. `values` must have exactly one value per field of the collection, keyed by field id, with the field\'s type. Send an `idempotencyKey` (for example a source ID) so a retry returns the existing record instead of a duplicate (status "existing"). Needs a read-and-write credential.',
+  parameters: Schema.Struct({
+    collectionId: Schema.String,
+    values: AgentApi.RecordValues,
+    idempotencyKey: Schema.optionalKey(Schema.String),
+  }),
+  success: AgentApi.CreatedRecord,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const UpdateRecord = Tool.make("records_update", {
+  description:
+    "Replace all values of a record. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you retry. Needs a read-and-write credential.",
+  parameters: Schema.Struct({
+    collectionId: Schema.String,
+    recordId: Schema.String,
+    expectedRevision: Schema.Int,
+    values: AgentApi.RecordValues,
+  }),
+  success: AgentApi.UpdatedRecord,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+})
+
+const DfeToolkit = Toolkit.make(
+  DescribeWorkspace,
+  ListRecords,
+  CreateCollection,
+  CreateRecord,
+  UpdateRecord
+)
 
 const DfeToolkitHandlers = DfeToolkit.toLayer(
   Effect.gen(function* () {
@@ -46,6 +94,9 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
     return {
       workspace_describe: () => api.describeWorkspace,
       records_list: (input) => api.listRecords(input),
+      collections_create: (input) => api.createCollection(input),
+      records_create: (input) => api.createRecord(input),
+      records_update: (input) => api.updateRecord(input),
     }
   })
 )
@@ -79,7 +130,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections, then records_list to read them. Access is read-only.",
+      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, and records_list to read records. With a read-and-write credential, collections_create, records_create, and records_update change data.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)
     ),

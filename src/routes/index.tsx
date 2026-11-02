@@ -6,7 +6,7 @@ export const Route = createFileRoute("/")({ component: Home })
 const planned = [
   {
     title: "Bring your own agent",
-    body: "Keep using your existing agent harness for research and writing. Read-only MCP access works now. Planned write tools and self-service agent registration will let it build in your workspace.",
+    body: "Keep using your existing agent harness for research and writing. MCP access works now. Planned self-service agent registration will let it connect without a pasted credential.",
   },
   {
     title: "Connect and compute",
@@ -136,8 +136,9 @@ function Home() {
                   structure that fits your work.
                 </p>
                 <p>
-                  Give your agent a read-only workspace credential. It can then
-                  read your collections and records through MCP or the HTTP API.
+                  Give your agent a workspace credential. Through MCP or the
+                  HTTP API, it can read your collections and records, and with
+                  write access create collections and add or edit records.
                 </p>
               </div>
             </div>
