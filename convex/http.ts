@@ -2,6 +2,7 @@ import { httpRouter } from "convex/server"
 import { httpAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { digestToken } from "./agentAccess"
+import { register as registerAgent } from "./agentIdentityHttp"
 import {
   parseAddField,
   parseCreateCollection,
@@ -320,4 +321,6 @@ http.route({
     }
   }),
 })
+http.route({ path: "/agent/identity", method: "OPTIONS", handler: preflight })
+http.route({ path: "/agent/identity", method: "POST", handler: registerAgent })
 export default http
