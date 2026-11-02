@@ -135,7 +135,7 @@ export const createRecord = internalMutation({
     if (!checked.ok) return reject(checked.message)
     const id = await ctx.db.insert("collectionRecords", {
       collectionId: collection._id,
-      schemaVersion: 1,
+      schemaVersion: collection.definition.version,
       revision: 1,
       values: checked.value,
       idempotencyKey,
@@ -173,7 +173,11 @@ export const updateRecord = internalMutation({
     const checked = checkRecordValues(collection.definition.fields, args.values)
     if (!checked.ok) return reject(checked.message)
     const revision = record.revision + 1
-    await ctx.db.patch(record._id, { values: checked.value, revision })
+    await ctx.db.patch(record._id, {
+      values: checked.value,
+      revision,
+      schemaVersion: collection.definition.version,
+    })
     return { status: "updated", revision }
   },
 })

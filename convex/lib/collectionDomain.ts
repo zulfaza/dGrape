@@ -10,6 +10,22 @@ export const collectionFieldValidator = v.object({
   id: v.string(),
   label: v.string(),
   type: v.union(v.literal("text"), v.literal("number"), v.literal("boolean")),
+  /**
+   * When true, a record may leave this field out. When absent, every record
+   * must have a value. A field added after creation is always optional,
+   * because the records that exist already have no value for it.
+   */
+  optional: v.optional(v.literal(true)),
+})
+
+/**
+ * A collection's fields. `version` starts at 1 and increases by 1 for each
+ * schema change, so a record's `schemaVersion` tells which fields existed
+ * when it was last written.
+ */
+export const collectionDefinitionValidator = v.object({
+  version: v.number(),
+  fields: v.array(collectionFieldValidator),
 })
 
 export const recordValuesValidator = v.record(
@@ -22,13 +38,14 @@ export const collectionRecordValidator = v.object({
   _id: v.id("collectionRecords"),
   _creationTime: v.number(),
   collectionId: v.id("collections"),
-  schemaVersion: v.literal(1),
+  schemaVersion: v.number(),
   revision: v.number(),
   values: recordValuesValidator,
   idempotencyKey: v.optional(v.string()),
 })
 
 export type CollectionField = Infer<typeof collectionFieldValidator>
+export type CollectionDefinition = Infer<typeof collectionDefinitionValidator>
 export type RecordValues = Infer<typeof recordValuesValidator>
 
 const MAX_NAME_LENGTH = 100
@@ -44,6 +61,20 @@ export type Checked<A> =
 
 const invalid = (message: string): Checked<never> => ({ ok: false, message })
 
+/** Trims the label and checks the label length and the ID format. */
+function checkField(field: CollectionField): Checked<CollectionField> {
+  const label = field.label.trim()
+  if (!label || label.length > MAX_NAME_LENGTH)
+    return invalid(
+      `Field label must be between 1 and ${MAX_NAME_LENGTH} characters`
+    )
+  if (!FIELD_ID.test(field.id))
+    return invalid(
+      "Field IDs must use lowercase letters, numbers, or underscores, and start with a letter"
+    )
+  return { ok: true, value: { ...field, label } }
+}
+
 /** Trims the name and labels, and checks lengths and unique field IDs. */
 export function checkCollection(
   name: string,
@@ -57,34 +88,60 @@ export function checkCollection(
   const ids = new Set<string>()
   const checked: CollectionField[] = []
   for (const field of fields) {
-    const label = field.label.trim()
-    if (!label || label.length > MAX_NAME_LENGTH)
-      return invalid(
-        `Field label must be between 1 and ${MAX_NAME_LENGTH} characters`
-      )
-    if (!FIELD_ID.test(field.id) || ids.has(field.id))
-      return invalid(
-        "Field IDs must be unique and use lowercase letters, numbers, or underscores"
-      )
+    const result = checkField(field)
+    if (!result.ok) return result
+    if (ids.has(field.id))
+      return invalid(`Field ID "${field.id}" is used twice`)
     ids.add(field.id)
-    checked.push({ ...field, label })
+    checked.push(result.value)
   }
   return { ok: true, value: { name: trimmed, fields: checked } }
 }
 
-/** Checks that `values` has exactly one value of the right type per field. */
+/**
+ * Adds one field to a definition and increases its version. The new field is
+ * optional, so the records that exist stay valid without a migration.
+ */
+export function addField(
+  definition: CollectionDefinition,
+  field: Omit<CollectionField, "optional">
+): Checked<CollectionDefinition> {
+  if (definition.fields.length >= MAX_FIELDS)
+    return invalid(`A collection can have at most ${MAX_FIELDS} fields`)
+  const result = checkField(field)
+  if (!result.ok) return result
+  if (definition.fields.some((existing) => existing.id === field.id))
+    return invalid(`Field ID "${field.id}" is already used`)
+  return {
+    ok: true,
+    value: {
+      version: definition.version + 1,
+      fields: [...definition.fields, { ...result.value, optional: true }],
+    },
+  }
+}
+
+/**
+ * Checks that `values` has a value of the right type for each required field,
+ * and no value for a field that does not exist. Optional fields may be left
+ * out.
+ */
 export function checkRecordValues(
   fields: ReadonlyArray<CollectionField>,
   values: RecordValues
 ): Checked<RecordValues> {
-  if (Object.keys(values).length !== fields.length)
-    return invalid(
-      `Give exactly one value for each field: ${fields.map((f) => f.id).join(", ")}`
-    )
+  const ids = new Set(fields.map((field) => field.id))
+  for (const key of Object.keys(values))
+    if (!ids.has(key))
+      return invalid(
+        `Unknown field "${key}". Fields: ${fields.map((f) => f.id).join(", ")}`
+      )
   let textLength = 0
   for (const field of fields) {
-    if (!Object.hasOwn(values, field.id))
+    if (!Object.hasOwn(values, field.id)) {
+      if (field.optional) continue
       return invalid(`Missing value for field "${field.id}"`)
+    }
     const value = values[field.id]
     if (field.type === "text") {
       if (typeof value !== "string" || value.length > MAX_TEXT_LENGTH)

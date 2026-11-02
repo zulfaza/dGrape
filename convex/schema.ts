@@ -2,7 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 import { agentScopeValidator } from "./lib/agentScope";
-import { collectionFieldValidator } from "./lib/collectionDomain";
+import { collectionDefinitionValidator } from "./lib/collectionDomain";
 
 export default defineSchema({
   agentGrants: defineTable({
@@ -32,14 +32,12 @@ export default defineSchema({
   collections: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),
-    definition: v.object({
-      version: v.literal(1),
-      fields: v.array(collectionFieldValidator),
-    }),
+    definition: collectionDefinitionValidator,
   }).index("by_workspace", ["workspaceId"]),
   collectionRecords: defineTable({
     collectionId: v.id("collections"),
-    schemaVersion: v.literal(1),
+    /** The collection's definition version when this record was last written. */
+    schemaVersion: v.number(),
     revision: v.number(),
     values: v.record(v.string(), v.union(v.string(), v.number(), v.boolean())),
     /** Set by agent creates so a retried request returns the same record. */
