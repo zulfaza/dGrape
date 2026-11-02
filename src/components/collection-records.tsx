@@ -2,8 +2,41 @@ import { useMutation, usePaginatedQuery, useQuery } from "convex/react"
 import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Doc, Id } from "../../convex/_generated/dataModel"
+import { ChevronLeft, Plus } from "lucide-react"
+import { Mascot } from "@/components/mascot"
+import { PageHeader } from "@/components/page-header"
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/toast"
@@ -101,158 +134,294 @@ export function CollectionRecords({
       setSaving(false)
     }
   }
-  if (!collection) return <p role="status">Loading collection…</p>
+  if (!collection)
+    return (
+      <p role="status" className="text-muted-foreground">
+        Loading collection…
+      </p>
+    )
+  const { fields } = collection.definition
+  const openDraft = (next: Draft) => {
+    setConflict(false)
+    setDraft(next)
+  }
+  const newRecordButton = (
+    <Button
+      disabled={saving}
+      onClick={() => openDraft({ record: null, values: initialValues(fields) })}
+    >
+      <Plus aria-hidden />
+      New record
+    </Button>
+  )
   return (
-    <section className="flex flex-col gap-4">
-      <Button variant="outline" onClick={onClose} disabled={saving}>
-        Back to collections
-      </Button>
-      <h2 className="text-xl font-semibold">{collection.name}</h2>
-      {apiUrl ? (
-        <div className="flex flex-col gap-2">
-          <p>
-            Read these records with a workspace credential. Send it in the
-            Authorization header as Bearer followed by a space and the
-            credential.
-          </p>
-          <code className="break-all">{apiUrl}</code>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(apiUrl)
-                toast.success("API URL copied")
-              } catch {
-                toast.error("Could not copy API URL")
-              }
-            }}
-          >
-            Copy API URL
-          </Button>
-        </div>
-      ) : (
-        <p>API URL unavailable. Set VITE_CONVEX_SITE_URL to enable it.</p>
-      )}
-      <Button
-        disabled={saving}
-        onClick={() => {
-          setConflict(false)
-          setDraft({
-            record: null,
-            values: initialValues(collection.definition.fields),
-          })
-        }}
+    <>
+      <div className="flex flex-col gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 self-start text-muted-foreground"
+          onClick={onClose}
+          disabled={saving}
+        >
+          <ChevronLeft aria-hidden />
+          All collections
+        </Button>
+        <PageHeader
+          title={collection.name}
+          description={
+            fields.length === 1 ? "1 field" : `${fields.length} fields`
+          }
+          actions={results.length > 0 && newRecordButton}
+        />
+      </div>
+      <section
+        aria-label="Records"
+        className="overflow-hidden rounded-lg border bg-card"
       >
-        New record
-      </Button>
-      {status === "LoadingFirstPage" ? (
-        <p role="status">Loading records…</p>
-      ) : results.length === 0 ? (
-        <p>No records yet.</p>
-      ) : (
-        <ul className="grid gap-3">
-          {results.map((record) => (
-            <li key={record._id} className="rounded-lg border p-4">
-              <dl>
-                {collection.definition.fields.map((field) => (
-                  <div key={field.id}>
-                    <dt>{field.label}</dt>
-                    <dd>{String(record.values[field.id] ?? "")}</dd>
-                  </div>
+        {status === "LoadingFirstPage" ? (
+          <p role="status" className="px-5 py-6 text-muted-foreground">
+            Loading records…
+          </p>
+        ) : results.length === 0 ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia>
+                <Mascot pose="chart" size={160} />
+              </EmptyMedia>
+              <EmptyTitle>Add your first record</EmptyTitle>
+              <EmptyDescription>
+                Fill in a record here, or let your agent add records with a
+                read-and-write credential.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>{newRecordButton}</EmptyContent>
+          </Empty>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {fields.map((field) => (
+                  <TableHead
+                    key={field.id}
+                    className={
+                      field.type === "number" ? "px-4 text-right" : "px-4"
+                    }
+                  >
+                    {field.label}
+                  </TableHead>
                 ))}
-              </dl>
+                <TableHead className="px-4">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {results.map((record) => (
+                <TableRow key={record._id}>
+                  {fields.map((field) => (
+                    <TableCell
+                      key={field.id}
+                      className={
+                        field.type === "number"
+                          ? "px-4 py-3 text-right tabular-nums"
+                          : "max-w-80 truncate px-4 py-3"
+                      }
+                    >
+                      {formatValue(field, record.values[field.id])}
+                    </TableCell>
+                  ))}
+                  <TableCell className="w-0 px-4 py-2 text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={saving}
+                      onClick={() =>
+                        openDraft({ record, values: editValues(record.values) })
+                      }
+                    >
+                      Edit
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        {status === "CanLoadMore" && (
+          <div className="border-t px-5 py-3">
+            <Button variant="outline" onClick={() => loadMore(20)}>
+              Load more
+            </Button>
+          </div>
+        )}
+        {status === "LoadingMore" && (
+          <p role="status" className="border-t px-5 py-3">
+            Loading more…
+          </p>
+        )}
+      </section>
+      <section
+        aria-labelledby="api-heading"
+        className="flex flex-col gap-2 border-t pt-6"
+      >
+        <h2 id="api-heading" className="text-base font-semibold">
+          Read with the HTTP API
+        </h2>
+        {apiUrl ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Send a workspace credential in the Authorization header as Bearer,
+              a space, then the credential.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="min-w-0 flex-1 rounded-sm bg-muted px-2 py-1.5 text-xs break-all">
+                {apiUrl}
+              </code>
               <Button
                 variant="outline"
-                disabled={saving}
-                onClick={() => {
-                  setConflict(false)
-                  setDraft({ record, values: editValues(record.values) })
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(apiUrl)
+                    toast.success("API URL copied")
+                  } catch {
+                    toast.error("Could not copy API URL")
+                  }
                 }}
               >
-                Edit
+                Copy API URL
               </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {status === "CanLoadMore" && (
-        <Button variant="outline" onClick={() => loadMore(20)}>
-          Load more
-        </Button>
-      )}
-      {status === "LoadingMore" && <p role="status">Loading more…</p>}
-      {draft && (
-        <form onSubmit={submit} className="flex max-w-xl flex-col gap-4">
-          <h3>{draft.record ? "Edit record" : "New record"}</h3>
-          {collection.definition.fields.map((field) => (
-            <div className="grid gap-2" key={field.id}>
-              <Label htmlFor={`record-${field.id}`}>{field.label}</Label>
-              {field.type === "boolean" ? (
-                <Checkbox
-                  disabled={saving}
-                  id={`record-${field.id}`}
-                  checked={draft.values[field.id] === true}
-                  onCheckedChange={(checked) =>
-                    setDraft({
-                      ...draft,
-                      values: { ...draft.values, [field.id]: checked === true },
-                    })
-                  }
-                />
-              ) : (
-                <Input
-                  disabled={saving}
-                  id={`record-${field.id}`}
-                  type={field.type === "number" ? "number" : "text"}
-                  step={field.type === "number" ? "any" : undefined}
-                  maxLength={field.type === "text" ? 10000 : undefined}
-                  required={field.type === "number"}
-                  value={String(draft.values[field.id] ?? "")}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    setDraft({
-                      ...draft,
-                      values: { ...draft.values, [field.id]: value },
-                    })
-                  }}
-                />
-              )}
             </div>
-          ))}
-          {conflict && (
-            <p role="alert">This record changed. Reload it before you save.</p>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            API URL unavailable. Set VITE_CONVEX_SITE_URL to enable it.
+          </p>
+        )}
+      </section>
+      <Dialog
+        open={draft !== null}
+        onOpenChange={(open) => {
+          if (!open && !saving) setDraft(null)
+        }}
+      >
+        <DialogContent className="max-h-[90svh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {draft?.record ? "Edit record" : "New record"}
+            </DialogTitle>
+            <DialogDescription>{collection.name}</DialogDescription>
+          </DialogHeader>
+          {draft && (
+            <form onSubmit={submit} className="flex flex-col gap-4">
+              {fields.map((field) => (
+                <div
+                  className={
+                    field.type === "boolean"
+                      ? "flex items-center gap-2"
+                      : "grid gap-2"
+                  }
+                  key={field.id}
+                >
+                  {field.type === "boolean" ? (
+                    <>
+                      <Checkbox
+                        disabled={saving}
+                        id={`record-${field.id}`}
+                        checked={draft.values[field.id] === true}
+                        onCheckedChange={(checked) =>
+                          setDraft({
+                            ...draft,
+                            values: {
+                              ...draft.values,
+                              [field.id]: checked === true,
+                            },
+                          })
+                        }
+                      />
+                      <Label htmlFor={`record-${field.id}`}>
+                        {field.label}
+                      </Label>
+                    </>
+                  ) : (
+                    <>
+                      <Label htmlFor={`record-${field.id}`}>
+                        {field.label}
+                      </Label>
+                      <Input
+                        disabled={saving}
+                        id={`record-${field.id}`}
+                        type={field.type === "number" ? "number" : "text"}
+                        step={field.type === "number" ? "any" : undefined}
+                        maxLength={field.type === "text" ? 10000 : undefined}
+                        required={field.type === "number"}
+                        value={String(draft.values[field.id] ?? "")}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            values: {
+                              ...draft.values,
+                              [field.id]: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </>
+                  )}
+                </div>
+              ))}
+              {conflict && draft.record && (
+                <Alert variant="destructive">
+                  <AlertTitle>This record changed</AlertTitle>
+                  <AlertDescription>
+                    Someone saved it after you opened it. Load the latest
+                    version, then make your change again.
+                  </AlertDescription>
+                  <AlertAction>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={saving || !latest}
+                      onClick={() => {
+                        if (latest)
+                          openDraft({
+                            record: latest,
+                            values: editValues(latest.values),
+                          })
+                      }}
+                    >
+                      {latest === undefined ? "Loading…" : "Load latest"}
+                    </Button>
+                  </AlertAction>
+                </Alert>
+              )}
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => setDraft(null)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving || conflict}>
+                  {saving ? "Saving…" : "Save record"}
+                </Button>
+              </DialogFooter>
+            </form>
           )}
-          {conflict && draft.record && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={saving || !latest}
-              onClick={() => {
-                if (latest) {
-                  setDraft({
-                    record: latest,
-                    values: editValues(latest.values),
-                  })
-                  setConflict(false)
-                }
-              }}
-            >
-              {latest === undefined ? "Loading record…" : "Reload record"}
-            </Button>
-          )}
-          <Button type="submit" disabled={saving || conflict}>
-            {saving ? "Saving…" : "Save record"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={saving}
-            onClick={() => setDraft(null)}
-          >
-            Cancel
-          </Button>
-        </form>
-      )}
-    </section>
+        </DialogContent>
+      </Dialog>
+    </>
   )
+}
+
+/** Shows a stored value as text; booleans read as Yes or No. */
+function formatValue(field: Field, value: Values[string] | undefined) {
+  if (value === undefined) return ""
+  if (field.type === "boolean") return value === true ? "Yes" : "No"
+  if (typeof value === "number") return value.toLocaleString()
+  return String(value)
 }

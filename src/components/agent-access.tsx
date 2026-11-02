@@ -3,6 +3,8 @@ import { Component, useState, type FormEvent, type ReactNode } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import type { AgentScope } from "../../convex/lib/agentScope"
+import { Mascot } from "@/components/mascot"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -29,8 +31,10 @@ export class AgentAccessBoundary extends Component<
   render() {
     if (this.state.failed) {
       return (
-        <section>
-          <p role="alert">Could not load credentials.</p>
+        <section className="flex flex-col items-start gap-2 rounded-lg border bg-card p-4">
+          <p role="alert" className="text-sm">
+            Could not load credentials.
+          </p>
           <Button
             variant="outline"
             onClick={() => this.setState({ failed: false })}
@@ -105,25 +109,42 @@ export function AgentAccess({
       setSaving(false)
     }
   }
+  const now = Date.now()
   return (
-    <section className="flex flex-col gap-4">
-      <h2 className="text-xl font-semibold">Agent access</h2>
-      <p>
-        Credentials let an agent read this workspace, or also create collections
-        and write records. Each credential expires after the selected number of
-        days.
-      </p>
-      <p>
-        Connect an MCP client to /mcp, or open a collection to copy its HTTP API
-        URL. Send the credential in the Authorization header as Bearer followed
-        by a space and the credential.
-      </p>
+    <aside
+      aria-labelledby="agent-access-heading"
+      className="flex flex-col gap-4"
+    >
+      <div className="flex gap-3 rounded-xl bg-mascot-surface p-4 text-foreground">
+        <Mascot pose="laptop" size={72} className="-my-1" />
+        <div className="flex flex-col gap-1">
+          <h2 id="agent-access-heading" className="text-base font-semibold">
+            Connect your agent
+          </h2>
+          <p className="text-sm">
+            Keep your current agent. Give it a credential, and it can read this
+            workspace, or also create collections and write records, through MCP
+            or the HTTP API.
+          </p>
+        </div>
+      </div>
       {token ? (
-        <div className="flex flex-col gap-2">
-          <p>Copy this credential now. You cannot see it again.</p>
-          <code className="break-all">{token}</code>
-          <p>To connect Claude Code through MCP, run:</p>
-          <code className="break-all">{mcpCommand(token)}</code>
+        <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+          <div className="flex items-center gap-3">
+            <Mascot pose="celebrate" size={56} />
+            <p className="text-sm font-medium">
+              Copy this credential now. You cannot see it again.
+            </p>
+          </div>
+          <code className="rounded-sm bg-muted p-2 text-xs break-all">
+            {token}
+          </code>
+          <p className="text-sm text-muted-foreground">
+            To connect Claude Code, run:
+          </p>
+          <code className="rounded-sm bg-muted p-2 text-xs break-all">
+            {mcpCommand(token)}
+          </code>
           <div className="flex gap-2">
             <Button
               type="button"
@@ -136,89 +157,130 @@ export function AgentAccess({
                 }
               }}
             >
-              Copy
+              Copy credential
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => setToken(null)}
             >
-              Close
+              Done
             </Button>
           </div>
         </div>
       ) : (
-        <form onSubmit={submit} className="flex flex-col gap-2">
-          <Label htmlFor="grant-days">Duration in days (1–30)</Label>
-          <Input
-            id="grant-days"
-            value={days}
-            onChange={(e) => setDays(e.target.value)}
-            disabled={saving}
-            inputMode="numeric"
-          />
-          <Label htmlFor="grant-scope">Access</Label>
-          <Select
-            value={scope}
-            disabled={saving}
-            onValueChange={(value) => {
-              if (value === "readonly" || value === "readwrite") setScope(value)
-            }}
-          >
-            <SelectTrigger id="grant-scope" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="readonly">
-                  {SCOPE_LABELS.readonly}
-                </SelectItem>
-                <SelectItem value="readwrite">
-                  {SCOPE_LABELS.readwrite}
-                </SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+        <form
+          onSubmit={submit}
+          className="flex flex-col gap-4 rounded-lg border bg-card p-4"
+        >
+          <div className="grid grid-cols-[1fr_7rem] gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="grant-scope">Access</Label>
+              <Select
+                value={scope}
+                disabled={saving}
+                onValueChange={(value) => {
+                  if (value === "readonly" || value === "readwrite")
+                    setScope(value)
+                }}
+              >
+                <SelectTrigger id="grant-scope" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="readonly">
+                      {SCOPE_LABELS.readonly}
+                    </SelectItem>
+                    <SelectItem value="readwrite">
+                      {SCOPE_LABELS.readwrite}
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="grant-days">Days</Label>
+              <Input
+                id="grant-days"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                disabled={saving}
+                inputMode="numeric"
+                aria-describedby="grant-days-help"
+              />
+            </div>
+          </div>
+          <p id="grant-days-help" className="text-sm text-muted-foreground">
+            The credential expires after 1 to 30 days.
+          </p>
           <Button type="submit" disabled={saving}>
-            Create credential
+            {saving ? "Creating…" : "Create credential"}
           </Button>
         </form>
       )}
-      {status === "LoadingFirstPage" ? (
-        <p role="status">Loading credentials…</p>
-      ) : results.length === 0 ? (
-        <p>No credentials yet.</p>
-      ) : null}
-      <ul>
-        {results.map((grant) => (
-          <li key={grant._id} className="flex items-center gap-2">
-            <span>
-              {SCOPE_LABELS[grant.scope]} · Created{" "}
-              {new Date(grant._creationTime).toLocaleDateString()} · Expires{" "}
-              {new Date(grant.expiresAt).toLocaleDateString()} ·{" "}
-              {grant.state === "revoked"
-                ? "Revoked"
-                : grant.expiresAt <= Date.now()
-                  ? "Expired"
-                  : "Active"}
-            </span>
-            {grant.state === "active" && grant.expiresAt > Date.now() && (
-              <Button
-                variant="outline"
-                disabled={saving || token !== null}
-                onClick={() => remove(grant._id)}
-              >
-                Revoke
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
-      {status === "CanLoadMore" && (
-        <Button variant="outline" onClick={() => loadMore(20)}>
-          Load more
-        </Button>
-      )}
-    </section>
+      <section
+        aria-labelledby="credentials-heading"
+        className="flex flex-col gap-2"
+      >
+        <h3 id="credentials-heading" className="text-sm font-semibold">
+          Credentials
+        </h3>
+        {status === "LoadingFirstPage" ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            Loading credentials…
+          </p>
+        ) : results.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No credentials yet.</p>
+        ) : (
+          <ul className="divide-y rounded-lg border bg-card">
+            {results.map((grant) => {
+              const active = grant.state === "active" && grant.expiresAt > now
+              return (
+                <li
+                  key={grant._id}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5"
+                >
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-sm font-medium">
+                      {SCOPE_LABELS[grant.scope]}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {active
+                        ? `Expires ${new Date(grant.expiresAt).toLocaleDateString()}`
+                        : `Created ${new Date(grant._creationTime).toLocaleDateString()}`}
+                    </span>
+                  </div>
+                  {active ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={saving || token !== null}
+                      onClick={() => remove(grant._id)}
+                    >
+                      Revoke
+                    </Button>
+                  ) : (
+                    <Badge variant="secondary">
+                      {grant.state === "revoked" ? "Revoked" : "Expired"}
+                    </Badge>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        {status === "CanLoadMore" && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="self-start"
+            onClick={() => loadMore(20)}
+          >
+            Load more
+          </Button>
+        )}
+      </section>
+    </aside>
   )
 }

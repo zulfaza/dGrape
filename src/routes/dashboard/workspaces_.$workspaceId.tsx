@@ -1,22 +1,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { useMutation, usePaginatedQuery, useQuery } from "convex/react"
-import { useState, type FormEvent } from "react"
+import { usePaginatedQuery, useQuery } from "convex/react"
+import { ChevronLeft } from "lucide-react"
+import { useState } from "react"
 import { api } from "../../../convex/_generated/api"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import type { Id } from "../../../convex/_generated/dataModel"
 import { AgentAccess, AgentAccessBoundary } from "@/components/agent-access"
 import { CollectionRecords } from "@/components/collection-records"
-import type { Id } from "../../../convex/_generated/dataModel"
-import { toast } from "@/components/ui/toast"
+import { CreateCollectionDialog } from "@/components/create-collection-dialog"
+import { Mascot } from "@/components/mascot"
+import { PageHeader } from "@/components/page-header"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 
 export const Route = createFileRoute("/dashboard/workspaces_/$workspaceId")({
   component: WorkspacePage,
@@ -27,7 +29,11 @@ export const Route = createFileRoute("/dashboard/workspaces_/$workspaceId")({
   ),
 })
 
-type Field = { id: string; label: string; type: "text" | "number" | "boolean" }
+const FIELD_TYPE_LABELS = {
+  text: "Text",
+  number: "Number",
+  boolean: "Yes / no",
+}
 
 function WorkspacePage() {
   const { workspaceId } = Route.useParams()
@@ -37,192 +43,130 @@ function WorkspacePage() {
     { workspaceId },
     { initialNumItems: 20 }
   )
-  const create = useMutation(api.workspaces.createCollection)
-  const [selectedCollection, setSelectedCollection] = useState<Id<"collections"> | null>(null)
-  const [name, setName] = useState("")
-  const [fields, setFields] = useState<Field[]>([
-    { id: "", label: "", type: "text" },
-  ])
-  const [saving, setSaving] = useState(false)
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (saving) return
-    if (!name.trim()) {
-      toast.error("Enter a collection name")
-      return
-    }
-    if (fields.some((field) => !field.label.trim())) {
-      toast.error("Enter a label for each field")
-      return
-    }
-    if (new Set(fields.map((field) => field.id)).size !== fields.length) {
-      toast.error("Field IDs must be unique")
-      return
-    }
-    setSaving(true)
-    try {
-      await create({ workspaceId, name, fields })
-      setName("")
-      setFields([{ id: "", label: "", type: "text" }])
-      toast.success("Collection created")
-    } catch {
-      toast.error("Could not create collection")
-    } finally {
-      setSaving(false)
-    }
-  }
+  const [selectedCollection, setSelectedCollection] =
+    useState<Id<"collections"> | null>(null)
+
+  if (selectedCollection)
+    return (
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-8 md:px-8">
+        <CollectionRecords
+          key={selectedCollection}
+          collectionId={selectedCollection}
+          onClose={() => setSelectedCollection(null)}
+        />
+      </main>
+    )
+
   return (
-    <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      {!selectedCollection && <Link to="/dashboard/workspaces">All workspaces</Link>}
-      <h1 className="text-2xl font-semibold">
-        {workspace ? workspace.name : "Loading workspace…"}
-      </h1>
-      {selectedCollection && <CollectionRecords key={selectedCollection} collectionId={selectedCollection} onClose={() => setSelectedCollection(null)} />}
-      <div hidden={selectedCollection !== null}>
-      {workspace && (
-        <AgentAccessBoundary key={workspace._id}>
-          <AgentAccess workspaceId={workspace._id} />
-        </AgentAccessBoundary>
-      )}
-      <section className="flex flex-col gap-4">
-        <h2 className="text-xl font-semibold">Collections</h2>
-        {status === "LoadingFirstPage" ? (
-          <p role="status">Loading collections…</p>
-        ) : results.length === 0 ? (
-          <p>No collections yet.</p>
-        ) : (
-          <ul className="grid gap-3">
-            {results.map((collection) => (
-              <li
-                key={collection._id}
-                className="rounded-lg border bg-card p-4"
-              >
-                <h3 className="font-medium">{collection.name}</h3>
-                <Button variant="outline" onClick={() => setSelectedCollection(collection._id)}>Open collection</Button>
-                <ul>
-                  {collection.definition.fields.map((field) => (
-                    <li key={field.id}>
-                      {field.label} ({field.id}, {field.type})
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        )}
-        {status === "CanLoadMore" && (
-          <Button variant="outline" onClick={() => loadMore(20)}>
-            Load more
-          </Button>
-        )}
-        {status === "LoadingMore" && <p role="status">Loading more…</p>}
-      </section>
-      <section className="flex flex-col gap-4">
-        <h2 className="text-xl font-semibold">Create collection</h2>
-        <form onSubmit={submit} className="flex max-w-xl flex-col gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="collection-name">Name</Label>
-            <Input
-              id="collection-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={100}
-              required
-              disabled={saving}
-            />
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-8 md:px-8">
+      <div className="flex flex-col gap-3">
+        <Link
+          to="/dashboard/workspaces"
+          className="inline-flex items-center gap-1 self-start text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft aria-hidden className="size-4" />
+          All workspaces
+        </Link>
+        <PageHeader
+          title={workspace ? workspace.name : "Loading workspace…"}
+          description="Collections hold your records. Open one to view, add, or edit them."
+          actions={
+            results.length > 0 && (
+              <CreateCollectionDialog workspaceId={workspaceId} />
+            )
+          }
+        />
+      </div>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <section
+          aria-labelledby="collections-heading"
+          className="rounded-lg border bg-card"
+        >
+          <div className="flex items-baseline justify-between gap-4 border-b px-5 py-4">
+            <h2 id="collections-heading" className="text-xl font-semibold">
+              Collections
+            </h2>
+            {results.length > 0 && (
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {results.length === 1
+                  ? "1 collection"
+                  : `${results.length} collections`}
+              </span>
+            )}
           </div>
-          {fields.map((field, index) => (
-            <fieldset
-              key={index}
-              className="grid gap-2 rounded-lg border p-4"
-              disabled={saving}
-            >
-              <legend>Field {index + 1}</legend>
-              <Label htmlFor={`label-${index}`}>Label</Label>
-              <Input
-                id={`label-${index}`}
-                value={field.label}
-                maxLength={100}
-                required
-                onChange={(e) =>
-                  setFields(
-                    fields.map((item, i) =>
-                      i === index ? { ...item, label: e.target.value } : item
-                    )
-                  )
-                }
-              />
-              <Label htmlFor={`id-${index}`}>Machine ID</Label>
-              <Input
-                id={`id-${index}`}
-                value={field.id}
-                maxLength={64}
-                pattern="[a-z][a-z0-9_]*"
-                required
-                onChange={(e) =>
-                  setFields(
-                    fields.map((item, i) =>
-                      i === index ? { ...item, id: e.target.value } : item
-                    )
-                  )
-                }
-              />
-              <Label htmlFor={`type-${index}`}>Type</Label>
-              <Select
-                value={field.type}
-                disabled={saving}
-                onValueChange={(value) => {
-                  if (
-                    value === "text" ||
-                    value === "number" ||
-                    value === "boolean"
-                  )
-                    setFields(
-                      fields.map((item, i) =>
-                        i === index ? { ...item, type: value } : item
-                      )
-                    )
-                }}
-              >
-                <SelectTrigger id={`type-${index}`} className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="text">Text</SelectItem>
-                    <SelectItem value="number">Number</SelectItem>
-                    <SelectItem value="boolean">Boolean</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              {fields.length > 1 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    setFields(fields.filter((_, i) => i !== index))
-                  }
+          {status === "LoadingFirstPage" ? (
+            <p role="status" className="px-5 py-6 text-muted-foreground">
+              Loading collections…
+            </p>
+          ) : results.length === 0 ? (
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia>
+                  <Mascot pose="wave" size={160} />
+                </EmptyMedia>
+                <EmptyTitle>Create your first collection</EmptyTitle>
+                <EmptyDescription>
+                  Choose the fields each record has, such as company, salary,
+                  and applied. Your agent can then fill it in.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <CreateCollectionDialog workspaceId={workspaceId} />
+              </EmptyContent>
+            </Empty>
+          ) : (
+            <ul className="divide-y">
+              {results.map((collection) => (
+                <li
+                  key={collection._id}
+                  className="flex flex-wrap items-center justify-between gap-4 px-5 py-4"
                 >
-                  Remove field
-                </Button>
-              )}
-            </fieldset>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            disabled={saving || fields.length >= 50}
-            onClick={() =>
-              setFields([...fields, { id: "", label: "", type: "text" }])
-            }
-          >
-            Add field
-          </Button>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Creating…" : "Create collection"}
-          </Button>
-        </form>
-      </section>
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <h3 className="truncate text-base font-semibold">
+                      {collection.name}
+                    </h3>
+                    <ul aria-label="Fields" className="flex flex-wrap gap-1.5">
+                      {collection.definition.fields.map((field) => (
+                        <li key={field.id}>
+                          <Badge variant="secondary">
+                            {field.label}
+                            <span className="text-muted-foreground">
+                              {FIELD_TYPE_LABELS[field.type]}
+                            </span>
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setSelectedCollection(collection._id)}
+                  >
+                    Open
+                    <span className="sr-only"> {collection.name}</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {status === "CanLoadMore" && (
+            <div className="border-t px-5 py-3">
+              <Button variant="outline" onClick={() => loadMore(20)}>
+                Load more
+              </Button>
+            </div>
+          )}
+          {status === "LoadingMore" && (
+            <p role="status" className="border-t px-5 py-3">
+              Loading more…
+            </p>
+          )}
+        </section>
+        {workspace && (
+          <AgentAccessBoundary key={workspace._id}>
+            <AgentAccess workspaceId={workspace._id} />
+          </AgentAccessBoundary>
+        )}
       </div>
     </main>
   )

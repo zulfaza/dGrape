@@ -48,7 +48,7 @@ function DashboardLayout() {
     <SidebarProvider>
       <AppSidebar user={user} />
       <SidebarInset className="h-svh min-h-0 overflow-x-hidden">
-        <header className="flex h-16 shrink-0 items-center gap-2">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-card">
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator
@@ -94,6 +94,11 @@ function buildBreadcrumbs(pathname: string): Crumb[] {
   const crumbs: Crumb[] = [{ label: "Dashboard", href: "/dashboard" }]
   if (pathname !== "/dashboard" && DASHBOARD_PAGE_TITLES[pathname]) {
     crumbs.push({ label: DASHBOARD_PAGE_TITLES[pathname], href: pathname })
+  } else if (pathname.startsWith("/dashboard/workspaces/")) {
+    crumbs.push(
+      { label: "Workspaces", href: "/dashboard/workspaces" },
+      { label: "Workspace", href: pathname }
+    )
   }
   return crumbs
 }

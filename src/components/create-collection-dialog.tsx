@@ -1,0 +1,206 @@
+import { useMutation } from "convex/react"
+import { Plus, Trash2 } from "lucide-react"
+import { useState, type FormEvent } from "react"
+import { api } from "../../convex/_generated/api"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { toast } from "@/components/ui/toast"
+
+type FieldType = "text" | "number" | "boolean"
+type Field = { id: string; label: string; type: FieldType }
+
+const MAX_FIELDS = 50
+const emptyField = (): Field => ({ id: "", label: "", type: "text" })
+
+function isFieldType(value: string): value is FieldType {
+  return value === "text" || value === "number" || value === "boolean"
+}
+
+/** Opens a form that creates a collection with typed fields. */
+export function CreateCollectionDialog({
+  workspaceId,
+}: {
+  workspaceId: string
+}) {
+  const create = useMutation(api.workspaces.createCollection)
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState("")
+  const [fields, setFields] = useState<Field[]>([emptyField()])
+  const [saving, setSaving] = useState(false)
+
+  const updateField = (index: number, change: Partial<Field>) =>
+    setFields(
+      fields.map((field, i) => (i === index ? { ...field, ...change } : field))
+    )
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (saving) return
+    if (!name.trim()) {
+      toast.error("Enter a collection name")
+      return
+    }
+    if (fields.some((field) => !field.label.trim())) {
+      toast.error("Enter a label for each field")
+      return
+    }
+    if (new Set(fields.map((field) => field.id)).size !== fields.length) {
+      toast.error("Field IDs must be unique")
+      return
+    }
+    setSaving(true)
+    try {
+      await create({ workspaceId, name, fields })
+      setName("")
+      setFields([emptyField()])
+      setOpen(false)
+      toast.success("Collection created")
+    } catch {
+      toast.error("Could not create collection")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!saving) setOpen(nextOpen)
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button>
+          <Plus aria-hidden />
+          Create collection
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Create collection</DialogTitle>
+          <DialogDescription>
+            Name the collection and add the fields each record has.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="flex flex-col gap-6">
+          <div className="grid gap-2">
+            <Label htmlFor="collection-name">Name</Label>
+            <Input
+              id="collection-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={100}
+              required
+              disabled={saving}
+            />
+          </div>
+          <fieldset className="flex flex-col gap-3" disabled={saving}>
+            <legend className="mb-1 text-sm font-medium">Fields</legend>
+            <p className="text-sm text-muted-foreground">
+              The ID is what agents and the API use. Use lowercase letters,
+              numbers, and underscores.
+            </p>
+            {fields.map((field, index) => (
+              <div
+                key={index}
+                className="grid items-end gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_1fr_8rem_auto]"
+              >
+                <div className="grid gap-2">
+                  <Label htmlFor={`label-${index}`}>Label</Label>
+                  <Input
+                    id={`label-${index}`}
+                    value={field.label}
+                    maxLength={100}
+                    required
+                    onChange={(e) =>
+                      updateField(index, { label: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`id-${index}`}>ID</Label>
+                  <Input
+                    id={`id-${index}`}
+                    value={field.id}
+                    maxLength={64}
+                    pattern="[a-z][a-z0-9_]*"
+                    required
+                    className="font-mono"
+                    onChange={(e) => updateField(index, { id: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`type-${index}`}>Type</Label>
+                  <Select
+                    value={field.type}
+                    disabled={saving}
+                    onValueChange={(value) => {
+                      if (isFieldType(value))
+                        updateField(index, { type: value })
+                    }}
+                  >
+                    <SelectTrigger id={`type-${index}`} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="text">Text</SelectItem>
+                        <SelectItem value="number">Number</SelectItem>
+                        <SelectItem value="boolean">Yes / no</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Remove field ${index + 1}`}
+                  disabled={fields.length === 1}
+                  onClick={() =>
+                    setFields(fields.filter((_, i) => i !== index))
+                  }
+                >
+                  <Trash2 aria-hidden />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              className="self-start"
+              disabled={fields.length >= MAX_FIELDS}
+              onClick={() => setFields([...fields, emptyField()])}
+            >
+              <Plus aria-hidden />
+              Add field
+            </Button>
+          </fieldset>
+          <DialogFooter>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Creating…" : "Create collection"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
