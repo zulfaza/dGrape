@@ -10,6 +10,11 @@ export async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
     .withIndex("by_digest", (q) => q.eq("digest", digest))
     .unique()
   if (!grant || grant.state !== "active" || grant.expiresAt <= now) return null
+  if (grant.registrationId) {
+    // Revoking a registration stops every token issued to it.
+    const registration = await ctx.db.get(grant.registrationId)
+    if (registration?.status !== "claimed") return null
+  }
   const member = await ctx.db
     .query("workspaceMembers")
     .withIndex("by_workspace_user", (q) =>

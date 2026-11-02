@@ -25,3 +25,19 @@ export function codeKey() {
 export function workosApiKey() {
   return required("WORKOS_API_KEY")
 }
+
+/**
+ * The ES256 private key that signs identity assertions, as a JWK JSON
+ * string with a `kid`. Generate one with scripts/agent-auth-signing-key.mjs.
+ */
+export function signingKeyJwk() {
+  return required("AGENT_AUTH_SIGNING_KEY")
+}
+
+/**
+ * The authorization server issuer: this deployment's HTTP origin. Derived
+ * from configuration, never from request headers.
+ */
+export function issuer() {
+  return new URL(required("CONVEX_SITE_URL")).origin
+}

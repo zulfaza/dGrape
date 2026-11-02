@@ -22,6 +22,7 @@ import type * as lib_agentRequests from "../lib/agentRequests.js";
 import type * as lib_agentScope from "../lib/agentScope.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_collectionDomain from "../lib/collectionDomain.js";
+import type * as lib_identityAssertion from "../lib/identityAssertion.js";
 import type * as lib_recordQuery from "../lib/recordQuery.js";
 import type * as lib_records from "../lib/records.js";
 import type * as workspaces from "../workspaces.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   "lib/agentScope": typeof lib_agentScope;
   "lib/auth": typeof lib_auth;
   "lib/collectionDomain": typeof lib_collectionDomain;
+  "lib/identityAssertion": typeof lib_identityAssertion;
   "lib/recordQuery": typeof lib_recordQuery;
   "lib/records": typeof lib_records;
   workspaces: typeof workspaces;

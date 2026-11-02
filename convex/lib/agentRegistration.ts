@@ -14,6 +14,8 @@ export const CLAIM_WINDOW_MS = 24 * 60 * 60 * 1000
 export const CLAIM_ATTEMPT_MS = 10 * 60 * 1000
 /** The minimum seconds between two token polls. */
 export const POLL_INTERVAL_SECONDS = 5
+/** How long one access token from /oauth2/token is valid. */
+export const ACCESS_TOKEN_LIFETIME_MS = 60 * 60 * 1000
 /** Wrong codes allowed for one claim attempt before it locks. */
 export const MAX_CODE_TRIES = 5
 /** Pending registrations allowed for one email at a time. */
