@@ -226,6 +226,28 @@ export const updateRecord = mutation({
 })
 
 /**
+ * Deletes a record when its revision is still `expectedRevision`. Returns
+ * "conflict" when someone changed it after the caller read it.
+ */
+export const deleteRecord = mutation({
+  returns: v.union(v.literal("conflict"), v.literal("deleted")),
+  args: {
+    collectionId: v.id("collections"),
+    recordId: v.id("collectionRecords"),
+    expectedRevision: v.number(),
+  },
+  handler: async (ctx, { collectionId, recordId, expectedRevision }) => {
+    await collectionForRecords(ctx, collectionId)
+    const record = await ctx.db.get(recordId)
+    if (!record || record.collectionId !== collectionId)
+      throw new Error("Record not found")
+    if (record.revision !== expectedRevision) return "conflict"
+    await ctx.db.delete(recordId)
+    return "deleted"
+  },
+})
+
+/**
  * Adds an optional field to a collection. The records that exist stay valid
  * and have no value for the new field.
  */
