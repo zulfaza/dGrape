@@ -5,6 +5,7 @@ import type { Doc, Id } from "../../convex/_generated/dataModel"
 import type { RecordQuery } from "../../convex/lib/recordQuery"
 import { ChevronLeft, Plus, Trash2 } from "lucide-react"
 import { AddFieldDialog } from "@/components/add-field-dialog"
+import { ExportRecordsButton } from "@/components/export-records-button"
 import { Mascot } from "@/components/mascot"
 import { RecordQueryBar } from "@/components/record-query-bar"
 import { PageHeader } from "@/components/page-header"
@@ -215,6 +216,7 @@ export function CollectionRecords({
           }
           actions={
             <>
+              <ExportRecordsButton collection={collection} disabled={saving} />
               <AddFieldDialog
                 collectionId={collectionId}
                 fields={fields}
