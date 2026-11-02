@@ -2,7 +2,7 @@ import { useMutation, usePaginatedQuery, useQuery } from "convex/react"
 import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Doc, Id } from "../../convex/_generated/dataModel"
-import { ChevronLeft, Plus } from "lucide-react"
+import { ChevronLeft, Plus, Trash2 } from "lucide-react"
 import { AddFieldDialog } from "@/components/add-field-dialog"
 import { Mascot } from "@/components/mascot"
 import { PageHeader } from "@/components/page-header"
@@ -90,9 +90,11 @@ export function CollectionRecords({
   )
   const create = useMutation(api.workspaces.createRecord)
   const update = useMutation(api.workspaces.updateRecord)
+  const remove = useMutation(api.workspaces.deleteRecord)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
   const [conflict, setConflict] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const latest = useQuery(
     api.workspaces.getRecord,
     conflict && draft?.record
@@ -141,6 +143,28 @@ export function CollectionRecords({
       setSaving(false)
     }
   }
+  async function deleteDraftRecord() {
+    if (!draft?.record || saving) return
+    setSaving(true)
+    try {
+      const result = await remove({
+        collectionId,
+        recordId: draft.record._id,
+        expectedRevision: draft.record.revision,
+      })
+      if (result === "conflict") {
+        setConfirmingDelete(false)
+        setConflict(true)
+        return
+      }
+      setDraft(null)
+      toast.success("Record deleted")
+    } catch {
+      toast.error("Could not delete record")
+    } finally {
+      setSaving(false)
+    }
+  }
   if (!collection)
     return (
       <p role="status" className="text-muted-foreground">
@@ -150,6 +174,7 @@ export function CollectionRecords({
   const { fields } = collection.definition
   const openDraft = (next: Draft) => {
     setConflict(false)
+    setConfirmingDelete(false)
     setDraft(next)
   }
   const newRecordButton = (
@@ -418,7 +443,39 @@ export function CollectionRecords({
                   </AlertAction>
                 </Alert>
               )}
+              {confirmingDelete && draft.record && (
+                <Alert variant="destructive">
+                  <AlertTitle>Delete this record?</AlertTitle>
+                  <AlertDescription>
+                    You cannot undo this. Agents and the API can no longer read
+                    the record.
+                  </AlertDescription>
+                  <AlertAction>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={saving}
+                      onClick={deleteDraftRecord}
+                    >
+                      Delete
+                    </Button>
+                  </AlertAction>
+                </Alert>
+              )}
               <DialogFooter>
+                {draft.record && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-destructive sm:mr-auto"
+                    disabled={saving || conflict || confirmingDelete}
+                    onClick={() => setConfirmingDelete(true)}
+                  >
+                    <Trash2 aria-hidden />
+                    Delete
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="outline"
