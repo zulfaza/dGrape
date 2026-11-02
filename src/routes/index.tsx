@@ -6,7 +6,7 @@ export const Route = createFileRoute("/")({ component: Home })
 const planned = [
   {
     title: "Bring your own agent",
-    body: "Keep using your existing agent harness for research and writing. A planned MCP and API interface will let it work with your workspace.",
+    body: "Keep using your existing agent harness for research and writing. Read-only MCP access works now. Planned write tools and self-service agent registration will let it build in your workspace.",
   },
   {
     title: "Connect and compute",
@@ -135,6 +135,10 @@ function Home() {
                   need to track. Define typed fields and keep records in a
                   structure that fits your work.
                 </p>
+                <p>
+                  Give your agent a read-only workspace credential. It can then
+                  read your collections and records through MCP or the HTTP API.
+                </p>
               </div>
             </div>
           </section>
@@ -167,8 +171,8 @@ function Home() {
               ))}
             </div>
             <p className="mt-6 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Schema versions and portable exports of data and definitions are also
-              planned, so your work can evolve and move with you.
+              Schema versions and portable exports of data and definitions are
+              also planned, so your work can evolve and move with you.
             </p>
           </section>
 
