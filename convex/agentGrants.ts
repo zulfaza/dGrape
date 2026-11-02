@@ -8,8 +8,10 @@ import {
   internalQuery,
   mutation,
   query,
+  type QueryCtx,
 } from "./_generated/server"
 import { requireMembership } from "./lib/auth"
+import { collectionFieldValidator } from "./lib/collectionDomain"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_ACTIVE_GRANTS = 10
@@ -120,6 +122,73 @@ export const revoke = mutation({
     return null
   },
 })
+/**
+ * Returns the workspace a credential may read, or null when the credential is
+ * unknown, revoked, expired, or its owner has lost the workspace.
+ */
+async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
+  const grant = await ctx.db
+    .query("agentGrants")
+    .withIndex("by_digest", (q) => q.eq("digest", digest))
+    .unique()
+  if (
+    !grant ||
+    grant.state !== "active" ||
+    grant.scope !== "readonly" ||
+    grant.expiresAt <= now
+  )
+    return null
+  const member = await ctx.db
+    .query("workspaceMembers")
+    .withIndex("by_workspace_user", (q) =>
+      q.eq("workspaceId", grant.workspaceId).eq("userId", grant.owner)
+    )
+    .unique()
+  if (!member || member.role !== "owner") return null
+  return grant.workspaceId
+}
+
+const MAX_DESCRIBED_COLLECTIONS = 100
+
+export const describe = internalQuery({
+  args: { digest: v.string(), now: v.number() },
+  returns: v.union(
+    v.literal("denied"),
+    v.object({
+      workspace: v.object({ id: v.id("workspaces"), name: v.string() }),
+      collections: v.array(
+        v.object({
+          id: v.id("collections"),
+          name: v.string(),
+          fields: v.array(collectionFieldValidator),
+        })
+      ),
+      collectionsTruncated: v.boolean(),
+    })
+  ),
+  handler: async (ctx, { digest, now }) => {
+    const workspaceId = await resolveGrant(ctx, digest, now)
+    if (!workspaceId) return "denied"
+    const workspace = await ctx.db.get(workspaceId)
+    if (!workspace) return "denied"
+    const collections = await ctx.db
+      .query("collections")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+      .take(MAX_DESCRIBED_COLLECTIONS + 1)
+    return {
+      workspace: { id: workspace._id, name: workspace.name },
+      collections: collections
+        .slice(0, MAX_DESCRIBED_COLLECTIONS)
+        .map(({ _id, name, definition }) => ({
+          id: _id,
+          name,
+          fields: definition.fields,
+        })),
+      collectionsTruncated: collections.length > MAX_DESCRIBED_COLLECTIONS,
+    }
+  },
+})
+
 const record = v.object({
   _id: v.id("collectionRecords"),
   _creationTime: v.number(),
@@ -143,29 +212,12 @@ export const read = internalQuery({
   ),
   // Callers (convex/http.ts) validate limit and cursor size at the boundary.
   handler: async (ctx, args) => {
-    const grant = await ctx.db
-      .query("agentGrants")
-      .withIndex("by_digest", (q) => q.eq("digest", args.digest))
-      .unique()
-    if (
-      !grant ||
-      grant.state !== "active" ||
-      grant.scope !== "readonly" ||
-      grant.expiresAt <= args.now
-    )
-      return "denied"
-    const member = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", grant.workspaceId).eq("userId", grant.owner)
-      )
-      .unique()
-    if (!member || member.role !== "owner") return "denied"
+    const workspaceId = await resolveGrant(ctx, args.digest, args.now)
+    if (!workspaceId) return "denied"
     const id = ctx.db.normalizeId("collections", args.collectionId)
     if (!id) return "invalid"
     const collection = await ctx.db.get(id)
-    if (!collection || collection.workspaceId !== grant.workspaceId)
-      return "denied"
+    if (!collection || collection.workspaceId !== workspaceId) return "denied"
     return ctx.db
       .query("collectionRecords")
       .withIndex("by_collection", (q) => q.eq("collectionId", id))

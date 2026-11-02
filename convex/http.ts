@@ -24,13 +24,20 @@ type ReadRequest = {
   limit: number
 }
 
+/** Returns the Bearer credential, or null when the header is malformed. */
+function bearerToken(request: Request) {
+  return (
+    /^Bearer ([a-f0-9]{64})$/.exec(
+      request.headers.get("Authorization") ?? ""
+    )?.[1] ?? null
+  )
+}
+
 /** Parses `GET /agent/records` at the boundary, before any database read. */
 function parseReadRequest(
   request: Request
 ): ReadRequest | "unauthorized" | "invalid" {
-  const token = /^Bearer ([a-f0-9]{64})$/.exec(
-    request.headers.get("Authorization") ?? ""
-  )?.[1]
+  const token = bearerToken(request)
   if (!token) return "unauthorized"
   const params = new URL(request.url).searchParams
   const ids = params.getAll("collectionId")
@@ -54,14 +61,31 @@ function parseReadRequest(
   return { token, collectionId, cursor, limit }
 }
 
+const preflight = httpAction(
+  async () => new Response(null, { status: 204, headers: corsHeaders })
+)
+
 const http = httpRouter()
+http.route({ path: "/agent/workspace", method: "OPTIONS", handler: preflight })
 http.route({
-  path: "/agent/records",
-  method: "OPTIONS",
-  handler: httpAction(
-    async () => new Response(null, { status: 204, headers: corsHeaders })
-  ),
+  path: "/agent/workspace",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const token = bearerToken(request)
+    if (!token) return reply(401, "Unauthorized")
+    try {
+      const result = await ctx.runQuery(internal.agentGrants.describe, {
+        digest: await digestToken(token),
+        now: Date.now(),
+      })
+      if (result === "denied") return reply(403, "Forbidden")
+      return Response.json(result, { headers: corsHeaders })
+    } catch {
+      return reply(503, "Service unavailable")
+    }
+  }),
 })
+http.route({ path: "/agent/records", method: "OPTIONS", handler: preflight })
 http.route({
   path: "/agent/records",
   method: "GET",
