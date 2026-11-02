@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { useCallback, useState } from "react"
+import { useCallback, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
 import { HeroDashboard } from "@/components/landing/hero-dashboard"
 import { LyingSloth } from "@/components/landing/lying-sloth"
@@ -54,9 +54,22 @@ function WorkspaceLink({
 }
 
 /** The example dashboard with the sloth resting on its top edge. */
+/** A lazy bob when the dashboard changes view, without re-creating the sloth. */
+const BOB: Keyframe[] = [
+  { translate: "0 0", rotate: "0deg" },
+  { translate: "0 -6px", rotate: "-1.5deg", offset: 0.45 },
+  { translate: "0 0", rotate: "0deg" },
+]
+
 function HeroShowcase() {
-  const [views, setViews] = useState(0)
-  const countView = useCallback(() => setViews((count) => count + 1), [])
+  const bob = useRef<HTMLDivElement>(null)
+  const views = useRef(0)
+  const onViewChange = useCallback(() => {
+    views.current += 1
+    if (views.current < 2) return
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    bob.current?.animate(BOB, { duration: 900, easing: "ease-in-out" })
+  }, [])
   // The sloth's belly line sits at 78% of its height (it is 2:1), so a top
   // padding of width x 1/2 x 0.78 puts the belly on the window's top edge:
   // 45% wide and centered on phones (17.5%), 20% wide on the right above.
@@ -64,15 +77,12 @@ function HeroShowcase() {
     <div className="relative mt-14 w-full pt-[17.5%] text-left sm:pt-[7.8%]">
       <div className="pointer-events-none absolute top-0 left-1/2 z-10 w-[45%] -translate-x-1/2 sm:right-[6%] sm:left-auto sm:w-[20%] sm:translate-x-0">
         <div className="dfe-anim dfe-sloth-settle">
-          <div
-            key={views}
-            className={views > 1 ? "dfe-anim dfe-sloth-bob" : undefined}
-          >
+          <div ref={bob} className="origin-bottom">
             <LyingSloth />
           </div>
         </div>
       </div>
-      <HeroDashboard onChange={countView} />
+      <HeroDashboard onChange={onViewChange} />
     </div>
   )
 }
