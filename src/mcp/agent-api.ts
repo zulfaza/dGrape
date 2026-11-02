@@ -42,6 +42,20 @@ export const WorkspaceDescription = Schema.Struct({
 const RecordValue = Schema.Union([Schema.String, Schema.Number, Schema.Boolean])
 export const RecordValues = Schema.Record(Schema.String, RecordValue)
 
+const Bound = Schema.Struct({
+  value: RecordValue,
+  inclusive: Schema.optionalKey(Schema.Boolean),
+})
+
+/** Keeps records whose value equals `eq`, or lies between the bounds. */
+export const RecordWhere = Schema.Union([
+  Schema.Struct({ eq: RecordValue }),
+  Schema.Struct({
+    lower: Schema.optionalKey(Bound),
+    upper: Schema.optionalKey(Bound),
+  }),
+])
+
 export const RecordPage = Schema.Struct({
   page: Schema.Array(
     Schema.Struct({
@@ -75,6 +89,15 @@ const ErrorBody = Schema.Struct({ error: Schema.String })
 
 export interface ListRecordsInput {
   readonly collectionId: string
+  readonly limit?: number | undefined
+  readonly cursor?: string | undefined
+}
+
+export interface QueryRecordsInput {
+  readonly collectionId: string
+  readonly fieldId: string
+  readonly order?: "asc" | "desc" | undefined
+  readonly where?: typeof RecordWhere.Type | undefined
   readonly limit?: number | undefined
   readonly cursor?: string | undefined
 }
@@ -116,6 +139,9 @@ export class AgentApi extends Context.Service<
     readonly describeWorkspace: Call<typeof WorkspaceDescription.Type>
     readonly listRecords: (
       input: ListRecordsInput
+    ) => Call<typeof RecordPage.Type>
+    readonly queryRecords: (
+      input: QueryRecordsInput
     ) => Call<typeof RecordPage.Type>
     readonly createCollection: (
       input: CreateCollectionInput
@@ -203,6 +229,11 @@ export const layer = (baseUrl: string) =>
                 ...(cursor === undefined ? {} : { cursor }),
               })
             ),
+            RecordPage
+          ),
+        queryRecords: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/records/query")), input),
             RecordPage
           ),
         createCollection: (input) =>

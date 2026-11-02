@@ -7,6 +7,7 @@ import {
   parseCreateCollection,
   parseCreateRecord,
   parseDeleteRecord,
+  parseQueryRecords,
   parseUpdateRecord,
 } from "./lib/agentRequests"
 
@@ -218,6 +219,44 @@ http.route({
           revision: result.revision,
         })
       return replyJson(200, result)
+    } catch {
+      return reply(503, "Service unavailable")
+    }
+  }),
+})
+http.route({
+  path: "/agent/records/query",
+  method: "OPTIONS",
+  handler: preflight,
+})
+http.route({
+  path: "/agent/records/query",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const token = bearerToken(request)
+    if (!token) return reply(401, "Unauthorized")
+    const body = parseQueryRecords(
+      await readJson(request),
+      MAX_PAGE_SIZE,
+      MAX_CURSOR_BYTES
+    )
+    if (!body)
+      return replyJson(400, {
+        error: `Send JSON: { collectionId, fieldId, order?: "asc" | "desc", where?: { eq } | { lower?, upper? }, limit?: 1 to ${MAX_PAGE_SIZE}, cursor? }. A bound is { value, inclusive? }.`,
+      })
+    try {
+      const result = await ctx.runQuery(internal.agentGrants.queryPage, {
+        digest: await digestToken(token),
+        collectionId: body.collectionId,
+        query: body.query,
+        cursor: body.cursor,
+        limit: body.limit,
+        now: Date.now(),
+      })
+      if (result.status === "denied") return reply(403, "Forbidden")
+      if (result.status === "invalid")
+        return replyJson(400, { error: result.message })
+      return Response.json(result.result, { headers: corsHeaders })
     } catch {
       return reply(503, "Service unavailable")
     }
