@@ -96,13 +96,27 @@ const UpdateRecord = Tool.make("records_update", {
   dependencies: [AgentApi.AgentCredential],
 })
 
+const DeleteRecord = Tool.make("records_delete", {
+  description:
+    "Delete a record. You cannot undo this. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you decide to delete it. Needs a read-and-write credential.",
+  parameters: Schema.Struct({
+    collectionId: Schema.String,
+    recordId: Schema.String,
+    expectedRevision: Schema.Int,
+  }),
+  success: AgentApi.DeletedRecord,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, true)
+
 const DfeToolkit = Toolkit.make(
   DescribeWorkspace,
   ListRecords,
   CreateCollection,
   AddField,
   CreateRecord,
-  UpdateRecord
+  UpdateRecord,
+  DeleteRecord
 )
 
 const DfeToolkitHandlers = DfeToolkit.toLayer(
@@ -115,6 +129,7 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       collections_add_field: (input) => api.addField(input),
       records_create: (input) => api.createRecord(input),
       records_update: (input) => api.updateRecord(input),
+      records_delete: (input) => api.deleteRecord(input),
     }
   })
 )
@@ -148,7 +163,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, and records_list to read records. With a read-and-write credential, collections_create, collections_add_field, records_create, and records_update change data.",
+      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, and records_list to read records. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)
     ),

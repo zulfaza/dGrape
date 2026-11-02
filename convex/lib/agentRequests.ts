@@ -77,6 +77,26 @@ export function parseAddField(body: unknown): AddFieldBody | null {
   return { collectionId: body.collectionId, field }
 }
 
+export type DeleteRecordBody = {
+  collectionId: string
+  recordId: string
+  expectedRevision: number
+}
+
+export function parseDeleteRecord(body: unknown): DeleteRecordBody | null {
+  if (!isObject(body)) return null
+  const { collectionId, recordId, expectedRevision } = body
+  if (typeof collectionId !== "string" || typeof recordId !== "string")
+    return null
+  if (
+    typeof expectedRevision !== "number" ||
+    !Number.isSafeInteger(expectedRevision) ||
+    expectedRevision < 1
+  )
+    return null
+  return { collectionId, recordId, expectedRevision }
+}
+
 export function parseCreateRecord(body: unknown): CreateRecordBody | null {
   if (!isObject(body) || typeof body.collectionId !== "string") return null
   const values = parseValues(body.values)
