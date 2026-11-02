@@ -1,34 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useCallback, useState } from "react"
-import { Mascot, type MascotPose } from "@/components/mascot"
 import { Badge } from "@/components/ui/badge"
 import { HeroDashboard } from "@/components/landing/hero-dashboard"
 import { LyingSloth } from "@/components/landing/lying-sloth"
+import { HowItWorks, WorkspacesShowcase } from "@/components/landing/step-mocks"
 import { Button } from "@/components/ui/button"
 
 export const Route = createFileRoute("/")({ component: Home })
-
-const steps: ReadonlyArray<{
-  pose: MascotPose
-  title: string
-  body: string
-}> = [
-  {
-    pose: "chart",
-    title: "Make a collection",
-    body: "Name the fields you care about, such as company, salary, and applied. No database setup.",
-  },
-  {
-    pose: "laptop",
-    title: "Connect your agent",
-    body: "Create a credential and add DFE to your agent over MCP. Choose read only, or read and write.",
-  },
-  {
-    pose: "celebrate",
-    title: "Let it fill the table",
-    body: "Your agent adds and updates records while it works. You review them here.",
-  },
-]
 
 const planned = [
   {
@@ -79,12 +57,12 @@ function WorkspaceLink({
 function HeroShowcase() {
   const [views, setViews] = useState(0)
   const countView = useCallback(() => setViews((count) => count + 1), [])
-  // The sloth is 20% of the width; its belly line sits at 78% of its height,
-  // so the top padding (20% x 1/2 x 0.78 = 7.8% of the width) puts the
-  // belly on the window's top edge.
+  // The sloth's belly line sits at 78% of its height (it is 2:1), so a top
+  // padding of width x 1/2 x 0.78 puts the belly on the window's top edge:
+  // 45% wide and centered on phones (17.5%), 20% wide on the right above.
   return (
-    <div className="relative mt-14 w-full pt-[7.8%] text-left">
-      <div className="pointer-events-none absolute top-0 right-[6%] z-10 w-[20%]">
+    <div className="relative mt-14 w-full pt-[17.5%] text-left sm:pt-[7.8%]">
+      <div className="pointer-events-none absolute top-0 left-1/2 z-10 w-[45%] -translate-x-1/2 sm:right-[6%] sm:left-auto sm:w-[20%] sm:translate-x-0">
         <div className="dfe-anim dfe-sloth-settle">
           <div
             key={views}
@@ -164,24 +142,7 @@ function Home() {
             >
               Set it up once. Your agent does the typing.
             </h2>
-            <ol className="mt-10 grid gap-8 md:grid-cols-3">
-              {steps.map((step, index) => (
-                <li key={step.title} className="flex flex-col gap-3">
-                  <div className="flex h-44 items-end justify-center rounded-xl bg-card">
-                    <Mascot pose={step.pose} size={160} className="-mb-2" />
-                  </div>
-                  <h3 className="mt-2 text-lg font-semibold">
-                    <span className="mr-2 text-muted-foreground tabular-nums">
-                      {index + 1}.
-                    </span>
-                    {step.title}
-                  </h3>
-                  <p className="leading-relaxed text-muted-foreground">
-                    {step.body}
-                  </p>
-                </li>
-              ))}
-            </ol>
+            <HowItWorks />
           </section>
 
           <section
@@ -215,11 +176,8 @@ function Home() {
             </ul>
           </section>
 
-          <section className="mb-14 flex flex-col items-center gap-6 rounded-xl bg-primary px-6 py-12 text-center text-primary-foreground sm:flex-row sm:px-12 sm:text-left">
-            <div className="flex size-40 shrink-0 items-center justify-center rounded-full bg-mascot-surface">
-              <Mascot pose="laptop" size={136} />
-            </div>
-            <div className="flex-1">
+          <section className="mb-14 grid items-center gap-10 rounded-xl bg-primary px-6 py-12 text-primary-foreground sm:px-12 md:grid-cols-[1fr_auto]">
+            <div>
               <h2 className="text-3xl font-semibold tracking-tight">
                 Start with one table.
               </h2>
@@ -227,8 +185,11 @@ function Home() {
                 Make a workspace for a project, a process, or a question you
                 want to answer. Add your agent when you are ready.
               </p>
+              <div className="mt-6">
+                <WorkspaceLink signedIn={signedIn} variant="secondary" />
+              </div>
             </div>
-            <WorkspaceLink signedIn={signedIn} variant="secondary" />
+            <WorkspacesShowcase />
           </section>
         </main>
         <footer className="flex items-center gap-2 border-t py-6 text-sm text-muted-foreground">
