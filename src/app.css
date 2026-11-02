@@ -230,6 +230,25 @@
     rotate: -6deg;
   }
 }
+/* Step mocks: typed text reveals left to right; a new row flashes once. */
+@keyframes dfe-type-line {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes dfe-caret {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes dfe-flash {
+  from {
+    background-color: var(--mascot-surface);
+  }
+}
 @keyframes dfe-sloth-bob {
   40% {
     transform: translateY(-8px) rotate(-2deg);
@@ -237,6 +256,18 @@
 }
 
 @layer utilities {
+  .dfe-type-line {
+    animation: dfe-type-line 650ms steps(24, end) both;
+  }
+  .dfe-caret {
+    display: inline-block;
+    animation: dfe-caret 1s step-end infinite;
+  }
+  .dfe-flash {
+    animation:
+      dfe-row-in 400ms ease-out both,
+      dfe-flash 1.6s ease-out both;
+  }
   /* Pivots are the joints in the 768x384 lying.png canvas. */
   .dfe-sloth-hand {
     transform-origin: 35.8% 77.1%;
@@ -271,7 +302,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dfe-anim {
+  .dfe-anim,
+  .dfe-caret {
     animation: none !important;
   }
 }
