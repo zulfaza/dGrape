@@ -85,9 +85,6 @@ function DashboardLayout() {
 }
 
 const DASHBOARD_PAGE_TITLES: Record<string, string> = {
-  "/dashboard/applications": "Applications",
-  "/dashboard/companies": "Companies",
-  "/dashboard/profile": "Profile",
   "/dashboard/workspaces": "Workspaces",
 }
 
@@ -95,12 +92,7 @@ type Crumb = { label: string; href: string }
 
 function buildBreadcrumbs(pathname: string): Crumb[] {
   const crumbs: Crumb[] = [{ label: "Dashboard", href: "/dashboard" }]
-  if (pathname.startsWith("/dashboard/applications/")) {
-    crumbs.push(
-      { label: "Applications", href: "/dashboard/applications" },
-      { label: "Application detail", href: pathname },
-    )
-  } else if (pathname !== "/dashboard" && DASHBOARD_PAGE_TITLES[pathname]) {
+  if (pathname !== "/dashboard" && DASHBOARD_PAGE_TITLES[pathname]) {
     crumbs.push({ label: DASHBOARD_PAGE_TITLES[pathname], href: pathname })
   }
   return crumbs
