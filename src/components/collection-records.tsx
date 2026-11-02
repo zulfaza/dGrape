@@ -2,9 +2,11 @@ import { useMutation, usePaginatedQuery, useQuery } from "convex/react"
 import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Doc, Id } from "../../convex/_generated/dataModel"
+import type { RecordQuery } from "../../convex/lib/recordQuery"
 import { ChevronLeft, Plus, Trash2 } from "lucide-react"
 import { AddFieldDialog } from "@/components/add-field-dialog"
 import { Mascot } from "@/components/mascot"
+import { RecordQueryBar } from "@/components/record-query-bar"
 import { PageHeader } from "@/components/page-header"
 import {
   Alert,
@@ -83,11 +85,18 @@ export function CollectionRecords({
     ? `${siteUrl.replace(/\/$/, "")}/agent/records?collectionId=${encodeURIComponent(collectionId)}`
     : null
   const collection = useQuery(api.workspaces.getCollection, { collectionId })
-  const { results, status, loadMore } = usePaginatedQuery(
+  const [query, setQuery] = useState<RecordQuery | null>(null)
+  const listed = usePaginatedQuery(
     api.workspaces.listRecords,
-    { collectionId },
+    query ? "skip" : { collectionId },
     { initialNumItems: 20 }
   )
+  const queried = usePaginatedQuery(
+    api.workspaces.queryRecords,
+    query ? { collectionId, query } : "skip",
+    { initialNumItems: 20 }
+  )
+  const { results, status, loadMore } = query ? queried : listed
   const create = useMutation(api.workspaces.createRecord)
   const update = useMutation(api.workspaces.updateRecord)
   const remove = useMutation(api.workspaces.deleteRecord)
@@ -211,11 +220,12 @@ export function CollectionRecords({
                 fields={fields}
                 disabled={saving}
               />
-              {results.length > 0 && newRecordButton}
+              {(results.length > 0 || query) && newRecordButton}
             </>
           }
         />
       </div>
+      <RecordQueryBar fields={fields} query={query} onChange={setQuery} />
       <section
         aria-label="Records"
         className="overflow-hidden rounded-lg border bg-card"
@@ -224,6 +234,16 @@ export function CollectionRecords({
           <p role="status" className="px-5 py-6 text-muted-foreground">
             Loading records…
           </p>
+        ) : results.length === 0 && query ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No records match</EmptyTitle>
+              <EmptyDescription>
+                Records with no value for the sort field are not shown. Change
+                the filter, or sort by order added to see every record.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : results.length === 0 ? (
           <Empty>
             <EmptyHeader>

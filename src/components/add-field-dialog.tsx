@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Doc, Id } from "../../convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ type Field = Doc<"collections">["definition"]["fields"][number]
 type FieldType = Field["type"]
 
 const MAX_FIELDS = 50
+const MAX_INDEXED_FIELDS = 5
 
 function isFieldType(value: string): value is FieldType {
   return value === "text" || value === "number" || value === "boolean"
@@ -52,6 +54,9 @@ export function AddFieldDialog({
   const [label, setLabel] = useState("")
   const [id, setId] = useState("")
   const [type, setType] = useState<FieldType>("text")
+  const [indexed, setIndexed] = useState(false)
+  const canIndex =
+    fields.filter((field) => field.indexed).length < MAX_INDEXED_FIELDS
   const [saving, setSaving] = useState(false)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -63,10 +68,14 @@ export function AddFieldDialog({
     }
     setSaving(true)
     try {
-      await addField({ collectionId, field: { id, label, type } })
+      await addField({
+        collectionId,
+        field: indexed ? { id, label, type, indexed } : { id, label, type },
+      })
       setLabel("")
       setId("")
       setType("text")
+      setIndexed(false)
       setOpen(false)
       toast.success("Field added")
     } catch {
@@ -144,6 +153,22 @@ export function AddFieldDialog({
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="new-field-indexed"
+                checked={indexed}
+                disabled={!canIndex}
+                onCheckedChange={(checked) => setIndexed(checked === true)}
+              />
+              <Label htmlFor="new-field-indexed">
+                Index to sort and filter by this field
+              </Label>
+            </div>
+            {!canIndex && (
+              <p className="text-sm text-muted-foreground">
+                This collection already has {MAX_INDEXED_FIELDS} indexed fields.
+              </p>
+            )}
           </fieldset>
           <DialogFooter>
             <Button type="submit" disabled={saving}>

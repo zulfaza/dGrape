@@ -22,6 +22,10 @@ import {
   insertRecord,
   replaceRecordValues,
 } from "./lib/records"
+import {
+  queryRecords as readRecordQuery,
+  recordQueryValidator,
+} from "./lib/recordQuery"
 
 export const list = query({
   args: { paginationOpts: paginationOptsValidator },
@@ -168,6 +172,28 @@ export const listRecords = query({
       .query("collectionRecords")
       .withIndex("by_collection", (q) => q.eq("collectionId", collectionId))
       .paginate(paginationOpts)
+  },
+})
+
+/** Reads a page of records filtered and sorted by one indexed field. */
+export const queryRecords = query({
+  returns: paginationResultValidator(collectionRecordValidator),
+  args: {
+    collectionId: v.id("collections"),
+    query: recordQueryValidator,
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, { collectionId, query, paginationOpts }) => {
+    const collection = await collectionForRecords(ctx, collectionId)
+    if (
+      !Number.isInteger(paginationOpts.numItems) ||
+      paginationOpts.numItems < 1 ||
+      paginationOpts.numItems > 50
+    )
+      throw new Error("Invalid page size")
+    const result = await readRecordQuery(ctx, collection, query, paginationOpts)
+    if (!result.ok) throw new Error(result.message)
+    return result.value
   },
 })
 
