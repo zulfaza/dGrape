@@ -105,3 +105,14 @@ Exact prompt:
 ```text
 Create one full-body DFE sloth mascot matching the attached model sheet: rounded bean body, warm brown, cream heart-shaped face and belly, dark brown eye masks, tiny open eyes, nose and smile, rounded limbs with cream claws. Pure flat 2D solid colors, clean dark brown outlines. No texture, shading, gradients, 3D, gloss, glow, halo, shadow, pouch or jewelry. Centered, fully in frame, even padding, truly transparent background. No text, letters, numbers, labels, logos or watermark. Props only forest green #315847 and yellow #E6BD5B and cream. Standing with one hand at chin, curious calm look.
 ```
+
+### Lying pose — 2026-11-02
+
+Output: `public/brand/mascot/lying.png`.
+Original: `/home/zul/.codex-t3/eka/generated_images/01a19c76-e338-7762-b7f0-df5b9a534e9c/exec-425ae02b-73f5-42c2-af1d-436a66b35f8b.png`.
+
+Exact prompt:
+
+```text
+Create one full-body DFE sloth mascot matching the attached model sheet and wave pose reference: rounded bean body, warm brown, cream heart-shaped face and belly, dark brown eye masks, tiny open eyes, nose and smile, rounded limbs with cream claws. Match the existing set's colors, proportions, face and outline weight. Pure flat 2D solid colors, clean dark brown outlines. No texture, shading, gradients, 3D, gloss, glow, halo, shadow, pouch or jewelry. Centered, fully in frame, even padding, truly transparent background. No text, letters, numbers, labels, logos or watermark. No props or surface. The sloth lies relaxed on its belly along an invisible flat horizontal surface, front three-quarter view, body horizontal, chin resting on crossed forearms, content calm smile with eyes open. One leg and the claws of one arm dangle slightly below the body's flat-ish straight horizontal bottom line, as if draped over an edge. Wide composition.
+```

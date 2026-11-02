@@ -4,7 +4,16 @@ import { cn } from "@/lib/utils"
  * The DFE sloth, one transparent image per pose in public/brand/mascot.
  * It is decorative: nearby text must carry the meaning (see DESIGN.md).
  */
-export type MascotPose = "wave" | "laptop" | "chart" | "celebrate" | "thinking"
+export type MascotPose =
+  | "wave"
+  | "laptop"
+  | "chart"
+  | "celebrate"
+  | "thinking"
+  | "lying"
+
+/** Width-to-height ratio of each pose image; poses are square unless listed. */
+const ASPECT: Partial<Record<MascotPose, number>> = { lying: 2 }
 
 export function Mascot({
   pose,
@@ -18,7 +27,7 @@ export function Mascot({
   return (
     <img
       src={`/brand/mascot/${pose}.png`}
-      width={size}
+      width={size * (ASPECT[pose] ?? 1)}
       height={size}
       alt=""
       aria-hidden

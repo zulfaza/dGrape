@@ -164,3 +164,67 @@
     @apply font-mono;
   }
 }
+
+/* Landing motion. Each animation runs once per trigger; none loops. */
+@keyframes dfe-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+@keyframes dfe-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes dfe-bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes dfe-sloth-settle {
+  0% {
+    opacity: 0;
+    transform: translateY(-40px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(4px) scaleY(0.94);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes dfe-sloth-bob {
+  40% {
+    transform: translateY(-8px) rotate(-2deg);
+  }
+}
+
+@layer utilities {
+  .dfe-rise {
+    animation: dfe-rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .dfe-row-in {
+    animation: dfe-row-in 400ms ease-out both;
+  }
+  .dfe-bar-grow {
+    transform-origin: bottom;
+    animation: dfe-bar-grow 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .dfe-sloth-settle {
+    transform-origin: bottom center;
+    animation: dfe-sloth-settle 900ms cubic-bezier(0.2, 0.8, 0.2, 1) 500ms both;
+  }
+  .dfe-sloth-bob {
+    transform-origin: bottom center;
+    animation: dfe-sloth-bob 600ms ease-in-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dfe-anim {
+    animation: none !important;
+  }
+}
