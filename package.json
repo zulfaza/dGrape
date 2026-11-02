@@ -16,11 +16,16 @@
     "check": "oxfmt --check \"**/*.{ts,tsx,js,jsx,json,jsonc}\"",
     "typecheck": "tsrs --noEmit",
     "typecheck:backend": "tsrs --noEmit -p convex/tsconfig.json",
-    "cf:deploy": "cf deploy"
+    "cf:deploy": "cf deploy",
+    "typecheck:design-system": "tsrs --noEmit -p design-system/tsconfig.json",
+    "design-system:build": "vite build --config design-system.vite.config.ts",
+    "design-system:export": "pnpm design-system:build && node scripts/export-design-system.mjs",
+    "design-system:dev": "vite --config design-system.vite.config.ts --port 3001"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@convex-dev/react-query": "^0.1.0",
+    "@fontsource-variable/ibm-plex-sans": "5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@hugeicons/core-free-icons": "^4.2.1",
     "@hugeicons/react": "^1.1.7",

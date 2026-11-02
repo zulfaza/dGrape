@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DFE sloth on green badge"><rect width="64" height="64" rx="14" fill="#315847"/><g transform="translate(8 8) scale(.75)">
+  <path d="M32 4C15 4 4 16 4 33c0 17 12 27 28 27s28-10 28-27C60 16 49 4 32 4Z" fill="#BC8D6C" stroke="#68412F" stroke-width="4"/>
+  <path d="M32 19C20 9 10 22 10 35c0 13 10 20 22 20s22-7 22-20C54 22 44 9 32 19Z" fill="#FFF1D9"/>
+  <path d="M11 29c4-8 13-7 16-1 2 5-4 11-9 12l-8 2c-1-5-1-9 1-13Zm42 0c-4-8-13-7-16-1-2 5 4 11 9 12l8 2c1-5 1-9-1-13Z" fill="#68412F"/>
+  <circle cx="22" cy="31" r="3" fill="#271C18"/>
+  <circle cx="42" cy="31" r="3" fill="#271C18"/>
+  <ellipse cx="32" cy="38" rx="4" ry="3" fill="#4D3026"/>
+  <path d="M24 45q8 7 16 0" fill="none" stroke="#68412F" stroke-width="3" stroke-linecap="round"/>
+</g></svg>
