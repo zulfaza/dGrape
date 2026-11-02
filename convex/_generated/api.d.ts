@@ -17,6 +17,7 @@ import type * as lib_domain from "../lib/domain.js";
 import type * as lib_profileDomain from "../lib/profileDomain.js";
 import type * as lib_services from "../lib/services.js";
 import type * as profile from "../profile.js";
+import type * as workspaces from "../workspaces.js";
 
 import type {
   ApiFromModules,
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   "lib/profileDomain": typeof lib_profileDomain;
   "lib/services": typeof lib_services;
   profile: typeof profile;
+  workspaces: typeof workspaces;
 }>;
 
 /**

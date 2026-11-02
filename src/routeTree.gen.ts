@@ -16,6 +16,7 @@ import { Route as CallbackRouteImport } from './routes/callback'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardWorkspacesRouteImport } from './routes/dashboard/workspaces'
 import { Route as DashboardProfileRouteImport } from './routes/dashboard/profile'
 import { Route as DashboardCompaniesRouteImport } from './routes/dashboard/companies'
 import { Route as DashboardApplicationsIndexRouteImport } from './routes/dashboard/applications/index'
@@ -56,6 +57,11 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardWorkspacesRoute = DashboardWorkspacesRouteImport.update({
+  id: '/workspaces',
+  path: '/workspaces',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardProfileRoute = DashboardProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof SignUpRoute
   '/dashboard/companies': typeof DashboardCompaniesRoute
   '/dashboard/profile': typeof DashboardProfileRoute
+  '/dashboard/workspaces': typeof DashboardWorkspacesRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/applications/$applicationId': typeof DashboardApplicationsApplicationIdRoute
   '/dashboard/applications/': typeof DashboardApplicationsIndexRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByTo {
   '/sign-up': typeof SignUpRoute
   '/dashboard/companies': typeof DashboardCompaniesRoute
   '/dashboard/profile': typeof DashboardProfileRoute
+  '/dashboard/workspaces': typeof DashboardWorkspacesRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/applications/$applicationId': typeof DashboardApplicationsApplicationIdRoute
   '/dashboard/applications': typeof DashboardApplicationsIndexRoute
@@ -114,6 +122,7 @@ export interface FileRoutesById {
   '/sign-up': typeof SignUpRoute
   '/dashboard/companies': typeof DashboardCompaniesRoute
   '/dashboard/profile': typeof DashboardProfileRoute
+  '/dashboard/workspaces': typeof DashboardWorkspacesRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/applications/$applicationId': typeof DashboardApplicationsApplicationIdRoute
   '/dashboard/applications/': typeof DashboardApplicationsIndexRoute
@@ -129,6 +138,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/dashboard/companies'
     | '/dashboard/profile'
+    | '/dashboard/workspaces'
     | '/dashboard/'
     | '/dashboard/applications/$applicationId'
     | '/dashboard/applications/'
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/dashboard/companies'
     | '/dashboard/profile'
+    | '/dashboard/workspaces'
     | '/dashboard'
     | '/dashboard/applications/$applicationId'
     | '/dashboard/applications'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/dashboard/companies'
     | '/dashboard/profile'
+    | '/dashboard/workspaces'
     | '/dashboard/'
     | '/dashboard/applications/$applicationId'
     | '/dashboard/applications/'
@@ -219,6 +231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/workspaces': {
+      id: '/dashboard/workspaces'
+      path: '/workspaces'
+      fullPath: '/dashboard/workspaces'
+      preLoaderRoute: typeof DashboardWorkspacesRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/profile': {
       id: '/dashboard/profile'
       path: '/profile'
@@ -253,6 +272,7 @@ declare module '@tanstack/react-router' {
 interface DashboardRouteRouteChildren {
   DashboardCompaniesRoute: typeof DashboardCompaniesRoute
   DashboardProfileRoute: typeof DashboardProfileRoute
+  DashboardWorkspacesRoute: typeof DashboardWorkspacesRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardApplicationsApplicationIdRoute: typeof DashboardApplicationsApplicationIdRoute
   DashboardApplicationsIndexRoute: typeof DashboardApplicationsIndexRoute
@@ -261,6 +281,7 @@ interface DashboardRouteRouteChildren {
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardCompaniesRoute: DashboardCompaniesRoute,
   DashboardProfileRoute: DashboardProfileRoute,
+  DashboardWorkspacesRoute: DashboardWorkspacesRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardApplicationsApplicationIdRoute:
     DashboardApplicationsApplicationIdRoute,

@@ -10,6 +10,14 @@ import {
 } from "./lib/applicationAgentDomain";
 
 export default defineSchema({
+  workspaces: defineTable({ name: v.string() }),
+  workspaceMembers: defineTable({
+    workspaceId: v.id("workspaces"),
+    userId: v.string(),
+    role: v.literal("owner"),
+  })
+    .index("by_user", ["userId"])
+    .index("by_workspace_user", ["workspaceId", "userId"]),
   companies: defineTable({
     normalizedName: v.string(),
     name: v.string(),
