@@ -4,7 +4,7 @@ export default defineConfig({
   worker: {
     name: "dfe",
     entrypoint: "@tanstack/react-start/server-entry",
-    compatibilityDate: "2026-11-02",
+    compatibilityDate: "2026-10-30",
     compatibilityFlags: ["nodejs_compat"],
     domains: ["dfe.makarima.dev"],
     env: {
