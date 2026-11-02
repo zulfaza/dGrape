@@ -23,6 +23,7 @@ export const Field = Schema.Struct({
   id: Schema.String,
   label: Schema.String,
   type: Schema.Literals(["text", "number", "boolean"]),
+  optional: Schema.optionalKey(Schema.Literal(true)),
 })
 
 export const WorkspaceDescription = Schema.Struct({

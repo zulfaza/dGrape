@@ -8,8 +8,10 @@ import type { QueryCtx } from "./_generated/server"
 import { mutation, query } from "./_generated/server"
 import { requireMembership, requireUserId } from "./lib/auth"
 import {
+  addField as addFieldToDefinition,
   checkCollection,
   checkRecordValues,
+  collectionDefinitionValidator,
   collectionFieldValidator,
   collectionRecordValidator,
   recordValuesValidator,
@@ -111,9 +113,11 @@ export const createCollection = mutation({
 })
 
 const collectionValidator = v.object({
-  _id: v.id("collections"), _creationTime: v.number(),
-  workspaceId: v.id("workspaces"), name: v.string(),
-  definition: v.object({ version: v.literal(1), fields: v.array(collectionFieldValidator) }),
+  _id: v.id("collections"),
+  _creationTime: v.number(),
+  workspaceId: v.id("workspaces"),
+  name: v.string(),
+  definition: collectionDefinitionValidator,
 })
 
 async function collectionForRecords(
@@ -185,7 +189,7 @@ export const createRecord = mutation({
     validateRecord(collection.definition.fields, values)
     return ctx.db.insert("collectionRecords", {
       collectionId,
-      schemaVersion: 1,
+      schemaVersion: collection.definition.version,
       revision: 1,
       values,
     })
@@ -212,7 +216,30 @@ export const updateRecord = mutation({
       throw new Error("Invalid revision")
     if (record.revision !== expectedRevision) return "conflict"
     validateRecord(collection.definition.fields, values)
-    await ctx.db.patch(recordId, { values, revision: record.revision + 1 })
+    await ctx.db.patch(recordId, {
+      values,
+      revision: record.revision + 1,
+      schemaVersion: collection.definition.version,
+    })
     return "updated"
+  },
+})
+
+/**
+ * Adds an optional field to a collection. The records that exist stay valid
+ * and have no value for the new field.
+ */
+export const addField = mutation({
+  returns: v.null(),
+  args: {
+    collectionId: v.id("collections"),
+    field: collectionFieldValidator.omit("optional"),
+  },
+  handler: async (ctx, { collectionId, field }) => {
+    const collection = await collectionForRecords(ctx, collectionId)
+    const definition = addFieldToDefinition(collection.definition, field)
+    if (!definition.ok) throw new Error(definition.message)
+    await ctx.db.patch(collectionId, { definition: definition.value })
+    return null
   },
 })

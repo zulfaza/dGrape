@@ -28,10 +28,12 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function parseField(value: unknown): CollectionField | null {
   if (!isObject(value)) return null
-  const { id, label, type } = value
+  const { id, label, type, optional } = value
   if (typeof id !== "string" || typeof label !== "string") return null
   if (type !== "text" && type !== "number" && type !== "boolean") return null
-  return { id, label, type }
+  if (optional === undefined) return { id, label, type }
+  if (optional !== true) return null
+  return { id, label, type, optional }
 }
 
 function parseValues(value: unknown): RecordValues | null {

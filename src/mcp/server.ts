@@ -40,7 +40,7 @@ const ListRecords = Tool.make("records_list", {
 }).annotate(Tool.Readonly, true)
 
 const FieldsDescription =
-  'Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", or "boolean".'
+  'Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", or "boolean". Set `optional` to true when a record may leave the field out.'
 
 const CreateCollection = Tool.make("collections_create", {
   description: `Create a collection in the workspace. Needs a read-and-write credential. ${FieldsDescription} Give 1 to 50 fields.`,
@@ -55,7 +55,7 @@ const CreateCollection = Tool.make("collections_create", {
 
 const CreateRecord = Tool.make("records_create", {
   description:
-    'Create a record. `values` must have exactly one value per field of the collection, keyed by field id, with the field\'s type. Send an `idempotencyKey` (for example a source ID) so a retry returns the existing record instead of a duplicate (status "existing"). Needs a read-and-write credential.',
+    'Create a record. `values` must have one value for each required field of the collection, keyed by field id, with the field\'s type. Optional fields may be left out. Send an `idempotencyKey` (for example a source ID) so a retry returns the existing record instead of a duplicate (status "existing"). Needs a read-and-write credential.',
   parameters: Schema.Struct({
     collectionId: Schema.String,
     values: AgentApi.RecordValues,
