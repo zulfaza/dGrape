@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+import { collectionFieldValidator } from "./lib/collectionDomain";
 import { applicationStatusValidator } from "./lib/domain";
 import { profileDocumentValidator } from "./lib/profileDomain";
 import {
@@ -18,6 +19,14 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_workspace_user", ["workspaceId", "userId"]),
+  collections: defineTable({
+    workspaceId: v.id("workspaces"),
+    name: v.string(),
+    definition: v.object({
+      version: v.literal(1),
+      fields: v.array(collectionFieldValidator),
+    }),
+  }).index("by_workspace", ["workspaceId"]),
   companies: defineTable({
     normalizedName: v.string(),
     name: v.string(),
