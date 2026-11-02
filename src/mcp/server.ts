@@ -39,6 +39,23 @@ const ListRecords = Tool.make("records_list", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Readonly, true)
 
+const QueryRecords = Tool.make("records_query", {
+  description: `Filter and sort records by one indexed field (see \`indexed\` in workspace_describe). Records with no value for the field are left out. \`where\` is \`{ eq: value }\`, or \`{ lower?, upper? }\` where a bound is \`{ value, inclusive? }\` (inclusive is true by default). Values must have the field's type. \`order\` is "asc" (default) or "desc". Returns up to \`limit\` records (1 to ${MAX_PAGE_SIZE}, default ${MAX_PAGE_SIZE}). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\` with the same query to get the next page.`,
+  parameters: Schema.Struct({
+    collectionId: Schema.String,
+    fieldId: Schema.String,
+    order: Schema.optionalKey(Schema.Literals(["asc", "desc"])),
+    where: Schema.optionalKey(AgentApi.RecordWhere),
+    limit: Schema.optionalKey(
+      Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_PAGE_SIZE }))
+    ),
+    cursor: Schema.optionalKey(Schema.String),
+  }),
+  success: AgentApi.RecordPage,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
 const FieldsDescription =
   'Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", or "boolean". Set `optional` to true when a record may leave the field out. Set `indexed` to true for fields you will filter or sort by (at most 5; indexed text is at most 200 characters).'
 
@@ -113,6 +130,7 @@ const DeleteRecord = Tool.make("records_delete", {
 const DfeToolkit = Toolkit.make(
   DescribeWorkspace,
   ListRecords,
+  QueryRecords,
   CreateCollection,
   AddField,
   CreateRecord,
@@ -126,6 +144,7 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
     return {
       workspace_describe: () => api.describeWorkspace,
       records_list: (input) => api.listRecords(input),
+      records_query: (input) => api.queryRecords(input),
       collections_create: (input) => api.createCollection(input),
       collections_add_field: (input) => api.addField(input),
       records_create: (input) => api.createRecord(input),
@@ -164,7 +183,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, and records_list to read records. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data.",
+      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, records_list to read records, and records_query to filter and sort them by an indexed field. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)
     ),

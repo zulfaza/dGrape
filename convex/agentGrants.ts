@@ -2,7 +2,7 @@ import {
   paginationOptsValidator,
   paginationResultValidator,
 } from "convex/server"
-import { v } from "convex/values"
+import { v, type Infer } from "convex/values"
 import {
   internalMutation,
   internalQuery,
@@ -16,6 +16,7 @@ import {
   collectionFieldValidator,
   collectionRecordValidator,
 } from "./lib/collectionDomain"
+import { queryRecords, recordQueryValidator } from "./lib/recordQuery"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_ACTIVE_GRANTS = 10
@@ -196,5 +197,42 @@ export const read = internalQuery({
       .query("collectionRecords")
       .withIndex("by_collection", (q) => q.eq("collectionId", id))
       .paginate({ cursor: args.cursor, numItems: args.limit })
+  },
+})
+
+/** Reads a page of records filtered and sorted by one indexed field. */
+const queryPageResult = v.union(
+  v.object({ status: v.literal("denied") }),
+  v.object({ status: v.literal("invalid"), message: v.string() }),
+  v.object({
+    status: v.literal("ok"),
+    result: paginationResultValidator(collectionRecordValidator),
+  })
+)
+
+export const queryPage = internalQuery({
+  args: {
+    digest: v.string(),
+    collectionId: v.string(),
+    query: recordQueryValidator,
+    cursor: v.union(v.string(), v.null()),
+    limit: v.number(),
+    now: v.number(),
+  },
+  returns: queryPageResult,
+  // Callers (convex/http.ts) validate limit and cursor size at the boundary.
+  handler: async (ctx, args): Promise<Infer<typeof queryPageResult>> => {
+    const grant = await resolveGrant(ctx, args.digest, args.now)
+    if (!grant) return { status: "denied" }
+    const id = ctx.db.normalizeId("collections", args.collectionId)
+    const collection = id && (await ctx.db.get(id))
+    if (!collection || collection.workspaceId !== grant.workspaceId)
+      return { status: "denied" }
+    const result = await queryRecords(ctx, collection, args.query, {
+      cursor: args.cursor,
+      numItems: args.limit,
+    })
+    if (!result.ok) return { status: "invalid", message: result.message }
+    return { status: "ok", result: result.value }
   },
 })

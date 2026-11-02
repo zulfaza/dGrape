@@ -1,4 +1,9 @@
-import type { CollectionField, RecordValues } from "./collectionDomain"
+import type {
+  CollectionField,
+  RecordValue,
+  RecordValues,
+} from "./collectionDomain"
+import type { RecordQuery } from "./recordQuery"
 
 /**
  * Parsers for agent write request bodies. They check only shape and types;
@@ -128,4 +133,88 @@ export function parseUpdateRecord(body: unknown): UpdateRecordBody | null {
   const values = parseValues(body.values)
   if (!values) return null
   return { collectionId, recordId, expectedRevision, values }
+}
+
+export type QueryRecordsBody = {
+  collectionId: string
+  query: RecordQuery
+  limit: number
+  cursor: string | null
+}
+
+function isRecordValue(value: unknown): value is RecordValue {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  )
+}
+
+type Bound = { value: RecordValue; inclusive: boolean }
+
+/** Parses `{ value, inclusive? }`; `inclusive` is true when absent. */
+function parseBound(value: unknown): Bound | null | undefined {
+  if (value === undefined) return undefined
+  if (!isObject(value) || !isRecordValue(value.value)) return null
+  const { inclusive } = value
+  if (inclusive !== undefined && typeof inclusive !== "boolean") return null
+  return { value: value.value, inclusive: inclusive ?? true }
+}
+
+function parseWhere(value: unknown): RecordQuery["where"] | null {
+  if (value === undefined) return undefined
+  if (!isObject(value)) return null
+  if ("eq" in value) {
+    if (!isRecordValue(value.eq) || Object.keys(value).length !== 1) return null
+    return { eq: value.eq }
+  }
+  const lower = parseBound(value.lower)
+  const upper = parseBound(value.upper)
+  if (lower === null || upper === null) return null
+  return {
+    ...(lower ? { lower } : {}),
+    ...(upper ? { upper } : {}),
+  }
+}
+
+/**
+ * Parses `{ collectionId, fieldId, order?, where?, limit?, cursor? }`.
+ * `order` is "asc" when absent and `limit` is `maxLimit` when absent.
+ */
+export function parseQueryRecords(
+  body: unknown,
+  maxLimit: number,
+  maxCursorBytes: number
+): QueryRecordsBody | null {
+  if (!isObject(body)) return null
+  const { collectionId, fieldId, order, limit, cursor } = body
+  if (typeof collectionId !== "string" || typeof fieldId !== "string")
+    return null
+  if (order !== undefined && order !== "asc" && order !== "desc") return null
+  if (
+    limit !== undefined &&
+    (typeof limit !== "number" ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > maxLimit)
+  )
+    return null
+  if (
+    cursor !== undefined &&
+    (typeof cursor !== "string" ||
+      new TextEncoder().encode(cursor).length > maxCursorBytes)
+  )
+    return null
+  const where = parseWhere(body.where)
+  if (where === null) return null
+  return {
+    collectionId,
+    query: {
+      fieldId,
+      order: order ?? "asc",
+      ...(where ? { where } : {}),
+    },
+    limit: limit ?? maxLimit,
+    cursor: cursor ?? null,
+  }
 }
