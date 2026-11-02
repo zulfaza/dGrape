@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
+import { useCallback, useState } from "react"
 import { Mascot, type MascotPose } from "@/components/mascot"
 import { Badge } from "@/components/ui/badge"
+import { HeroDashboard } from "@/components/landing/hero-dashboard"
 import { Button } from "@/components/ui/button"
 
 export const Route = createFileRoute("/")({ component: Home })
@@ -54,12 +56,6 @@ const planned = [
   },
 ]
 
-const sampleRecords = [
-  { company: "Linear", role: "Product engineer", applied: true },
-  { company: "PostHog", role: "Full-stack engineer", applied: true },
-  { company: "Railway", role: "Software engineer", applied: false },
-]
-
 function WorkspaceLink({
   signedIn,
   variant = "default",
@@ -78,46 +74,24 @@ function WorkspaceLink({
   )
 }
 
-/** A static example of what an agent writes. It is not live data. */
-function AgentActivityCard() {
+/** The example dashboard with the sloth resting on its top edge. */
+function HeroShowcase() {
+  const [views, setViews] = useState(0)
+  const countView = useCallback(() => setViews((count) => count + 1), [])
   return (
-    <figure className="w-full rounded-lg border bg-card text-card-foreground shadow-[var(--dfe-shadow-overlay)]">
-      <figcaption className="border-b px-4 py-3 text-sm">
-        <span className="font-semibold">Your agent added 3 records</span>
-        <span className="block text-muted-foreground">to Job applications</span>
-      </figcaption>
-      <table className="w-full text-left text-sm">
-        <thead className="sr-only">
-          <tr>
-            <th>Company</th>
-            <th>Role</th>
-            <th>Applied</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {sampleRecords.map((record) => (
-            <tr key={record.company}>
-              <td className="px-4 py-2.5">
-                <span className="font-medium">{record.company}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {record.role}
-                </span>
-              </td>
-              <td className="px-4 py-2.5 text-right">
-                <Badge
-                  variant="secondary"
-                  className={
-                    record.applied ? "bg-success-surface text-success" : ""
-                  }
-                >
-                  {record.applied ? "Applied" : "Saved"}
-                </Badge>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </figure>
+    <div className="relative mt-14 w-full max-w-5xl pt-[72px] text-left sm:pt-[90px]">
+      <div className="pointer-events-none absolute top-0 right-6 z-10 w-48 sm:right-14 sm:w-60">
+        <div className="dfe-anim dfe-sloth-settle">
+          <div
+            key={views}
+            className={views > 1 ? "dfe-anim dfe-sloth-bob" : undefined}
+          >
+            <Mascot pose="lying" size={120} className="h-auto w-full" />
+          </div>
+        </div>
+      </div>
+      <HeroDashboard onChange={countView} />
+    </div>
   )
 }
 
@@ -160,30 +134,19 @@ function Home() {
         </header>
 
         <main>
-          <section className="grid items-center gap-10 py-12 md:grid-cols-[1fr_1fr] md:py-20">
-            <div>
-              <h1 className="max-w-xl text-4xl leading-tight font-semibold tracking-tight sm:text-5xl sm:leading-[1.1]">
-                A tidy home for your data, kept by your agent.
-              </h1>
-              <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted-foreground">
-                DFE, the Dashboard for Everything, holds the tables you track:
-                job applications, spending, project notes. The agent you already
-                use reads and fills them in.
-              </p>
-              <div className="mt-8">
-                <WorkspaceLink signedIn={signedIn} />
-              </div>
+          <section className="flex flex-col items-center py-12 text-center md:py-20">
+            <h1 className="max-w-3xl text-4xl leading-tight font-semibold tracking-tight sm:text-6xl sm:leading-[1.05]">
+              A tidy home for your data, kept by your agent.
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+              DFE, the Dashboard for Everything, holds the tables you track: job
+              applications, spending, project activity. The agent you already
+              use reads and fills them in.
+            </p>
+            <div className="mt-8">
+              <WorkspaceLink signedIn={signedIn} />
             </div>
-            <div className="relative flex min-h-[26rem] flex-col items-center gap-4 overflow-hidden rounded-xl bg-mascot-surface px-5 pt-8 sm:block">
-              <div className="w-full max-w-64 sm:absolute sm:top-8 sm:right-6">
-                <AgentActivityCard />
-              </div>
-              <Mascot
-                pose="wave"
-                size={256}
-                className="-mb-4 h-auto w-56 sm:absolute sm:bottom-0 sm:left-4 sm:w-64"
-              />
-            </div>
+            <HeroShowcase />
           </section>
 
           <section
