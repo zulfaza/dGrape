@@ -19,6 +19,8 @@ export default defineSchema({
     scope: agentScopeValidator,
     state: v.union(v.literal("active"), v.literal("revoked")),
     expiresAt: v.number(),
+    /** Set for tokens issued to an auth.md registration. */
+    registrationId: v.optional(v.id("agentRegistrations")),
   })
     .index("by_digest", ["digest"])
     .index("by_workspace_owner", ["workspaceId", "owner"])

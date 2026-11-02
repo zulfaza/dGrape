@@ -24,6 +24,14 @@ export function randomToken(prefix: string) {
   return `${prefix}_${toBase64Url(crypto.getRandomValues(new Uint8Array(32)))}`
 }
 
+/**
+ * An access token in the same format as workspace credentials (64 hex
+ * characters), so the agent API and MCP server accept it unchanged.
+ */
+export function randomAccessToken() {
+  return toHex(crypto.getRandomValues(new Uint8Array(32)))
+}
+
 /** A uniformly random 6-digit code. */
 export function randomUserCode() {
   // Rejection sampling keeps the distribution uniform.

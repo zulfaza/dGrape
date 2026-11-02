@@ -2,7 +2,12 @@ import { httpRouter } from "convex/server"
 import { httpAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { digestToken } from "./agentAccess"
-import { register as registerAgent } from "./agentIdentityHttp"
+import {
+  jwks,
+  register as registerAgent,
+  revoke as revokeAgentToken,
+  token as agentToken,
+} from "./agentIdentityHttp"
 import {
   parseAddField,
   parseCreateCollection,
@@ -323,4 +328,13 @@ http.route({
 })
 http.route({ path: "/agent/identity", method: "OPTIONS", handler: preflight })
 http.route({ path: "/agent/identity", method: "POST", handler: registerAgent })
+http.route({ path: "/oauth2/token", method: "OPTIONS", handler: preflight })
+http.route({ path: "/oauth2/token", method: "POST", handler: agentToken })
+http.route({ path: "/oauth2/revoke", method: "OPTIONS", handler: preflight })
+http.route({
+  path: "/oauth2/revoke",
+  method: "POST",
+  handler: revokeAgentToken,
+})
+http.route({ path: "/.well-known/jwks.json", method: "GET", handler: jwks })
 export default http

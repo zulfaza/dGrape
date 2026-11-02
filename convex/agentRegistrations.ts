@@ -8,11 +8,14 @@ import { codeKey, workosApiKey } from "./lib/agentAuthConfig"
 import { agentScopeValidator } from "./lib/agentScope"
 import { requireUserId } from "./lib/auth"
 import {
+  ACCESS_TOKEN_LIFETIME_MS,
   CLAIM_ATTEMPT_MS,
   CLAIM_WINDOW_MS,
   MAX_CODE_TRIES,
   MAX_PENDING_PER_EMAIL,
+  POLL_INTERVAL_SECONDS,
 } from "./lib/agentRegistration"
+import type { MutationCtx } from "./_generated/server"
 
 /**
  * auth.md registration state changes. convex/http.ts calls these after it
@@ -237,5 +240,141 @@ export const confirmClaim = action({
       scope: args.scope,
       now: Date.now(),
     })
+  },
+})
+
+/** Stores a 1-hour access token for a claimed registration. */
+async function issueAccessToken(
+  ctx: MutationCtx,
+  registration: Doc<"agentRegistrations"> & { status: "claimed" },
+  accessTokenDigest: string,
+  now: number
+) {
+  const expiresAt = now + ACCESS_TOKEN_LIFETIME_MS
+  await ctx.db.insert("agentGrants", {
+    workspaceId: registration.workspaceId,
+    owner: registration.owner,
+    digest: accessTokenDigest,
+    scope: registration.scope,
+    state: "active",
+    expiresAt,
+    registrationId: registration._id,
+  })
+  return expiresAt
+}
+
+const pollResult = v.union(
+  v.object({ status: v.literal("expired") }),
+  v.object({ status: v.literal("pending") }),
+  v.object({ status: v.literal("slow_down") }),
+  v.object({ status: v.literal("used") }),
+  v.object({
+    status: v.literal("issued"),
+    registrationId: v.id("agentRegistrations"),
+    email: v.string(),
+    scope: agentScopeValidator,
+    expiresAt: v.number(),
+  })
+)
+
+/**
+ * The claim grant: the agent polls with its claim token until the user
+ * claims. The first poll after the claim gets the tokens; the claim token
+ * cannot get tokens again.
+ */
+export const pollClaim = internalMutation({
+  args: {
+    claimTokenDigest: v.string(),
+    accessTokenDigest: v.string(),
+    now: v.number(),
+  },
+  returns: pollResult,
+  handler: async (ctx, args): Promise<Infer<typeof pollResult>> => {
+    const registration = await ctx.db
+      .query("agentRegistrations")
+      .withIndex("by_claimTokenDigest", (q) =>
+        q.eq("claimTokenDigest", args.claimTokenDigest)
+      )
+      .unique()
+    if (!registration) return { status: "expired" }
+    if (registration.status === "revoked") return { status: "used" }
+    if (registration.status === "claimed") {
+      if (registration.claimTokenUsedAt !== undefined) return { status: "used" }
+      const expiresAt = await issueAccessToken(
+        ctx,
+        registration,
+        args.accessTokenDigest,
+        args.now
+      )
+      await ctx.db.patch(registration._id, { claimTokenUsedAt: args.now })
+      return {
+        status: "issued",
+        registrationId: registration._id,
+        email: registration.loginHint,
+        scope: registration.scope,
+        expiresAt,
+      }
+    }
+    if (registration.claimExpiresAt <= args.now) return { status: "expired" }
+    const attempts = await ctx.db
+      .query("agentClaimAttempts")
+      .withIndex("by_registrationId", (q) =>
+        q.eq("registrationId", registration._id)
+      )
+      .collect()
+    if (!attempts.some((a) => a.state === "open" && a.expiresAt > args.now))
+      return { status: "expired" }
+    const tooSoon =
+      registration.lastPolledAt !== undefined &&
+      args.now - registration.lastPolledAt < POLL_INTERVAL_SECONDS * 1000
+    await ctx.db.patch(registration._id, { lastPolledAt: args.now })
+    return { status: tooSoon ? "slow_down" : "pending" }
+  },
+})
+
+const exchangeResult = v.union(
+  v.object({ status: v.literal("invalid") }),
+  v.object({
+    status: v.literal("issued"),
+    scope: agentScopeValidator,
+    expiresAt: v.number(),
+  })
+)
+
+/** The JWT-bearer grant, after convex/http.ts has verified the assertion. */
+export const exchangeAssertion = internalMutation({
+  args: {
+    registrationId: v.string(),
+    accessTokenDigest: v.string(),
+    now: v.number(),
+  },
+  returns: exchangeResult,
+  handler: async (ctx, args): Promise<Infer<typeof exchangeResult>> => {
+    const id = ctx.db.normalizeId("agentRegistrations", args.registrationId)
+    const registration = id && (await ctx.db.get(id))
+    if (!registration || registration.status !== "claimed")
+      return { status: "invalid" }
+    const expiresAt = await issueAccessToken(
+      ctx,
+      registration,
+      args.accessTokenDigest,
+      args.now
+    )
+    return { status: "issued", scope: registration.scope, expiresAt }
+  },
+})
+
+/** RFC 7009 revocation of one access token. Unknown tokens are ignored. */
+export const revokeAccessToken = internalMutation({
+  args: { digest: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { digest }) => {
+    const grant = await ctx.db
+      .query("agentGrants")
+      .withIndex("by_digest", (q) => q.eq("digest", digest))
+      .unique()
+    if (grant?.state === "active")
+      await ctx.db.patch(grant._id, { state: "revoked" })
+    return null
   },
 })
