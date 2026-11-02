@@ -35,6 +35,11 @@ export class AgentAccessBoundary extends Component<
   }
 }
 
+/** The Claude Code command that connects this app's `/mcp` endpoint. */
+function mcpCommand(token: string) {
+  return `claude mcp add --transport http dfe ${window.location.origin}/mcp --header "Authorization: Bearer ${token}"`
+}
+
 export function AgentAccess({
   workspaceId,
 }: {
@@ -93,13 +98,16 @@ export function AgentAccess({
         credential expires after the selected number of days.
       </p>
       <p>
-        Open a collection to copy its API URL. Send the credential in the
-        Authorization header as Bearer followed by a space and the credential.
+        Connect an MCP client to /mcp, or open a collection to copy its HTTP API
+        URL. Send the credential in the Authorization header as Bearer followed
+        by a space and the credential.
       </p>
       {token ? (
         <div className="flex flex-col gap-2">
           <p>Copy this credential now. You cannot see it again.</p>
           <code className="break-all">{token}</code>
+          <p>To connect Claude Code through MCP, run:</p>
+          <code className="break-all">{mcpCommand(token)}</code>
           <div className="flex gap-2">
             <Button
               type="button"
