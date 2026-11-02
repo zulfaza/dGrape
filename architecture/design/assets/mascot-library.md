@@ -117,6 +117,35 @@ Exact prompt:
 Create one full-body DFE sloth mascot matching the attached model sheet and wave pose reference: rounded bean body, warm brown, cream heart-shaped face and belly, dark brown eye masks, tiny open eyes, nose and smile, rounded limbs with cream claws. Match the existing set's colors, proportions, face and outline weight. Pure flat 2D solid colors, clean dark brown outlines. No texture, shading, gradients, 3D, gloss, glow, halo, shadow, pouch or jewelry. Centered, fully in frame, even padding, truly transparent background. No text, letters, numbers, labels, logos or watermark. No props or surface. The sloth lies relaxed on its belly along an invisible flat horizontal surface, front three-quarter view, body horizontal, chin resting on crossed forearms, content calm smile with eyes open. One leg and the claws of one arm dangle slightly below the body's flat-ish straight horizontal bottom line, as if draped over an edge. Wide composition.
 ```
 
-### Lying pose layers — 2026-11-02
+### Lying pose layers — 2026-11-02 (replaced)
 
-`public/brand/mascot/lying/` holds `body.png`, `hand.png`, `leg.png`, and `foot.png`: full 768×384 canvases cut from `lying.png` with Pillow, so they stack exactly. Each limb layer overlaps the body by about 6px at its joint, so no seam opens while it swings. The joints (pivots in the canvas) are the hand at (275, 296), the leg at (590, 296), and the foot at (634, 255). Recombined, the layers match `lying.png` except for 381 anti-aliased edge pixels in the overlaps. Regenerate the layers from `lying.png` if the pose changes.
+The first hero loop cut `lying.png` into body, hand, leg, and foot layers and swung them with CSS. The drawn sprite frames below replace it; the layer files are removed.
+
+### Lying sprite frames — 2026-11-02
+
+Two built-in GPT image generations were attempted with true transparency, using `/home/zul/Code/Personal/dGrape/public/brand/mascot/lying.png` as the pose reference and `/home/zul/Code/Personal/dGrape/public/brand/mascot-reference.png` as the model reference. Neither was accepted for slicing: head and face proportions drift, neighboring figures touch, and the requested limb positions are not consistently represented. No frame alignment or sprite outputs were produced.
+
+Originals:
+
+- `/home/zul/.codex-t3/eka/generated_images/01a19caa-f913-7e51-95d9-aac2fc10ed91/exec-d55667d9-e9e2-499a-a222-972a92710218.png`
+- `/home/zul/.codex-t3/eka/generated_images/01a19caa-f913-7e51-95d9-aac2fc10ed91/exec-711aadb9-e7bd-4ff5-b1b3-5c835779bc38.png`
+
+Exact first prompt:
+
+```text
+Create one horizontal animation sprite strip of exactly six evenly spaced complete DFE sloths on a truly transparent background. Image 1 is the exact lying pose; image 2 is the character model. All six cells must have identical head, face, body position, size, and horizontal belly line. Only limbs move. In order: 1 rest like image 1; 2 dangling front hand swings forward and up, claws spread waving; 3 hand down, dangling leg kicks right and up; 4 leg under, back foot lifts toes up; 5 hand swings back and dangling leg left; 6 hand slightly raised toward rest. Keep chin on crossed forearms and body lying on an invisible edge. Pure flat 2D solid colors, clean dark brown outlines, matching reference. No texture, shading, gradients, glow, halo, shadow, text, props, surface, borders or checkerboard. Six separate cells, same scale and belly height.
+```
+
+Exact second prompt:
+
+```text
+Produce one horizontal strip of six separate animation frames, no borders, on true transparent alpha. Reference 1 is the exact lying pose; reference 2 is the character model. Preserve the head, face, body, belly height, and scale exactly unchanged in every cell. Preserve chin resting on crossed forearms. Only alter dangling limbs: frame 1 rest; frame 2 dangling hand up waving; frame 3 dangling leg kicks right and up; frame 4 back foot lifts toes up; frame 5 hand back and leg left; frame 6 hand slightly raised. Each complete sloth has ample transparent space around it, no overlap between cells. No motion lines. Solid flat 2D colors and clean dark brown outlines. No texture, shading, gradients, glow, halo, shadow, text, props, surface or checkerboard.
+```
+
+The second strip (`exec-d55667d9-…`) is used. Its heads and faces are consistent; the two problems reported above were fixed in post-processing with `scripts/build-sloth-sprite.py` (Pillow only):
+
+- Frames are separated as connected shapes of the alpha mask, not by fixed cells, so touching neighbours do not mix. Loose parts (the wave lines) join the nearest figure.
+- Each frame is aligned on the head: a template of frame 1's head (left 3–40% of its width, top 62%) is matched against each frame by mask overlap. Match scores were 96–100% of a perfect match; shifts in pixels of the strip: (0, 0), (−36, −2) (the waving hand widens frame 2), (5, −2), (2, −1), (6, −1), (4, −1).
+- The aligned union is fitted into 768×384 frames (scale 1.607). The forearms rest at about y = 300 in every frame, matching `lying.png`, so the hero layout is unchanged.
+
+Output: `public/brand/mascot/lying-frames/sprite.webp`, six 768×384 frames in one 4608×384 sheet, WebP quality 88 with lossless alpha (216 KB; the PNG sheet was 1 MB). The torso drifts slightly between frames, as hand-drawn frames do; the head does not move.
