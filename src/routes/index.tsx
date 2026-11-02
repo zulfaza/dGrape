@@ -3,6 +3,7 @@ import { useCallback, useState } from "react"
 import { Mascot, type MascotPose } from "@/components/mascot"
 import { Badge } from "@/components/ui/badge"
 import { HeroDashboard } from "@/components/landing/hero-dashboard"
+import { LyingSloth } from "@/components/landing/lying-sloth"
 import { Button } from "@/components/ui/button"
 
 export const Route = createFileRoute("/")({ component: Home })
@@ -78,15 +79,18 @@ function WorkspaceLink({
 function HeroShowcase() {
   const [views, setViews] = useState(0)
   const countView = useCallback(() => setViews((count) => count + 1), [])
+  // The sloth is 20% of the width; its belly line sits at 78% of its height,
+  // so the top padding (20% x 1/2 x 0.78 = 7.8% of the width) puts the
+  // belly on the window's top edge.
   return (
-    <div className="relative mt-14 w-full max-w-5xl pt-[72px] text-left sm:pt-[90px]">
-      <div className="pointer-events-none absolute top-0 right-6 z-10 w-48 sm:right-14 sm:w-60">
+    <div className="relative mt-14 w-full pt-[7.8%] text-left">
+      <div className="pointer-events-none absolute top-0 right-[6%] z-10 w-[20%]">
         <div className="dfe-anim dfe-sloth-settle">
           <div
             key={views}
             className={views > 1 ? "dfe-anim dfe-sloth-bob" : undefined}
           >
-            <Mascot pose="lying" size={120} className="h-auto w-full" />
+            <LyingSloth />
           </div>
         </div>
       </div>
