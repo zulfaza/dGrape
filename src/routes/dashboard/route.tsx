@@ -88,6 +88,7 @@ const DASHBOARD_PAGE_TITLES: Record<string, string> = {
   "/dashboard/applications": "Applications",
   "/dashboard/companies": "Companies",
   "/dashboard/profile": "Profile",
+  "/dashboard/workspaces": "Workspaces",
 }
 
 type Crumb = { label: string; href: string }
