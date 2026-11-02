@@ -11,6 +11,7 @@ import {
   checkCollection,
   checkRecordValues,
   collectionFieldValidator,
+  collectionRecordValidator,
   recordValuesValidator,
   type RecordValues,
 } from "./lib/collectionDomain"
@@ -114,11 +115,6 @@ const collectionValidator = v.object({
   workspaceId: v.id("workspaces"), name: v.string(),
   definition: v.object({ version: v.literal(1), fields: v.array(collectionFieldValidator) }),
 })
-const recordValidator = v.object({
-  _id: v.id("collectionRecords"), _creationTime: v.number(),
-  collectionId: v.id("collections"), schemaVersion: v.literal(1),
-  revision: v.number(), values: recordValuesValidator,
-})
 
 async function collectionForRecords(
   ctx: QueryCtx,
@@ -146,7 +142,7 @@ export const getCollection = query({
 })
 
 export const listRecords = query({
-  returns: paginationResultValidator(recordValidator),
+  returns: paginationResultValidator(collectionRecordValidator),
   args: {
     collectionId: v.id("collections"),
     paginationOpts: paginationOptsValidator,
@@ -167,7 +163,7 @@ export const listRecords = query({
 })
 
 export const getRecord = query({
-  returns: recordValidator,
+  returns: collectionRecordValidator,
   args: {
     collectionId: v.id("collections"),
     recordId: v.id("collectionRecords"),

@@ -42,5 +42,9 @@ export default defineSchema({
     schemaVersion: v.literal(1),
     revision: v.number(),
     values: v.record(v.string(), v.union(v.string(), v.number(), v.boolean())),
-  }).index("by_collection", ["collectionId"]),
+    /** Set by agent creates so a retried request returns the same record. */
+    idempotencyKey: v.optional(v.string()),
+  })
+    .index("by_collection", ["collectionId"])
+    .index("by_collection_idempotencyKey", ["collectionId", "idempotencyKey"]),
 });
