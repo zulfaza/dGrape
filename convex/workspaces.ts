@@ -7,7 +7,13 @@ import type { Doc, Id } from "./_generated/dataModel"
 import type { QueryCtx } from "./_generated/server"
 import { mutation, query } from "./_generated/server"
 import { requireMembership, requireUserId } from "./lib/auth"
-import { collectionFieldValidator } from "./lib/collectionDomain"
+import {
+  checkCollection,
+  checkRecordValues,
+  collectionFieldValidator,
+  recordValuesValidator,
+  type RecordValues,
+} from "./lib/collectionDomain"
 
 export const list = query({
   args: { paginationOpts: paginationOptsValidator },
@@ -93,35 +99,15 @@ export const createCollection = mutation({
     const workspaceId = ctx.db.normalizeId("workspaces", rawId)
     if (!workspaceId) throw new Error("Workspace access denied")
     await requireMembership(ctx, workspaceId)
-    const trimmed = name.trim()
-    if (!trimmed || trimmed.length > 100)
-      throw new Error("Name must be between 1 and 100 characters")
-    if (fields.length < 1 || fields.length > 50)
-      throw new Error("Add 1 to 50 fields")
-    const ids = new Set<string>()
-    const normalized = fields.map((field) => {
-      const label = field.label.trim()
-      if (!label || label.length > 100)
-        throw new Error("Field label must be between 1 and 100 characters")
-      if (!/^[a-z][a-z0-9_]{0,63}$/.test(field.id) || ids.has(field.id))
-        throw new Error(
-          "Field IDs must be unique and use lowercase letters, numbers, or underscores"
-        )
-      ids.add(field.id)
-      return { ...field, label }
-    })
+    const checked = checkCollection(name, fields)
+    if (!checked.ok) throw new Error(checked.message)
     return ctx.db.insert("collections", {
       workspaceId,
-      name: trimmed,
-      definition: { version: 1, fields: normalized },
+      name: checked.value.name,
+      definition: { version: 1, fields: checked.value.fields },
     })
   },
 })
-
-const recordValuesValidator = v.record(
-  v.string(),
-  v.union(v.string(), v.number(), v.boolean())
-)
 
 const collectionValidator = v.object({
   _id: v.id("collections"), _creationTime: v.number(),
@@ -146,24 +132,10 @@ async function collectionForRecords(
 
 function validateRecord(
   fields: Doc<"collections">["definition"]["fields"],
-  values: Record<string, string | number | boolean>
+  values: RecordValues
 ) {
-  if (Object.keys(values).length !== fields.length)
-    throw new Error("Invalid record")
-  let size = 0
-  for (const field of fields) {
-    if (!Object.hasOwn(values, field.id)) throw new Error("Invalid record")
-    const value = values[field.id]
-    if (field.type === "text") {
-      if (typeof value !== "string" || value.length > 10000)
-        throw new Error("Invalid record")
-      size += value.length
-    } else if (field.type === "number") {
-      if (typeof value !== "number" || !Number.isFinite(value))
-        throw new Error("Invalid record")
-    } else if (typeof value !== "boolean") throw new Error("Invalid record")
-  }
-  if (size > 50000) throw new Error("Invalid record")
+  const checked = checkRecordValues(fields, values)
+  if (!checked.ok) throw new Error(checked.message)
 }
 
 export const getCollection = query({
