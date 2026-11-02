@@ -116,3 +116,7 @@ Exact prompt:
 ```text
 Create one full-body DFE sloth mascot matching the attached model sheet and wave pose reference: rounded bean body, warm brown, cream heart-shaped face and belly, dark brown eye masks, tiny open eyes, nose and smile, rounded limbs with cream claws. Match the existing set's colors, proportions, face and outline weight. Pure flat 2D solid colors, clean dark brown outlines. No texture, shading, gradients, 3D, gloss, glow, halo, shadow, pouch or jewelry. Centered, fully in frame, even padding, truly transparent background. No text, letters, numbers, labels, logos or watermark. No props or surface. The sloth lies relaxed on its belly along an invisible flat horizontal surface, front three-quarter view, body horizontal, chin resting on crossed forearms, content calm smile with eyes open. One leg and the claws of one arm dangle slightly below the body's flat-ish straight horizontal bottom line, as if draped over an edge. Wide composition.
 ```
+
+### Lying pose layers — 2026-11-02
+
+`public/brand/mascot/lying/` holds `body.png`, `hand.png`, `leg.png`, and `foot.png`: full 768×384 canvases cut from `lying.png` with Pillow, so they stack exactly. Each limb layer overlaps the body by about 6px at its joint, so no seam opens while it swings. The joints (pivots in the canvas) are the hand at (275, 296), the leg at (590, 296), and the foot at (634, 255). Recombined, the layers match `lying.png` except for 381 anti-aliased edge pixels in the overlaps. Regenerate the layers from `lying.png` if the pose changes.
