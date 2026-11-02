@@ -6,6 +6,7 @@ export default defineConfig({
     entrypoint: "@tanstack/react-start/server-entry",
     compatibilityDate: "2026-11-02",
     compatibilityFlags: ["nodejs_compat"],
+    domains: ["dfe.makarima.dev"],
     env: {
       WORKOS_CLIENT_ID: bindings.secret(),
       WORKOS_API_KEY: bindings.secret(),
