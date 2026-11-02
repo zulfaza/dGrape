@@ -32,12 +32,18 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function parseField(value: unknown): CollectionField | null {
   if (!isObject(value)) return null
-  const { id, label, type, optional } = value
+  const { id, label, type, optional, indexed } = value
   if (typeof id !== "string" || typeof label !== "string") return null
   if (type !== "text" && type !== "number" && type !== "boolean") return null
-  if (optional === undefined) return { id, label, type }
-  if (optional !== true) return null
-  return { id, label, type, optional }
+  if (optional !== undefined && optional !== true) return null
+  if (indexed !== undefined && indexed !== true) return null
+  return {
+    id,
+    label,
+    type,
+    ...(optional ? { optional } : {}),
+    ...(indexed ? { indexed } : {}),
+  }
 }
 
 function parseValues(value: unknown): RecordValues | null {

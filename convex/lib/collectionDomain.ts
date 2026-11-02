@@ -16,6 +16,12 @@ export const collectionFieldValidator = v.object({
    * because the records that exist already have no value for it.
    */
   optional: v.optional(v.literal(true)),
+  /**
+   * When true, records can be filtered and sorted by this field. Each record
+   * keeps one index entry per indexed field that has a value. Indexed text
+   * values must be short.
+   */
+  indexed: v.optional(v.literal(true)),
 })
 
 /**
@@ -28,10 +34,9 @@ export const collectionDefinitionValidator = v.object({
   fields: v.array(collectionFieldValidator),
 })
 
-export const recordValuesValidator = v.record(
-  v.string(),
-  v.union(v.string(), v.number(), v.boolean())
-)
+export const recordValueValidator = v.union(v.string(), v.number(), v.boolean())
+
+export const recordValuesValidator = v.record(v.string(), recordValueValidator)
 
 /** A stored record as queries return it. */
 export const collectionRecordValidator = v.object({
@@ -46,10 +51,13 @@ export const collectionRecordValidator = v.object({
 
 export type CollectionField = Infer<typeof collectionFieldValidator>
 export type CollectionDefinition = Infer<typeof collectionDefinitionValidator>
+export type RecordValue = Infer<typeof recordValueValidator>
 export type RecordValues = Infer<typeof recordValuesValidator>
 
 const MAX_NAME_LENGTH = 100
 const MAX_FIELDS = 50
+export const MAX_INDEXED_FIELDS = 5
+export const MAX_INDEXED_TEXT_LENGTH = 200
 const MAX_TEXT_LENGTH = 10_000
 const MAX_RECORD_TEXT = 50_000
 const FIELD_ID = /^[a-z][a-z0-9_]{0,63}$/
@@ -95,6 +103,8 @@ export function checkCollection(
     ids.add(field.id)
     checked.push(result.value)
   }
+  if (checked.filter((field) => field.indexed).length > MAX_INDEXED_FIELDS)
+    return invalid(`Index at most ${MAX_INDEXED_FIELDS} fields`)
   return { ok: true, value: { name: trimmed, fields: checked } }
 }
 
@@ -112,6 +122,14 @@ export function addField(
   if (!result.ok) return result
   if (definition.fields.some((existing) => existing.id === field.id))
     return invalid(`Field ID "${field.id}" is already used`)
+  if (
+    field.indexed &&
+    definition.fields.filter((existing) => existing.indexed).length >=
+      MAX_INDEXED_FIELDS
+  )
+    return invalid(
+      `A collection can index at most ${MAX_INDEXED_FIELDS} fields`
+    )
   return {
     ok: true,
     value: {
@@ -148,6 +166,10 @@ export function checkRecordValues(
         return invalid(
           `Field "${field.id}" must be text of at most ${MAX_TEXT_LENGTH} characters`
         )
+      if (field.indexed && value.length > MAX_INDEXED_TEXT_LENGTH)
+        return invalid(
+          `Field "${field.id}" is indexed, so its text must be at most ${MAX_INDEXED_TEXT_LENGTH} characters`
+        )
       textLength += value.length
     } else if (field.type === "number") {
       if (typeof value !== "number" || !Number.isFinite(value))
@@ -160,4 +182,16 @@ export function checkRecordValues(
       `Text in one record must total at most ${MAX_RECORD_TEXT} characters`
     )
   return { ok: true, value: values }
+}
+
+/** The index entries of a record: one per indexed field that has a value. */
+export function indexEntries(
+  fields: ReadonlyArray<CollectionField>,
+  values: RecordValues
+): Array<{ fieldId: string; value: RecordValue }> {
+  return fields.flatMap((field) =>
+    field.indexed && Object.hasOwn(values, field.id)
+      ? [{ fieldId: field.id, value: values[field.id] }]
+      : []
+  )
 }

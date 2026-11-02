@@ -2,7 +2,10 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 import { agentScopeValidator } from "./lib/agentScope";
-import { collectionDefinitionValidator } from "./lib/collectionDomain";
+import {
+  collectionDefinitionValidator,
+  recordValueValidator,
+} from "./lib/collectionDomain";
 
 export default defineSchema({
   agentGrants: defineTable({
@@ -45,4 +48,21 @@ export default defineSchema({
   })
     .index("by_collection", ["collectionId"])
     .index("by_collection_idempotencyKey", ["collectionId", "idempotencyKey"]),
+  /**
+   * One row per indexed field value of a record, so records can be filtered
+   * and sorted by that field with a bounded index range. convex/lib/records.ts
+   * keeps these rows in step with every record write.
+   */
+  recordIndexEntries: defineTable({
+    collectionId: v.id("collections"),
+    recordId: v.id("collectionRecords"),
+    fieldId: v.string(),
+    value: recordValueValidator,
+  })
+    .index("by_collectionId_and_fieldId_and_value", [
+      "collectionId",
+      "fieldId",
+      "value",
+    ])
+    .index("by_recordId", ["recordId"]),
 });
