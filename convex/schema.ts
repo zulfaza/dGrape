@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+import { agentScopeValidator } from "./lib/agentScope";
 import { collectionFieldValidator } from "./lib/collectionDomain";
 
 export default defineSchema({
@@ -8,7 +9,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     owner: v.string(),
     digest: v.string(),
-    scope: v.literal("readonly"),
+    scope: agentScopeValidator,
     state: v.union(v.literal("active"), v.literal("revoked")),
     expiresAt: v.number(),
   })
