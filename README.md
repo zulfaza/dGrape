@@ -1,12 +1,19 @@
-# dGrape
+# DFE — Dashboard for Everything
 
-![dGrape](./public/og-image.png)
+Architecture decisions for the planned agent-built workspace are recorded in
+[architecture/decisions](./architecture/decisions/README.md). These records are
+kept independently of temporary planning documents in `docs/`.
 
-Run your job search like an operating system. `dGrape` turns a messy spreadsheet
-of applications into a structured pipeline — feed it your CV and any job description,
-tailor your application with AI, track every stage, and learn why you advanced (or
-didn't).
+The reusable [design system](./DESIGN.md) has a standalone component specimen
+and workspace sample in `src/design-system`. Build it with
+`pnpm design-system:build`, or run `pnpm design-system:dev` for local development.
+It uses local demonstration data and does not need WorkOS or Convex credentials.
+`pnpm design-system:export` also builds the portable
+[interactive specimen](./architecture/design/showcase.html).
 
+![DFE sloth](./public/favicon.svg)
+
+DFE (Dashboard for Everything) is being rebuilt as an agent-first workspace for flexible data, API aggregation, deterministic jobs, artifacts, and dashboards. The name is provisional; the intended production domain is `dfe.makarima.dev`. The current runnable design-system sample uses local demonstration data.
 ## The flow
 
 1. **Drop your CV** — paste your resume or profile; skills, history and strengths get indexed.
@@ -47,5 +54,7 @@ The app runs at http://localhost:3000.
 npx shadcn@latest add button
 ```
 
-Components land in `src/components/ui` and follow the existing monospace,
-zero-radius design system — don't override the theme tokens in `src/app.css`.
+Components land in `src/components/ui`. Follow the current
+[design direction](./architecture/design/README.md) and shared theme tokens.
+The planned friendly shadcn theme replaces the previous monospace, zero-radius
+visual constraint after design curation.

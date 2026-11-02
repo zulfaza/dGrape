@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>dGrape architecture and data</title>
+<style>
+*{box-sizing:border-box}body{margin:0;color:var(--foreground);font-family:var(--font-sans,system-ui);font-size:14px;line-height:1.5}p{margin:0 0 12px}h2{font-size:16px;margin:18px 0 10px}h3{font-size:14px;margin:0 0 7px}.muted,small{color:var(--muted-foreground)}small{font-size:12px}.tabs{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--border);margin-bottom:16px}.tabs button,.switch button{font:inherit;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius,7px);background:var(--card);color:var(--foreground);cursor:pointer}.tabs button[aria-selected="true"],.switch button[aria-pressed="true"]{border-color:var(--primary);color:var(--primary-foreground);background:var(--primary)}button:focus-visible,a:focus-visible{outline:2px solid var(--ring);outline-offset:3px}[hidden]{display:none!important}.diagram{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius,8px);padding:12px;margin:12px 0}.diagram svg{display:block;width:100%;min-width:590px;height:auto}.diagram text{fill:var(--foreground);font-family:var(--font-sans,system-ui);font-size:12px}.diagram .title{font-size:14px;font-weight:650}.diagram .sub{fill:var(--muted-foreground);font-size:11px}.diagram rect{fill:var(--card);stroke:var(--border);stroke-width:1.2}.diagram .hot{stroke:var(--primary)}.diagram .line{stroke:var(--muted-foreground);stroke-width:1.4;fill:none}.diagram .edge{fill:var(--muted-foreground);font-size:10px}.diagram .trust{stroke:var(--warning)}.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted-foreground)}.dot{display:inline-block;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-right:5px}.dot.secret{background:var(--warning)}.notes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.note{padding:13px;background:var(--secondary);border-radius:var(--radius,8px);font-size:13px}.note p{margin:0}.stack{display:grid;gap:8px}.row{padding:12px;border:1px solid var(--border);border-radius:var(--radius,8px)}.row strong{display:block}.arrow{text-align:center;color:var(--primary);line-height:20px}.tag{font-size:11px;color:var(--primary);font-weight:650}.mono,code,pre{font-family:var(--font-mono,ui-monospace,monospace)}pre{background:var(--code-background,var(--card));border:1px solid var(--border);border-radius:var(--radius,8px);padding:13px;font-size:12px;line-height:1.65;overflow:auto;margin:8px 0 14px}.switch{display:flex;gap:8px;margin:14px 0}.caption{font-size:12px;color:var(--muted-foreground)}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;vertical-align:top;padding:8px;border-bottom:1px solid var(--border)}th{font-weight:600}a{color:var(--primary)}.footer{margin-top:18px;border-top:1px solid var(--border);padding-top:12px;font-size:12px;color:var(--muted-foreground)}.panel>p:first-child{font-size:14px}details{border:1px solid var(--border);padding:11px;border-radius:var(--radius,8px);margin-top:12px}summary{cursor:pointer;font-weight:600}details p{margin:10px 0 0;font-size:13px}@media(max-width:500px){.notes{grid-template-columns:1fr}.tabs button{padding:7px 9px;font-size:12px}.diagram{padding:5px}pre{font-size:11px}}
+</style></head><body><main>
+<nav class="tabs" aria-label="Explore the design" role="tablist">
+<button role="tab" id="tab-architecture" aria-controls="architecture" aria-selected="true" data-tab="architecture">Architecture</button>
+<button role="tab" id="tab-data" aria-controls="data" aria-selected="false" data-tab="data">Convex structure</button>
+<button role="tab" id="tab-examples" aria-controls="examples" aria-selected="false" data-tab="examples">Example records</button>
+<button role="tab" id="tab-reports" aria-controls="reports" aria-selected="false" data-tab="reports">Fast reports</button>
+</nav>
+
+<section class="panel" id="architecture" role="tabpanel" aria-labelledby="tab-architecture">
+<p>Your harness creates the workspace. Cloudflare runs it. Convex tracks structured data; R2 holds files.</p>
+<div class="diagram" tabindex="0" aria-label="Architecture diagram; horizontally scrollable on small screens">
+<svg viewBox="0 0 660 590" role="img" aria-labelledby="arch-title"><title id="arch-title">Harness and dashboard use an Effect gateway. Cron dispatches durable recipes. Convex and R2 store results, and WorkOS provides sign-in and optional Vault storage.</title>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted-foreground)"/></marker></defs>
+<rect x="8" y="8" width="195" height="66" rx="7"/><text x="22" y="32" class="title">Your agent harness</text><text x="22" y="51" class="sub">Research, write, design pages</text>
+<rect x="231" y="8" width="195" height="66" rx="7"/><text x="245" y="32" class="title">TanStack dashboard</text><text x="245" y="51" class="sub">Tables, charts, run history</text>
+<rect x="454" y="8" width="195" height="66" rx="7"/><text x="468" y="32" class="title">Cloudflare Cron</text><text x="468" y="51" class="sub">One tick dispatches due jobs</text>
+<path class="line" d="M105 74V126" marker-end="url(#ar)"/><text x="117" y="105" class="edge">MCP + scoped token</text>
+<path class="line" d="M328 74V126" marker-end="url(#ar)"/><text x="340" y="105" class="edge">Authenticated API</text>
+<path class="line" d="M551 74V126" marker-end="url(#ar)"/>
+<rect x="8" y="127" width="418" height="86" rx="7" class="hot"/><text x="24" y="153" class="title">API Worker + Effect services</text><text x="24" y="174" class="sub">Identity → permissions → validate → execute</text><text x="24" y="193" class="sub">Collections · queries · pages · artifacts · recipes</text>
+<rect x="454" y="127" width="195" height="86" rx="7"/><text x="468" y="153" class="title">Dispatcher</text><text x="468" y="174" class="sub">Claim due occurrence in DB</text><text x="468" y="193" class="sub">Start / reconcile durable run</text>
+<path class="line" d="M426 169H453" marker-end="url(#ar)"/><text x="384" y="232" class="edge">manual run uses same launch path</text>
+<path class="line" d="M551 213V271" marker-end="url(#ar)"/>
+<rect x="454" y="272" width="195" height="88" rx="7" class="hot"/><text x="468" y="297" class="title">Workflow runner</text><text x="468" y="318" class="sub">Fetch → map → aggregate</text><text x="468" y="338" class="sub">Versioned recipe, bounded retries</text>
+<path class="line" d="M105 213V397" marker-end="url(#ar)"/><text x="118" y="267" class="edge">Structured state</text>
+<path class="line" d="M295 213V397" marker-end="url(#ar)"/><text x="308" y="290" class="edge">File operations</text>
+<path class="line" d="M454 323H415V372H190V397" marker-end="url(#ar)"/>
+<path class="line" d="M502 360V383H358V397" marker-end="url(#ar)"/>
+<rect x="8" y="398" width="214" height="86" rx="7"/><text x="23" y="423" class="title">Convex</text><text x="23" y="444" class="sub">Records, schemas, summaries</text><text x="23" y="463" class="sub">Schedules, grants, page definitions</text>
+<rect x="247" y="398" width="179" height="86" rx="7"/><text x="262" y="423" class="title">Private R2</text><text x="262" y="444" class="sub">Files, HTML, PDFs</text><text x="262" y="463" class="sub">Approved data snapshots</text>
+<rect x="454" y="398" width="195" height="86" rx="7"/><text x="468" y="423" class="title">Third-party APIs</text><text x="468" y="444" class="sub">GitHub, configured JSON APIs</text><text x="468" y="463" class="sub">Approved origins and operations</text>
+<path class="line" d="M592 360V397" marker-end="url(#ar)"/>
+<rect x="8" y="520" width="641" height="58" rx="7" class="trust"/><text x="23" y="544" class="title">WorkOS: AuthKit login + auth.md user confirmation</text><text x="23" y="563" class="sub">Vault is a proposed secret store, pending production pricing. Only trusted connectors resolve secrets.</text>
+</svg>
+</div>
+<div class="legend"><span><i class="dot"></i>Application execution</span><span><i class="dot secret"></i>Identity and secret boundary</span></div>
+<div class="notes"><div class="note"><h3>Agent access</h3><p>Discover auth.md → show a code → you sign in and approve → scoped token. Connector API keys never go to the agent.</p></div><div class="note"><h3>Dashboard reads</h3><p>The UI can also subscribe directly to authorized, bounded Convex queries. Every query checks workspace access.</p></div></div>
+<details><summary>Custom HTML reports</summary><p>Agents can save bespoke HTML to R2. Display it in an isolated sandbox with snapshot data. It receives no app cookies, credentials, or direct database access. Live charts use saved query bindings.</p></details>
+</section>
+
+<section class="panel" id="data" role="tabpanel" aria-labelledby="tab-data">
+<p><strong>Fixed physical tables. Flexible logical collections.</strong> Applications, transactions, and summaries use the same record model.</p>
+<div class="diagram" tabindex="0" aria-label="Convex entity relationship diagram">
+<svg viewBox="0 0 660 585" role="img" aria-labelledby="data-title"><title id="data-title">Workspaces own collections; collections have schema versions and records; records have identity and index entries. Pages bind queries to records or summary collections. Artifact metadata references R2.</title>
+<defs><marker id="dr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--muted-foreground)"/></marker></defs>
+<rect x="188" y="8" width="284" height="64" rx="7" class="hot"/><text x="204" y="33" class="title">workspaces + memberships</text><text x="204" y="54" class="sub">Owner scope and access roles</text>
+<path class="line" d="M330 72V109" marker-end="url(#dr)"/><text x="340" y="96" class="edge">1 workspace → many collections</text>
+<rect x="188" y="110" width="284" height="75" rx="7"/><text x="204" y="136" class="title">collections</text><text x="204" y="157" class="sub">Name, slug, active schema version</text><text x="204" y="174" class="sub">Applications · Transactions · Daily totals</text>
+<path class="line" d="M188 146H109V218" marker-end="url(#dr)"/><text x="17" y="202" class="edge">has schema versions</text>
+<path class="line" d="M330 185V239" marker-end="url(#dr)"/><text x="341" y="220" class="edge">contains many records</text>
+<rect x="8" y="219" width="204" height="86" rx="7"/><text x="22" y="244" class="title">collectionSchemaVersions</text><text x="22" y="265" class="sub">Stable field IDs, names, types</text><text x="22" y="284" class="sub">Immutable version history</text>
+<rect x="252" y="240" width="220" height="101" rx="7" class="hot"/><text x="268" y="265" class="title">records</text><text x="268" y="286" class="sub">workspaceId, collectionId</text><text x="268" y="305" class="sub">schemaVersionId, revision</text><text x="268" y="324" class="sub">values: field ID → typed value</text>
+<path class="line" d="M252 284H213" marker-end="url(#dr)"/><text x="215" y="272" class="edge">uses</text>
+<path class="line" d="M304 341V384H145V412" marker-end="url(#dr)"/>
+<path class="line" d="M405 341V412" marker-end="url(#dr)"/>
+<rect x="8" y="413" width="225" height="77" rx="7"/><text x="23" y="438" class="title">recordIdentities</text><text x="23" y="459" class="sub">External key → record ID</text><text x="23" y="478" class="sub">Retry-safe imports and upserts</text>
+<rect x="252" y="413" width="220" height="77" rx="7"/><text x="268" y="438" class="title">recordIndexEntries</text><text x="268" y="459" class="sub">Selected field → typed value</text><text x="268" y="478" class="sub">Indexed lookup, then record IDs</text>
+<rect x="505" y="110" width="145" height="75" rx="7"/><text x="518" y="136" class="title">pageVersions</text><text x="518" y="157" class="sub">Layout and blocks</text><text x="518" y="174" class="sub">Versioned definitions</text>
+<path class="line" d="M577 185V239" marker-end="url(#dr)"/>
+<rect x="505" y="240" width="145" height="101" rx="7"/><text x="518" y="265" class="title">queryDefinitions</text><text x="518" y="286" class="sub">Source, filter, sort</text><text x="518" y="305" class="sub">Page size, grouping</text><text x="518" y="324" class="sub">Validated field bindings</text>
+<path class="line" d="M505 294H473" marker-end="url(#dr)"/>
+<rect x="8" y="526" width="642" height="48" rx="7"/><text x="23" y="548" class="title">artifacts: workspace + file metadata + private R2 key</text><text x="23" y="565" class="sub">Records and page blocks may reference artifact IDs. File bytes remain in R2.</text>
+</svg></div>
+<p class="caption">Arrows show logical references, not separate database deployments. All references stay inside an authorized workspace.</p>
+<details><summary>Other platform tables</summary><table><thead><tr><th>Group</th><th>Tables and purpose</th></tr></thead><tbody>
+<tr><td>Automation</td><td>recipes, recipeVersions, schedules, runs, runSteps, syncStates</td></tr>
+<tr><td>Connections</td><td>connections → secretRefs → Vault object; Convex holds metadata only</td></tr>
+<tr><td>Agent access</td><td>agentRegistrations, agentClaimAttempts, agentCredentials; token/code digests only</td></tr>
+<tr><td>History</td><td>operations for idempotency; auditEvents for redacted activity</td></tr>
+</tbody></table></details>
+</section>
+
+<section class="panel" id="examples" role="tabpanel" aria-labelledby="tab-examples">
+<p>One schema defines a collection. Each row stores values by stable field ID. These are illustrative IDs, not production Convex IDs.</p>
+<div class="switch" role="group" aria-label="Choose an example dataset"><button data-example="applications" aria-pressed="true">Applications</button><button data-example="transactions" aria-pressed="false">Transactions</button></div>
+<div class="example" id="example-applications">
+<h3>Collection → schema version → record</h3>
+<pre>{
+  "_id": "col_applications",
+  "workspaceId": "ws_zul",
+  "name": "Applications",
+  "activeSchemaVersionId": "schema_apps_1"
+}</pre>
+<pre>{
+  "_id": "schema_apps_1",
+  "workspaceId": "ws_zul",
+  "collectionId": "col_applications",
+  "version": 1,
+  "fields": [
+    { "id": "f_company", "name": "Company", "type": "text" },
+    { "id": "f_status", "name": "Status", "type": "select",
+      "options": ["saved", "applied", "interviewing"] },
+    { "id": "f_applied", "name": "Applied on", "type": "date" }
+  ]
+}</pre>
+<pre>{
+  "_id": "rec_application_42",
+  "workspaceId": "ws_zul",
+  "collectionId": "col_applications",
+  "schemaVersionId": "schema_apps_1",
+  "revision": 1,
+  "values": {
+    "f_company": "Example Co",
+    "f_status": "interviewing",
+    "f_applied": "2026-11-02"
+  }
+}</pre>
+</div>
+<div class="example" id="example-transactions">
+<h3>Collection → schema version → record</h3>
+<pre>{
+  "_id": "col_transactions",
+  "workspaceId": "ws_zul",
+  "name": "Transactions",
+  "activeSchemaVersionId": "schema_tx_1"
+}</pre>
+<pre>{
+  "_id": "schema_tx_1",
+  "workspaceId": "ws_zul",
+  "collectionId": "col_transactions",
+  "version": 1,
+  "fields": [
+    { "id": "f_amount", "name": "Amount (minor units)",
+      "type": "number", "integer": true },
+    { "id": "f_currency", "name": "Currency", "type": "text" },
+    { "id": "f_category", "name": "Category", "type": "text" },
+    { "id": "f_date", "name": "Date", "type": "date" }
+  ]
+}</pre>
+<pre>{
+  "_id": "rec_transaction_42",
+  "workspaceId": "ws_zul",
+  "collectionId": "col_transactions",
+  "schemaVersionId": "schema_tx_1",
+  "revision": 1,
+  "values": {
+    "f_amount": 1250,
+    "f_currency": "USD",
+    "f_category": "Software",
+    "f_date": "2026-11-02"
+  }
+}</pre>
+<p class="caption">1,250 USD cents = $12.50. Validate safe integer bounds; keep totals separated by currency unless conversion is explicitly configured.</p>
+</div>
+<div class="note"><h3>Schema changes without deployment</h3><p>Rename a label while preserving its field ID. Publish a new version for added fields. Type changes require validation and migration. The example field syntax is proposed, not implemented.</p></div>
+</section>
+
+<section class="panel" id="reports" role="tabpanel" aria-labelledby="tab-reports">
+<p><strong>Reports read prepared summaries.</strong> They do not wait for upstream APIs or rescan the entire history.</p>
+<div class="stack">
+<div class="row"><span class="tag">Ingestion</span><strong>Harness writes or scheduled API sync</strong><small>Validate schema and workspace. Deduplicate by external identity.</small></div>
+<div class="arrow" aria-hidden="true">↓</div>
+<div class="row"><span class="tag">Convex transaction</span><strong>Save record + selected index entries</strong><small>Bounded writes, revision checks, retry-safe updates.</small></div>
+<div class="arrow" aria-hidden="true">↓</div>
+<div class="row"><span class="tag">Incremental update or bounded job</span><strong>Maintain daily summary collections</strong><small>Count applications by stage/source. Total transactions by date/category/currency.</small></div>
+<div class="arrow" aria-hidden="true">↓</div>
+<div class="row"><span class="tag">On-demand report</span><strong>Saved query → summary records → chart/table</strong><small>Read the requested date range. Return freshness and completeness.</small></div>
+</div>
+<h2>A summary is also a record</h2>
+<pre>{
+  "collectionId": "col_daily_totals",
+  "values": {
+    "f_day": "2026-11-02",
+    "f_currency": "USD",
+    "f_category": "Software",
+    "f_total_minor": 1250,
+    "f_count": 1
+  }
+}</pre>
+<div class="notes"><div class="note"><h3>Proposed speed targets</h3><p>API p95 under 1 second for supported indexed pages and summary reports. Useful dashboard within 2 seconds.</p></div><div class="note"><h3>Capacity validation</h3><p>Test at least 500,000 primary records, concurrent use, and a 1,000-record batch import. Measure cost and index overhead.</p></div></div>
+<p class="caption" style="margin-top:12px">Targets are unmeasured. Summary freshness target: within 60 seconds of committed changes. Unusual heavy reports run as background jobs with visible progress.</p>
+</section>
+<p class="footer">Proposed architecture, not deployed. WorkOS Vault production pricing remains unconfirmed. The separate implementation brief contains the full contracts, recovery rules, and acceptance checks.</p>
+</main>
+<script>
+const tabs=Array.from(document.querySelectorAll('[data-tab]'));
+function activate(id,focus){for(const b of tabs){const selected=b.dataset.tab===id;b.setAttribute('aria-selected',String(selected));b.tabIndex=selected?0:-1;if(selected&&focus)b.focus();}for(const p of document.querySelectorAll('.panel'))p.hidden=p.id!==id;}
+for(const [i,b] of tabs.entries()){b.addEventListener('click',()=>activate(b.dataset.tab,false));b.addEventListener('keydown',e=>{let n;if(e.key==='ArrowRight')n=(i+1)%tabs.length;if(e.key==='ArrowLeft')n=(i-1+tabs.length)%tabs.length;if(e.key==='Home')n=0;if(e.key==='End')n=tabs.length-1;if(n!==undefined){e.preventDefault();activate(tabs[n].dataset.tab,true);}});}
+function example(id){for(const b of document.querySelectorAll('[data-example]'))b.setAttribute('aria-pressed',String(b.dataset.example===id));for(const p of document.querySelectorAll('.example'))p.hidden=p.id!=='example-'+id;}
+for(const b of document.querySelectorAll('[data-example]'))b.addEventListener('click',()=>example(b.dataset.example));
+activate('architecture',false);example('applications');
+</script></body></html>
