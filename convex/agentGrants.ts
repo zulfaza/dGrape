@@ -8,13 +8,13 @@ import {
   internalQuery,
   mutation,
   query,
-  type QueryCtx,
 } from "./_generated/server"
 import { agentScopeValidator } from "./lib/agentScope"
+import { resolveGrant } from "./lib/agentGrant"
 import { requireMembership } from "./lib/auth"
 import {
   collectionFieldValidator,
-  recordValuesValidator,
+  collectionRecordValidator,
 } from "./lib/collectionDomain"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -127,30 +127,6 @@ export const revoke = mutation({
     return null
   },
 })
-/**
- * Returns the workspace and scope of a credential, or null when the credential
- * is unknown, revoked, expired, or its owner has lost the workspace.
- */
-async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
-  const grant = await ctx.db
-    .query("agentGrants")
-    .withIndex("by_digest", (q) => q.eq("digest", digest))
-    .unique()
-  if (
-    !grant ||
-    grant.state !== "active" ||
-    grant.expiresAt <= now
-  )
-    return null
-  const member = await ctx.db
-    .query("workspaceMembers")
-    .withIndex("by_workspace_user", (q) =>
-      q.eq("workspaceId", grant.workspaceId).eq("userId", grant.owner)
-    )
-    .unique()
-  if (!member || member.role !== "owner") return null
-  return { workspaceId: grant.workspaceId, scope: grant.scope }
-}
 
 const MAX_DESCRIBED_COLLECTIONS = 100
 
@@ -194,14 +170,6 @@ export const describe = internalQuery({
   },
 })
 
-const record = v.object({
-  _id: v.id("collectionRecords"),
-  _creationTime: v.number(),
-  collectionId: v.id("collections"),
-  schemaVersion: v.literal(1),
-  revision: v.number(),
-  values: recordValuesValidator,
-})
 export const read = internalQuery({
   args: {
     digest: v.string(),
@@ -213,7 +181,7 @@ export const read = internalQuery({
   returns: v.union(
     v.literal("denied"),
     v.literal("invalid"),
-    paginationResultValidator(record)
+    paginationResultValidator(collectionRecordValidator)
   ),
   // Callers (convex/http.ts) validate limit and cursor size at the boundary.
   handler: async (ctx, args) => {

@@ -17,6 +17,17 @@ export const recordValuesValidator = v.record(
   v.union(v.string(), v.number(), v.boolean())
 )
 
+/** A stored record as queries return it. */
+export const collectionRecordValidator = v.object({
+  _id: v.id("collectionRecords"),
+  _creationTime: v.number(),
+  collectionId: v.id("collections"),
+  schemaVersion: v.literal(1),
+  revision: v.number(),
+  values: recordValuesValidator,
+  idempotencyKey: v.optional(v.string()),
+})
+
 export type CollectionField = Infer<typeof collectionFieldValidator>
 export type RecordValues = Infer<typeof recordValuesValidator>
 
