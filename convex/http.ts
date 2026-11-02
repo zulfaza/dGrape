@@ -3,8 +3,12 @@ import { httpAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { digestToken } from "./agentAccess"
 import {
+  authorizationServer,
   jwks,
   newClaim as newAgentClaim,
+  protectedResource,
+  skill,
+  unauthorized,
   register as registerAgent,
   revoke as revokeAgentToken,
   token as agentToken,
@@ -110,7 +114,7 @@ http.route({
   method: "GET",
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
-    if (!token) return reply(401, "Unauthorized")
+    if (!token) return unauthorized()
     try {
       const result = await ctx.runQuery(internal.agentGrants.describe, {
         digest: await digestToken(token),
@@ -129,7 +133,7 @@ http.route({
   method: "GET",
   handler: httpAction(async (ctx, request) => {
     const parsed = parseReadRequest(request)
-    if (parsed === "unauthorized") return reply(401, "Unauthorized")
+    if (parsed === "unauthorized") return unauthorized()
     if (parsed === "invalid") return reply(400, "Invalid request")
     try {
       const result = await ctx.runQuery(internal.agentGrants.read, {
@@ -152,7 +156,7 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
-    if (!token) return reply(401, "Unauthorized")
+    if (!token) return unauthorized()
     const body = parseCreateRecord(await readJson(request))
     if (!body)
       return replyJson(400, {
@@ -177,7 +181,7 @@ http.route({
   method: "PATCH",
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
-    if (!token) return reply(401, "Unauthorized")
+    if (!token) return unauthorized()
     const body = parseUpdateRecord(await readJson(request))
     if (!body)
       return replyJson(400, {
@@ -207,7 +211,7 @@ http.route({
   method: "DELETE",
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
-    if (!token) return reply(401, "Unauthorized")
+    if (!token) return unauthorized()
     const body = parseDeleteRecord(await readJson(request))
     if (!body)
       return replyJson(400, {
@@ -241,7 +245,7 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
-    if (!token) return reply(401, "Unauthorized")
+    if (!token) return unauthorized()
     const body = parseQueryRecords(
       await readJson(request),
       MAX_PAGE_SIZE,
@@ -279,7 +283,7 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
-    if (!token) return reply(401, "Unauthorized")
+    if (!token) return unauthorized()
     const body = parseCreateCollection(await readJson(request))
     if (!body)
       return replyJson(400, {
@@ -308,7 +312,7 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
-    if (!token) return reply(401, "Unauthorized")
+    if (!token) return unauthorized()
     const body = parseAddField(await readJson(request))
     if (!body)
       return replyJson(400, {
@@ -348,4 +352,15 @@ http.route({
   handler: revokeAgentToken,
 })
 http.route({ path: "/.well-known/jwks.json", method: "GET", handler: jwks })
+http.route({
+  path: "/.well-known/oauth-authorization-server",
+  method: "GET",
+  handler: authorizationServer,
+})
+http.route({
+  path: "/.well-known/oauth-protected-resource",
+  method: "GET",
+  handler: protectedResource,
+})
+http.route({ path: "/auth.md", method: "GET", handler: skill })
 export default http

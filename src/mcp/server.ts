@@ -154,10 +154,8 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
   })
 )
 
-const unauthorized = HttpServerResponse.text("Unauthorized", {
-  status: 401,
-  headers: { "WWW-Authenticate": 'Bearer realm="dfe"' },
-})
+// src/routes/mcp.ts adds the WWW-Authenticate discovery hint.
+const unauthorized = HttpServerResponse.text("Unauthorized", { status: 401 })
 
 /** Rejects requests without a well-formed credential before MCP runs. */
 const CredentialMiddleware = HttpRouter.middleware<{
