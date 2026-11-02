@@ -6,6 +6,7 @@ import {
   parseAddField,
   parseCreateCollection,
   parseCreateRecord,
+  parseDeleteRecord,
   parseUpdateRecord,
 } from "./lib/agentRequests"
 
@@ -16,7 +17,7 @@ const MAX_BODY_BYTES = 256 * 1024
 // Auth is an explicit bearer token, never a cookie, so any origin may call.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
 }
 
@@ -185,6 +186,35 @@ http.route({
       if (result.status === "conflict")
         return replyJson(409, {
           error: `The record changed. Its revision is now ${result.revision}. Read it again, then retry with that expectedRevision.`,
+          revision: result.revision,
+        })
+      return replyJson(200, result)
+    } catch {
+      return reply(503, "Service unavailable")
+    }
+  }),
+})
+http.route({
+  path: "/agent/records",
+  method: "DELETE",
+  handler: httpAction(async (ctx, request) => {
+    const token = bearerToken(request)
+    if (!token) return reply(401, "Unauthorized")
+    const body = parseDeleteRecord(await readJson(request))
+    if (!body)
+      return replyJson(400, {
+        error:
+          "Send JSON: { collectionId, recordId, expectedRevision }. expectedRevision is a positive integer.",
+      })
+    try {
+      const result = await ctx.runMutation(internal.agentWrites.deleteRecord, {
+        digest: await digestToken(token),
+        ...body,
+      })
+      if (result.status === "denied") return writeFailure(result)
+      if (result.status === "conflict")
+        return replyJson(409, {
+          error: `The record changed. Its revision is now ${result.revision}. Read it again before you delete it.`,
           revision: result.revision,
         })
       return replyJson(200, result)

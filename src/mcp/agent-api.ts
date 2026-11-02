@@ -66,6 +66,10 @@ export const CreatedRecord = Schema.Struct({
 
 export const UpdatedRecord = Schema.Struct({ revision: Schema.Number })
 
+export const DeletedRecord = Schema.Struct({
+  status: Schema.Literal("deleted"),
+})
+
 const ErrorBody = Schema.Struct({ error: Schema.String })
 
 export interface ListRecordsInput {
@@ -97,6 +101,12 @@ export interface UpdateRecordInput {
   readonly values: typeof RecordValues.Type
 }
 
+export interface DeleteRecordInput {
+  readonly collectionId: string
+  readonly recordId: string
+  readonly expectedRevision: number
+}
+
 type Call<A> = Effect.Effect<A, AgentApiError, AgentCredential>
 
 export class AgentApi extends Context.Service<
@@ -116,6 +126,9 @@ export class AgentApi extends Context.Service<
     readonly updateRecord: (
       input: UpdateRecordInput
     ) => Call<typeof UpdatedRecord.Type>
+    readonly deleteRecord: (
+      input: DeleteRecordInput
+    ) => Call<typeof DeletedRecord.Type>
   }
 >()("dfe/AgentApi") {}
 
@@ -213,6 +226,11 @@ export const layer = (baseUrl: string) =>
           send(
             json(HttpClientRequest.patch(url("/agent/records")), input),
             UpdatedRecord
+          ),
+        deleteRecord: (input) =>
+          send(
+            json(HttpClientRequest.delete(url("/agent/records")), input),
+            DeletedRecord
           ),
       }
     })

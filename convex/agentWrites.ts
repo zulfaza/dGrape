@@ -210,3 +210,32 @@ export const updateRecord = internalMutation({
     return { status: "updated", revision }
   },
 })
+
+const deleteRecordResult = v.union(
+  denied,
+  v.object({ status: v.literal("conflict"), revision: v.number() }),
+  v.object({ status: v.literal("deleted") })
+)
+
+/** Deletes a record when its revision is still `expectedRevision`. */
+export const deleteRecord = internalMutation({
+  args: {
+    digest: v.string(),
+    collectionId: v.string(),
+    recordId: v.string(),
+    expectedRevision: v.number(),
+  },
+  returns: deleteRecordResult,
+  handler: async (ctx, args): Promise<Infer<typeof deleteRecordResult>> => {
+    const found = await writableCollection(ctx, args.digest, args.collectionId)
+    if (found.status !== "ok") return found
+    const recordId = ctx.db.normalizeId("collectionRecords", args.recordId)
+    const record = recordId && (await ctx.db.get(recordId))
+    if (!record || record.collectionId !== found.collection._id)
+      return deny("The record does not exist in this collection.")
+    if (record.revision !== args.expectedRevision)
+      return { status: "conflict", revision: record.revision }
+    await ctx.db.delete(record._id)
+    return { status: "deleted" }
+  },
+})
