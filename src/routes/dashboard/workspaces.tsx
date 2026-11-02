@@ -14,6 +14,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import { ChevronRight, Plus } from "lucide-react"
+import { Mascot } from "@/components/mascot"
+import { PageHeader } from "@/components/page-header"
 
 export const Route = createFileRoute("/dashboard/workspaces")({
   component: WorkspacesPage,
@@ -28,6 +39,67 @@ function WorkspacesPage() {
     {},
     { initialNumItems: 20 }
   )
+  return (
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-8 md:px-8">
+      <PageHeader
+        title="Workspaces"
+        description="Each workspace keeps its own collections, records, and agent access."
+        actions={<CreateWorkspaceDialog />}
+      />
+      {status === "LoadingFirstPage" ? (
+        <p role="status" className="text-muted-foreground">
+          Loading workspaces…
+        </p>
+      ) : results.length === 0 ? (
+        <Empty className="rounded-xl border bg-card">
+          <EmptyHeader>
+            <EmptyMedia>
+              <Mascot pose="wave" size={160} />
+            </EmptyMedia>
+            <EmptyTitle>Create your first workspace</EmptyTitle>
+            <EmptyDescription>
+              A workspace holds the collections you and your agent fill in, such
+              as job applications or monthly spending.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <CreateWorkspaceDialog />
+          </EmptyContent>
+        </Empty>
+      ) : (
+        <ul className="divide-y rounded-lg border bg-card">
+          {results.map((workspace) => (
+            <li key={workspace._id}>
+              <Link
+                to="/dashboard/workspaces/$workspaceId"
+                params={{ workspaceId: workspace._id }}
+                className="flex items-center justify-between gap-4 px-5 py-4 text-base font-medium outline-none first:rounded-t-lg last:rounded-b-lg hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="truncate">{workspace.name}</span>
+                <ChevronRight
+                  aria-hidden
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {status === "CanLoadMore" && (
+        <Button
+          variant="outline"
+          className="self-start"
+          onClick={() => loadMore(20)}
+        >
+          Load more
+        </Button>
+      )}
+      {status === "LoadingMore" && <p role="status">Loading more…</p>}
+    </main>
+  )
+}
+
+function CreateWorkspaceDialog() {
   const create = useMutation(api.workspaces.create)
   const [name, setName] = useState("")
   const [open, setOpen] = useState(false)
@@ -48,84 +120,49 @@ function WorkspacesPage() {
     }
   }
   return (
-    <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Workspaces</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Your workspaces.</p>
-        </div>
-        <Dialog
-          open={open}
-          onOpenChange={(nextOpen) => {
-            if (!saving) setOpen(nextOpen)
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button>Create workspace</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create workspace</DialogTitle>
-              <DialogDescription>Give your workspace a name.</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={submit}>
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="workspace-name">Name</Label>
-                  <Input
-                    id="workspace-name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    maxLength={100}
-                    disabled={saving}
-                    aria-describedby="workspace-name-help"
-                    required
-                  />
-                  <p
-                    id="workspace-name-help"
-                    className="text-sm text-muted-foreground"
-                  >
-                    Enter 1 to 100 characters.
-                  </p>
-                </div>
-                <Button type="submit" disabled={saving || !name.trim()}>
-                  {saving ? "Creating…" : "Create workspace"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-      {status === "LoadingFirstPage" ? (
-        <p role="status">Loading workspaces…</p>
-      ) : results.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No workspaces yet. Create one to get started.
-        </p>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {results.map((workspace) => (
-            <li
-              key={workspace._id}
-              className="rounded-lg border bg-card p-4 font-medium"
-            >
-              <Link
-                to="/dashboard/workspaces/$workspaceId"
-                params={{ workspaceId: workspace._id }}
-                className="block"
-              >
-                {workspace.name}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-      {status === "CanLoadMore" && (
-        <Button variant="outline" onClick={() => loadMore(20)}>
-          Load more
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!saving) setOpen(nextOpen)
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button>
+          <Plus aria-hidden />
+          Create workspace
         </Button>
-      )}
-      {status === "LoadingMore" && <p role="status">Loading more…</p>}
-    </main>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create workspace</DialogTitle>
+          <DialogDescription>Give your workspace a name.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit}>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="workspace-name">Name</Label>
+              <Input
+                id="workspace-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                maxLength={100}
+                disabled={saving}
+                aria-describedby="workspace-name-help"
+                required
+              />
+              <p
+                id="workspace-name-help"
+                className="text-sm text-muted-foreground"
+              >
+                Enter 1 to 100 characters.
+              </p>
+            </div>
+            <Button type="submit" disabled={saving || !name.trim()}>
+              {saving ? "Creating…" : "Create workspace"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

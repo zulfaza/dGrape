@@ -1,16 +1,36 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
+import { Mascot, type MascotPose } from "@/components/mascot"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
 export const Route = createFileRoute("/")({ component: Home })
 
-const planned = [
+const steps: ReadonlyArray<{
+  pose: MascotPose
+  title: string
+  body: string
+}> = [
   {
-    title: "Bring your own agent",
-    body: "Keep using your existing agent harness for research and writing. MCP access works now. Planned self-service agent registration will let it connect without a pasted credential.",
+    pose: "chart",
+    title: "Make a collection",
+    body: "Name the fields you care about, such as company, salary, and applied. No database setup.",
   },
   {
+    pose: "laptop",
+    title: "Connect your agent",
+    body: "Create a credential and add DFE to your agent over MCP. Choose read only, or read and write.",
+  },
+  {
+    pose: "celebrate",
+    title: "Let it fill the table",
+    body: "Your agent adds and updates records while it works. You review them here.",
+  },
+]
+
+const planned = [
+  {
     title: "Connect and compute",
-    body: "Planned connectors will gather API data. Deterministic recipes will map, combine, and aggregate it without a model call on each run.",
+    body: "Connectors will gather API data. Fixed recipes will map, combine, and total it without a model call on each run.",
   },
   {
     title: "Run on your schedule",
@@ -18,48 +38,119 @@ const planned = [
   },
   {
     title: "Keep the source",
-    body: "Store private files and artifacts alongside your data, with previews for the materials behind your work.",
+    body: "Store private files next to your data, with previews of the material behind your work.",
   },
   {
     title: "Make the view yours",
-    body: "Build versioned pages with tables, metrics, charts, and isolated custom HTML reports. Publish a view that fits the question.",
+    body: "Build versioned pages with tables, metrics, charts, and isolated custom HTML reports.",
+  },
+  {
+    title: "Connect without pasting",
+    body: "Agent registration will let your agent ask for access, and you approve it in DFE.",
   },
   {
     title: "Stay in control",
-    body: "Approve scoped agent access and connections. Credentials will use safe secret references, so ordinary records do not expose their values.",
+    body: "Credentials for other services will use secret references, so records never show their values.",
   },
 ]
 
-function WorkspaceLink() {
+const sampleRecords = [
+  { company: "Linear", role: "Product engineer", applied: true },
+  { company: "PostHog", role: "Full-stack engineer", applied: true },
+  { company: "Railway", role: "Software engineer", applied: false },
+]
+
+function WorkspaceLink({
+  signedIn,
+  variant = "default",
+}: {
+  signedIn: boolean
+  variant?: "default" | "secondary"
+}) {
   return (
-    <Button asChild size="lg">
-      <Link to="/dashboard/workspaces">Open workspaces</Link>
+    <Button asChild size="lg" variant={variant}>
+      {signedIn ? (
+        <Link to="/dashboard/workspaces">Open workspaces</Link>
+      ) : (
+        <a href="/sign-in">Start a workspace</a>
+      )}
     </Button>
+  )
+}
+
+/** A static example of what an agent writes. It is not live data. */
+function AgentActivityCard() {
+  return (
+    <figure className="w-full rounded-lg border bg-card text-card-foreground shadow-[var(--dfe-shadow-overlay)]">
+      <figcaption className="border-b px-4 py-3 text-sm">
+        <span className="font-semibold">Your agent added 3 records</span>
+        <span className="block text-muted-foreground">to Job applications</span>
+      </figcaption>
+      <table className="w-full text-left text-sm">
+        <thead className="sr-only">
+          <tr>
+            <th>Company</th>
+            <th>Role</th>
+            <th>Applied</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {sampleRecords.map((record) => (
+            <tr key={record.company}>
+              <td className="px-4 py-2.5">
+                <span className="font-medium">{record.company}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {record.role}
+                </span>
+              </td>
+              <td className="px-4 py-2.5 text-right">
+                <Badge
+                  variant="secondary"
+                  className={
+                    record.applied ? "bg-success-surface text-success" : ""
+                  }
+                >
+                  {record.applied ? "Applied" : "Saved"}
+                </Badge>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </figure>
   )
 }
 
 function Home() {
   const { user } = Route.useRouteContext()
+  const signedIn = Boolean(user)
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        <header className="flex items-center justify-between gap-4 border-b border-border py-5">
-          <Link to="/" className="text-lg font-semibold tracking-tight">
-            DFE{" "}
-            <span className="hidden font-normal text-muted-foreground sm:inline">
-              / Dashboard for Everything
-            </span>
+        <header className="flex items-center justify-between gap-4 py-5">
+          <Link
+            to="/"
+            className="flex items-center gap-2 text-xl font-semibold tracking-tight"
+          >
+            <img src="/favicon.svg" alt="" width={32} height={32} />
+            DFE
           </Link>
-          <nav aria-label="Main navigation" className="flex items-center gap-4">
+          <nav aria-label="Main navigation" className="flex items-center gap-5">
             <a
-              href="#capabilities"
+              href="#how-it-works"
               className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline"
             >
-              Capabilities
+              How it works
+            </a>
+            <a
+              href="#planned"
+              className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline"
+            >
+              Planned
             </a>
             <Button asChild variant="outline" size="sm">
-              {user ? (
+              {signedIn ? (
                 <Link to="/dashboard/workspaces">Open workspaces</Link>
               ) : (
                 <a href="/sign-in">Sign in</a>
@@ -69,129 +160,113 @@ function Home() {
         </header>
 
         <main>
-          <section className="grid gap-12 py-16 md:grid-cols-[1.1fr_0.9fr] md:items-center md:py-24">
+          <section className="grid items-center gap-10 py-12 md:grid-cols-[1fr_1fr] md:py-20">
             <div>
-              <p className="text-sm font-medium text-primary">
-                Dashboard for Everything
-              </p>
-              <h1 className="mt-4 max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-                A workspace for your data and your agent.
+              <h1 className="max-w-xl text-4xl leading-tight font-semibold tracking-tight sm:text-5xl sm:leading-[1.1]">
+                A tidy home for your data, kept by your agent.
               </h1>
-              <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                Organize the information you work with today. Build toward
-                connected data, repeatable jobs, and useful reports with the
-                agent you already use.
+              <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted-foreground">
+                DFE, the Dashboard for Everything, holds the tables you track:
+                job applications, spending, project notes. The agent you already
+                use reads and fills them in.
               </p>
-              <div className="mt-8 flex flex-wrap items-center gap-4">
-                <WorkspaceLink />
-                <span className="text-sm text-muted-foreground">
-                  Start with a workspace and a collection.
-                </span>
+              <div className="mt-8">
+                <WorkspaceLink signedIn={signedIn} />
               </div>
             </div>
-            <div className="rounded-lg border border-border bg-card p-6 sm:p-8">
-              <p className="text-sm font-medium text-primary">
-                One workspace, many uses
-              </p>
-              <div className="mt-5 flex flex-col divide-y divide-border">
-                <div className="py-4">
-                  <h2 className="font-semibold">Job applications</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Track roles, stages, and follow-ups.
-                  </p>
-                </div>
-                <div className="py-4">
-                  <h2 className="font-semibold">Transactions</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Organize imports and review spending.
-                  </p>
-                </div>
-                <div className="py-4">
-                  <h2 className="font-semibold">GitHub activity</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Bring work into a report alongside other data.
-                  </p>
-                </div>
+            <div className="relative flex min-h-[26rem] flex-col items-center gap-4 overflow-hidden rounded-xl bg-mascot-surface px-5 pt-8 sm:block">
+              <div className="w-full max-w-64 sm:absolute sm:top-8 sm:right-6">
+                <AgentActivityCard />
               </div>
-              <p className="mt-4 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">
-                These are examples. Connections and reports are planned.
-              </p>
-            </div>
-          </section>
-
-          <section className="border-t border-border py-14 sm:py-20">
-            <div className="grid gap-6 md:grid-cols-2 md:gap-16">
-              <div>
-                <p className="text-sm font-medium text-primary">
-                  Available now
-                </p>
-                <h2 className="mt-3 text-3xl font-semibold tracking-tight">
-                  Give your data a home.
-                </h2>
-              </div>
-              <div className="flex flex-col gap-4 text-base leading-relaxed text-muted-foreground">
-                <p>
-                  Create workspaces and flexible collections for the things you
-                  need to track. Define typed fields and keep records in a
-                  structure that fits your work.
-                </p>
-                <p>
-                  Give your agent a workspace credential. Through MCP or the
-                  HTTP API, it can read your collections and records, and with
-                  write access create collections and add or edit records.
-                </p>
-              </div>
+              <Mascot
+                pose="wave"
+                size={256}
+                className="-mb-4 h-auto w-56 sm:absolute sm:bottom-0 sm:left-4 sm:w-64"
+              />
             </div>
           </section>
 
           <section
-            id="capabilities"
-            className="border-t border-border py-14 sm:py-20"
+            id="how-it-works"
+            aria-labelledby="how-heading"
+            className="border-t py-14 sm:py-20"
           >
-            <div className="max-w-2xl">
-              <p className="text-sm font-medium text-primary">
-                Planned capabilities
-              </p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-                From information to a useful view.
+            <h2
+              id="how-heading"
+              className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl"
+            >
+              Set it up once. Your agent does the typing.
+            </h2>
+            <ol className="mt-10 grid gap-8 md:grid-cols-3">
+              {steps.map((step, index) => (
+                <li key={step.title} className="flex flex-col gap-3">
+                  <div className="flex h-44 items-end justify-center rounded-xl bg-card">
+                    <Mascot pose={step.pose} size={160} className="-mb-2" />
+                  </div>
+                  <h3 className="mt-2 text-lg font-semibold">
+                    <span className="mr-2 text-muted-foreground tabular-nums">
+                      {index + 1}.
+                    </span>
+                    {step.title}
+                  </h3>
+                  <p className="leading-relaxed text-muted-foreground">
+                    {step.body}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section
+            id="planned"
+            aria-labelledby="planned-heading"
+            className="border-t py-14 sm:py-20"
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <h2
+                id="planned-heading"
+                className="text-3xl font-semibold tracking-tight sm:text-4xl"
+              >
+                Coming next
               </h2>
-              <p className="mt-4 leading-relaxed text-muted-foreground">
-                The next parts of DFE bring your data, agent, and reports
-                together. These capabilities are planned and are not available
-                yet.
-              </p>
+              <Badge variant="outline">Planned, not available yet</Badge>
             </div>
-            <div className="mt-10 grid gap-x-12 sm:grid-cols-2 lg:grid-cols-3">
+            <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
+              Collections, records, and agent access over MCP and HTTP work
+              today. These parts bring your data, agent, and reports closer
+              together.
+            </p>
+            <ul className="mt-10 grid gap-x-12 sm:grid-cols-2 lg:grid-cols-3">
               {planned.map((item) => (
-                <div key={item.title} className="border-t border-border py-6">
+                <li key={item.title} className="border-t py-6">
                   <h3 className="text-lg font-semibold">{item.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                     {item.body}
                   </p>
-                </div>
+                </li>
               ))}
-            </div>
-            <p className="mt-6 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Schema versions and portable exports of data and definitions are
-              also planned, so your work can evolve and move with you.
-            </p>
+            </ul>
           </section>
 
-          <section className="border-t border-border py-14 sm:py-20">
-            <h2 className="text-3xl font-semibold tracking-tight">
-              Start with what matters to you.
-            </h2>
-            <p className="mt-4 max-w-xl leading-relaxed text-muted-foreground">
-              Make a workspace for a project, a process, or a question you want
-              to answer.
-            </p>
-            <div className="mt-6">
-              <WorkspaceLink />
+          <section className="mb-14 flex flex-col items-center gap-6 rounded-xl bg-primary px-6 py-12 text-center text-primary-foreground sm:flex-row sm:px-12 sm:text-left">
+            <div className="flex size-40 shrink-0 items-center justify-center rounded-full bg-mascot-surface">
+              <Mascot pose="laptop" size={136} />
             </div>
+            <div className="flex-1">
+              <h2 className="text-3xl font-semibold tracking-tight">
+                Start with one table.
+              </h2>
+              <p className="mt-3 max-w-xl text-primary-foreground/85">
+                Make a workspace for a project, a process, or a question you
+                want to answer. Add your agent when you are ready.
+              </p>
+            </div>
+            <WorkspaceLink signedIn={signedIn} variant="secondary" />
           </section>
         </main>
-        <footer className="border-t border-border py-6 text-sm text-muted-foreground">
-          DFE · Dashboard for Everything
+        <footer className="flex items-center gap-2 border-t py-6 text-sm text-muted-foreground">
+          <img src="/favicon.svg" alt="" width={20} height={20} />
+          DFE, Dashboard for Everything
         </footer>
       </div>
     </div>

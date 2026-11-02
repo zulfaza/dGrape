@@ -1,11 +1,9 @@
-import * as React from "react";
-import { PanelsTopLeft } from "lucide-react";
-import { Link } from "@tanstack/react-router";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { TerminalIcon } from "@hugeicons/core-free-icons";
-import type { User } from "@workos/authkit-tanstack-react-start";
+import * as React from "react"
+import { PanelsTopLeft } from "lucide-react"
+import { Link } from "@tanstack/react-router"
+import type { User } from "@workos/authkit-tanstack-react-start"
 
-import { NavUser } from "@/components/nav-user";
+import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
   SidebarContent,
@@ -16,31 +14,36 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/components/ui/sidebar";
+} from "@/components/ui/sidebar"
 
-const ACTIVE_LINK_PROPS = { "data-active": true };
+const ACTIVE_LINK_PROPS = { "data-active": true }
 
 export function AppSidebar({
   user,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
-  user: User;
+  user: User
 }) {
-  const name = user.name || [user.firstName, user.lastName].filter(Boolean).join(" ");
+  const name =
+    user.name || [user.firstName, user.lastName].filter(Boolean).join(" ")
   return (
     <Sidebar {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <div>
-                <div className="flex aspect-square size-8 items-center justify-center bg-primary text-primary-foreground">
-                  <HugeiconsIcon icon={TerminalIcon} strokeWidth={2} className="size-4" />
-                </div>
-                <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold tracking-tight">DFE</span>
-                </div>
-              </div>
+              <Link to="/">
+                <img
+                  src="/favicon.svg"
+                  alt=""
+                  className="size-8 shrink-0"
+                  width={32}
+                  height={32}
+                />
+                <span className="text-xl font-semibold tracking-tight">
+                  DFE
+                </span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -50,7 +53,10 @@ export function AppSidebar({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton asChild tooltip="Workspaces">
-                <Link activeProps={ACTIVE_LINK_PROPS} to="/dashboard/workspaces">
+                <Link
+                  activeProps={ACTIVE_LINK_PROPS}
+                  to="/dashboard/workspaces"
+                >
                   <PanelsTopLeft />
                   <span>Workspaces</span>
                 </Link>
@@ -70,5 +76,5 @@ export function AppSidebar({
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
-  );
+  )
 }
