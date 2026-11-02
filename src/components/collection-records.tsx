@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Doc, Id } from "../../convex/_generated/dataModel"
 import { ChevronLeft, Plus } from "lucide-react"
+import { AddFieldDialog } from "@/components/add-field-dialog"
 import { Mascot } from "@/components/mascot"
 import { PageHeader } from "@/components/page-header"
 import {
@@ -52,7 +53,11 @@ function initialValues(fields: Field[]): Draft["values"] {
   return Object.fromEntries(
     fields.map((field) => [
       field.id,
-      field.type === "boolean" ? false : field.type === "number" ? "0" : "",
+      field.type === "boolean"
+        ? false
+        : field.type === "number" && !field.optional
+          ? "0"
+          : "",
     ])
   )
 }
@@ -100,6 +105,8 @@ export function CollectionRecords({
     const values: Values = {}
     for (const field of collection?.definition.fields ?? []) {
       const value = draft.values[field.id]
+      // An empty optional field has no value, so the record leaves it out.
+      if (field.optional && (value === undefined || value === "")) continue
       if (field.type === "number") {
         if (
           typeof value !== "string" ||
@@ -172,7 +179,16 @@ export function CollectionRecords({
           description={
             fields.length === 1 ? "1 field" : `${fields.length} fields`
           }
-          actions={results.length > 0 && newRecordButton}
+          actions={
+            <>
+              <AddFieldDialog
+                collectionId={collectionId}
+                fields={fields}
+                disabled={saving}
+              />
+              {results.length > 0 && newRecordButton}
+            </>
+          }
         />
       </div>
       <section
@@ -348,6 +364,11 @@ export function CollectionRecords({
                     <>
                       <Label htmlFor={`record-${field.id}`}>
                         {field.label}
+                        {field.optional && (
+                          <span className="font-normal text-muted-foreground">
+                            (optional)
+                          </span>
+                        )}
                       </Label>
                       <Input
                         disabled={saving}
@@ -355,7 +376,7 @@ export function CollectionRecords({
                         type={field.type === "number" ? "number" : "text"}
                         step={field.type === "number" ? "any" : undefined}
                         maxLength={field.type === "text" ? 10000 : undefined}
-                        required={field.type === "number"}
+                        required={field.type === "number" && !field.optional}
                         value={String(draft.values[field.id] ?? "")}
                         onChange={(e) =>
                           setDraft({
