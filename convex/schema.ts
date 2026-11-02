@@ -11,6 +11,22 @@ import {
 } from "./lib/applicationAgentDomain";
 
 export default defineSchema({
+  agentGrants: defineTable({
+    workspaceId: v.id("workspaces"),
+    owner: v.string(),
+    digest: v.string(),
+    scope: v.literal("readonly"),
+    state: v.union(v.literal("active"), v.literal("revoked")),
+    expiresAt: v.number(),
+  })
+    .index("by_digest", ["digest"])
+    .index("by_workspace_owner", ["workspaceId", "owner"])
+    .index("by_workspace_owner_state_expiresAt", [
+      "workspaceId",
+      "owner",
+      "state",
+      "expiresAt",
+    ]),
   workspaces: defineTable({ name: v.string() }),
   workspaceMembers: defineTable({
     workspaceId: v.id("workspaces"),

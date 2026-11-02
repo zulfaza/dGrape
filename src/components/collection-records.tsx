@@ -40,6 +40,10 @@ export function CollectionRecords({
   collectionId: Id<"collections">
   onClose: () => void
 }) {
+  const siteUrl = import.meta.env.VITE_CONVEX_SITE_URL
+  const apiUrl = siteUrl
+    ? `${siteUrl.replace(/\/$/, "")}/agent/records?collectionId=${encodeURIComponent(collectionId)}`
+    : null
   const collection = useQuery(api.workspaces.getCollection, { collectionId })
   const { results, status, loadMore } = usePaginatedQuery(
     api.workspaces.listRecords,
@@ -104,6 +108,31 @@ export function CollectionRecords({
         Back to collections
       </Button>
       <h2 className="text-xl font-semibold">{collection.name}</h2>
+      {apiUrl ? (
+        <div className="flex flex-col gap-2">
+          <p>
+            Read these records with a workspace credential. Send it in the
+            Authorization header as Bearer followed by a space and the
+            credential.
+          </p>
+          <code className="break-all">{apiUrl}</code>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(apiUrl)
+                toast.success("API URL copied")
+              } catch {
+                toast.error("Could not copy API URL")
+              }
+            }}
+          >
+            Copy API URL
+          </Button>
+        </div>
+      ) : (
+        <p>API URL unavailable. Set VITE_CONVEX_SITE_URL to enable it.</p>
+      )}
       <Button
         disabled={saving}
         onClick={() => {
