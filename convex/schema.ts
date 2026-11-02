@@ -3,6 +3,10 @@ import { v } from "convex/values";
 
 import { agentScopeValidator } from "./lib/agentScope";
 import {
+  agentClaimAttemptValidator,
+  agentRegistrationValidator,
+} from "./lib/agentRegistration";
+import {
   collectionDefinitionValidator,
   recordValueValidator,
 } from "./lib/collectionDomain";
@@ -24,6 +28,17 @@ export default defineSchema({
       "state",
       "expiresAt",
     ]),
+  /** auth.md user-claimed registrations; see convex/lib/agentRegistration.ts. */
+  agentRegistrations: defineTable(agentRegistrationValidator)
+    .index("by_claimTokenDigest", ["claimTokenDigest"])
+    .index("by_loginHint_and_status_and_claimExpiresAt", [
+      "loginHint",
+      "status",
+      "claimExpiresAt",
+    ]),
+  agentClaimAttempts: defineTable(agentClaimAttemptValidator)
+    .index("by_attemptTokenDigest", ["attemptTokenDigest"])
+    .index("by_registrationId", ["registrationId"]),
   workspaces: defineTable({ name: v.string() }),
   workspaceMembers: defineTable({
     workspaceId: v.id("workspaces"),

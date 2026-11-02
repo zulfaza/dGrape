@@ -10,9 +10,14 @@
 
 import type * as agentAccess from "../agentAccess.js";
 import type * as agentGrants from "../agentGrants.js";
+import type * as agentIdentityHttp from "../agentIdentityHttp.js";
+import type * as agentRegistrations from "../agentRegistrations.js";
 import type * as agentWrites from "../agentWrites.js";
 import type * as http from "../http.js";
+import type * as lib_agentAuthConfig from "../lib/agentAuthConfig.js";
+import type * as lib_agentAuthCrypto from "../lib/agentAuthCrypto.js";
 import type * as lib_agentGrant from "../lib/agentGrant.js";
+import type * as lib_agentRegistration from "../lib/agentRegistration.js";
 import type * as lib_agentRequests from "../lib/agentRequests.js";
 import type * as lib_agentScope from "../lib/agentScope.js";
 import type * as lib_auth from "../lib/auth.js";
@@ -30,9 +35,14 @@ import type {
 declare const fullApi: ApiFromModules<{
   agentAccess: typeof agentAccess;
   agentGrants: typeof agentGrants;
+  agentIdentityHttp: typeof agentIdentityHttp;
+  agentRegistrations: typeof agentRegistrations;
   agentWrites: typeof agentWrites;
   http: typeof http;
+  "lib/agentAuthConfig": typeof lib_agentAuthConfig;
+  "lib/agentAuthCrypto": typeof lib_agentAuthCrypto;
   "lib/agentGrant": typeof lib_agentGrant;
+  "lib/agentRegistration": typeof lib_agentRegistration;
   "lib/agentRequests": typeof lib_agentRequests;
   "lib/agentScope": typeof lib_agentScope;
   "lib/auth": typeof lib_auth;
