@@ -215,32 +215,20 @@
     background-color: var(--mascot-surface);
   }
 }
-/* Landing sloth (user requested): a slow breath and a lazy sway. */
+/* Landing sloth: a slow, slight breath. */
 @keyframes dfe-sloth-breathe {
   from {
     scale: 1 1;
   }
   to {
-    scale: 1.015 1.035;
-  }
-}
-@keyframes dfe-sloth-sway {
-  from {
-    rotate: -1.2deg;
-  }
-  to {
-    rotate: 1deg;
+    scale: 1.008 1.02;
   }
 }
 
 @layer utilities {
   .dfe-sloth-breathe {
     transform-origin: 40% 78%;
-    animation: dfe-sloth-breathe 2.1s ease-in-out infinite alternate;
-  }
-  .dfe-sloth-sway {
-    transform-origin: 40% 78%;
-    animation: dfe-sloth-sway 3.6s ease-in-out infinite alternate;
+    animation: dfe-sloth-breathe 2.6s ease-in-out infinite alternate;
   }
   .dfe-type-line {
     animation: dfe-type-line 650ms steps(24, end) both;
