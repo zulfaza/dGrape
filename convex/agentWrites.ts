@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import { internalMutation, type MutationCtx } from "./_generated/server"
 import { resolveGrant } from "./lib/agentGrant"
 import {
+  addField as addFieldToDefinition,
   checkCollection,
   checkRecordValues,
   collectionFieldValidator,
@@ -80,6 +81,34 @@ export const createCollection = internalMutation({
       definition: { version: 1, fields: checked.value.fields },
     })
     return { status: "created", id }
+  },
+})
+
+const addFieldResult = v.union(
+  denied,
+  invalid,
+  v.object({ status: v.literal("added"), version: v.number() })
+)
+
+/** Adds an optional field. The records that exist stay valid. */
+export const addField = internalMutation({
+  args: {
+    digest: v.string(),
+    collectionId: v.string(),
+    field: collectionFieldValidator.omit("optional"),
+  },
+  returns: addFieldResult,
+  handler: async (
+    ctx,
+    { digest, collectionId, field }
+  ): Promise<Infer<typeof addFieldResult>> => {
+    const found = await writableCollection(ctx, digest, collectionId)
+    if (found.status !== "ok") return found
+    const { collection } = found
+    const definition = addFieldToDefinition(collection.definition, field)
+    if (!definition.ok) return reject(definition.message)
+    await ctx.db.patch(collection._id, { definition: definition.value })
+    return { status: "added", version: definition.value.version }
   },
 })
 
