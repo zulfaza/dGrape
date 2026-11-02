@@ -27,6 +27,12 @@ export default defineSchema({
       fields: v.array(collectionFieldValidator),
     }),
   }).index("by_workspace", ["workspaceId"]),
+  collectionRecords: defineTable({
+    collectionId: v.id("collections"),
+    schemaVersion: v.literal(1),
+    revision: v.number(),
+    values: v.record(v.string(), v.union(v.string(), v.number(), v.boolean())),
+  }).index("by_collection", ["collectionId"]),
   companies: defineTable({
     normalizedName: v.string(),
     name: v.string(),

@@ -13,6 +13,7 @@ import type * as applications from "../applications.js";
 import type * as companies from "../companies.js";
 import type * as lib_applicationAgentDomain from "../lib/applicationAgentDomain.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_collectionDomain from "../lib/collectionDomain.js";
 import type * as lib_domain from "../lib/domain.js";
 import type * as lib_profileDomain from "../lib/profileDomain.js";
 import type * as lib_services from "../lib/services.js";
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   companies: typeof companies;
   "lib/applicationAgentDomain": typeof lib_applicationAgentDomain;
   "lib/auth": typeof lib_auth;
+  "lib/collectionDomain": typeof lib_collectionDomain;
   "lib/domain": typeof lib_domain;
   "lib/profileDomain": typeof lib_profileDomain;
   "lib/services": typeof lib_services;

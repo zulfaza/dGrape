@@ -1,5 +1,10 @@
-import { paginationOptsValidator } from "convex/server"
+import {
+  paginationOptsValidator,
+  paginationResultValidator,
+} from "convex/server"
 import { v } from "convex/values"
+import type { Doc, Id } from "./_generated/dataModel"
+import type { QueryCtx } from "./_generated/server"
 import { mutation, query } from "./_generated/server"
 import { requireMembership, requireUserId } from "./lib/auth"
 import { collectionFieldValidator } from "./lib/collectionDomain"
@@ -110,5 +115,136 @@ export const createCollection = mutation({
       name: trimmed,
       definition: { version: 1, fields: normalized },
     })
+  },
+})
+
+const recordValuesValidator = v.record(
+  v.string(),
+  v.union(v.string(), v.number(), v.boolean())
+)
+
+const collectionValidator = v.object({
+  _id: v.id("collections"), _creationTime: v.number(),
+  workspaceId: v.id("workspaces"), name: v.string(),
+  definition: v.object({ version: v.literal(1), fields: v.array(collectionFieldValidator) }),
+})
+const recordValidator = v.object({
+  _id: v.id("collectionRecords"), _creationTime: v.number(),
+  collectionId: v.id("collections"), schemaVersion: v.literal(1),
+  revision: v.number(), values: recordValuesValidator,
+})
+
+async function collectionForRecords(
+  ctx: QueryCtx,
+  collectionId: Id<"collections">
+) {
+  const collection = await ctx.db.get(collectionId)
+  if (!collection) throw new Error("Collection access denied")
+  await requireMembership(ctx, collection.workspaceId)
+  return collection
+}
+
+function validateRecord(
+  fields: Doc<"collections">["definition"]["fields"],
+  values: Record<string, string | number | boolean>
+) {
+  if (Object.keys(values).length !== fields.length)
+    throw new Error("Invalid record")
+  let size = 0
+  for (const field of fields) {
+    if (!Object.hasOwn(values, field.id)) throw new Error("Invalid record")
+    const value = values[field.id]
+    if (field.type === "text") {
+      if (typeof value !== "string" || value.length > 10000)
+        throw new Error("Invalid record")
+      size += value.length
+    } else if (field.type === "number") {
+      if (typeof value !== "number" || !Number.isFinite(value))
+        throw new Error("Invalid record")
+    } else if (typeof value !== "boolean") throw new Error("Invalid record")
+  }
+  if (size > 50000) throw new Error("Invalid record")
+}
+
+export const getCollection = query({
+  returns: collectionValidator,
+  args: { collectionId: v.id("collections") },
+  handler: async (ctx, { collectionId }) =>
+    collectionForRecords(ctx, collectionId),
+})
+
+export const listRecords = query({
+  returns: paginationResultValidator(recordValidator),
+  args: {
+    collectionId: v.id("collections"),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, { collectionId, paginationOpts }) => {
+    await collectionForRecords(ctx, collectionId)
+    if (
+      !Number.isInteger(paginationOpts.numItems) ||
+      paginationOpts.numItems < 1 ||
+      paginationOpts.numItems > 50
+    )
+      throw new Error("Invalid page size")
+    return ctx.db
+      .query("collectionRecords")
+      .withIndex("by_collection", (q) => q.eq("collectionId", collectionId))
+      .paginate(paginationOpts)
+  },
+})
+
+export const getRecord = query({
+  returns: recordValidator,
+  args: {
+    collectionId: v.id("collections"),
+    recordId: v.id("collectionRecords"),
+  },
+  handler: async (ctx, { collectionId, recordId }) => {
+    await collectionForRecords(ctx, collectionId)
+    const record = await ctx.db.get(recordId)
+    if (!record || record.collectionId !== collectionId)
+      throw new Error("Record not found")
+    return record
+  },
+})
+
+export const createRecord = mutation({
+  returns: v.id("collectionRecords"),
+  args: { collectionId: v.id("collections"), values: recordValuesValidator },
+  handler: async (ctx, { collectionId, values }) => {
+    const collection = await collectionForRecords(ctx, collectionId)
+    validateRecord(collection.definition.fields, values)
+    return ctx.db.insert("collectionRecords", {
+      collectionId,
+      schemaVersion: 1,
+      revision: 1,
+      values,
+    })
+  },
+})
+
+export const updateRecord = mutation({
+  returns: v.union(v.literal("conflict"), v.literal("updated")),
+  args: {
+    collectionId: v.id("collections"),
+    recordId: v.id("collectionRecords"),
+    expectedRevision: v.number(),
+    values: recordValuesValidator,
+  },
+  handler: async (
+    ctx,
+    { collectionId, recordId, expectedRevision, values }
+  ) => {
+    const collection = await collectionForRecords(ctx, collectionId)
+    const record = await ctx.db.get(recordId)
+    if (!record || record.collectionId !== collectionId)
+      throw new Error("Record not found")
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+      throw new Error("Invalid revision")
+    if (record.revision !== expectedRevision) return "conflict"
+    validateRecord(collection.definition.fields, values)
+    await ctx.db.patch(recordId, { values, revision: record.revision + 1 })
+    return "updated"
   },
 })

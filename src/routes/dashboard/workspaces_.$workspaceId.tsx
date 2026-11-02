@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { CollectionRecords } from "@/components/collection-records"
+import type { Id } from "../../../convex/_generated/dataModel"
 import { toast } from "@/components/ui/toast"
 
 export const Route = createFileRoute("/dashboard/workspaces_/$workspaceId")({
@@ -35,6 +37,7 @@ function WorkspacePage() {
     { initialNumItems: 20 }
   )
   const create = useMutation(api.workspaces.createCollection)
+  const [selectedCollection, setSelectedCollection] = useState<Id<"collections"> | null>(null)
   const [name, setName] = useState("")
   const [fields, setFields] = useState<Field[]>([
     { id: "", label: "", type: "text" },
@@ -69,10 +72,12 @@ function WorkspacePage() {
   }
   return (
     <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <Link to="/dashboard/workspaces">All workspaces</Link>
+      {!selectedCollection && <Link to="/dashboard/workspaces">All workspaces</Link>}
       <h1 className="text-2xl font-semibold">
         {workspace ? workspace.name : "Loading workspace…"}
       </h1>
+      {selectedCollection && <CollectionRecords key={selectedCollection} collectionId={selectedCollection} onClose={() => setSelectedCollection(null)} />}
+      <div hidden={selectedCollection !== null}>
       <section className="flex flex-col gap-4">
         <h2 className="text-xl font-semibold">Collections</h2>
         {status === "LoadingFirstPage" ? (
@@ -87,6 +92,7 @@ function WorkspacePage() {
                 className="rounded-lg border bg-card p-4"
               >
                 <h3 className="font-medium">{collection.name}</h3>
+                <Button variant="outline" onClick={() => setSelectedCollection(collection._id)}>Open collection</Button>
                 <ul>
                   {collection.definition.fields.map((field) => (
                     <li key={field.id}>
@@ -211,6 +217,7 @@ function WorkspacePage() {
           </Button>
         </form>
       </section>
+      </div>
     </main>
   )
 }
