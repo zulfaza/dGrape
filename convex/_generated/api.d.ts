@@ -8,9 +8,12 @@
  * @module
  */
 
+import type * as agentAccess from "../agentAccess.js";
+import type * as agentGrants from "../agentGrants.js";
 import type * as applicationAgent from "../applicationAgent.js";
 import type * as applications from "../applications.js";
 import type * as companies from "../companies.js";
+import type * as http from "../http.js";
 import type * as lib_applicationAgentDomain from "../lib/applicationAgentDomain.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_collectionDomain from "../lib/collectionDomain.js";
@@ -27,9 +30,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  agentAccess: typeof agentAccess;
+  agentGrants: typeof agentGrants;
   applicationAgent: typeof applicationAgent;
   applications: typeof applications;
   companies: typeof companies;
+  http: typeof http;
   "lib/applicationAgentDomain": typeof lib_applicationAgentDomain;
   "lib/auth": typeof lib_auth;
   "lib/collectionDomain": typeof lib_collectionDomain;

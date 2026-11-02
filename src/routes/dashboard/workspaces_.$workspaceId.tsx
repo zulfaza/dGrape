@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { AgentAccess, AgentAccessBoundary } from "@/components/agent-access"
 import { CollectionRecords } from "@/components/collection-records"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { toast } from "@/components/ui/toast"
@@ -78,6 +79,11 @@ function WorkspacePage() {
       </h1>
       {selectedCollection && <CollectionRecords key={selectedCollection} collectionId={selectedCollection} onClose={() => setSelectedCollection(null)} />}
       <div hidden={selectedCollection !== null}>
+      {workspace && (
+        <AgentAccessBoundary key={workspace._id}>
+          <AgentAccess workspaceId={workspace._id} />
+        </AgentAccessBoundary>
+      )}
       <section className="flex flex-col gap-4">
         <h2 className="text-xl font-semibold">Collections</h2>
         {status === "LoadingFirstPage" ? (
