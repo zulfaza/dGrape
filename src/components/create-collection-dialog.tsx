@@ -3,6 +3,7 @@ import { Plus, Trash2 } from "lucide-react"
 import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -25,10 +26,16 @@ import {
 import { toast } from "@/components/ui/toast"
 
 type FieldType = "text" | "number" | "boolean"
-type Field = { id: string; label: string; type: FieldType }
+type Field = { id: string; label: string; type: FieldType; indexed: boolean }
 
 const MAX_FIELDS = 50
-const emptyField = (): Field => ({ id: "", label: "", type: "text" })
+const MAX_INDEXED_FIELDS = 5
+const emptyField = (): Field => ({
+  id: "",
+  label: "",
+  type: "text",
+  indexed: false,
+})
 
 function isFieldType(value: string): value is FieldType {
   return value === "text" || value === "number" || value === "boolean"
@@ -66,9 +73,20 @@ export function CreateCollectionDialog({
       toast.error("Field IDs must be unique")
       return
     }
+    const indexedCount = fields.filter((field) => field.indexed).length
+    if (indexedCount > MAX_INDEXED_FIELDS) {
+      toast.error(`Index at most ${MAX_INDEXED_FIELDS} fields`)
+      return
+    }
     setSaving(true)
     try {
-      await create({ workspaceId, name, fields })
+      await create({
+        workspaceId,
+        name,
+        fields: fields.map(({ indexed, ...field }) =>
+          indexed ? { ...field, indexed } : field
+        ),
+      })
       setName("")
       setFields([emptyField()])
       setOpen(false)
@@ -116,12 +134,14 @@ export function CreateCollectionDialog({
             <legend className="mb-1 text-sm font-medium">Fields</legend>
             <p className="text-sm text-muted-foreground">
               The ID is what agents and the API use. Use lowercase letters,
-              numbers, and underscores.
+              numbers, and underscores. Mark up to {MAX_INDEXED_FIELDS} fields
+              as indexed to sort and filter by them. Indexed text is at most 200
+              characters.
             </p>
             {fields.map((field, index) => (
               <div
                 key={index}
-                className="grid items-end gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_1fr_8rem_auto]"
+                className="grid items-end gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_1fr_8rem_auto_auto]"
               >
                 <div className="grid gap-2">
                   <Label htmlFor={`label-${index}`}>Label</Label>
@@ -168,6 +188,16 @@ export function CreateCollectionDialog({
                       </SelectGroup>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="flex h-9 items-center gap-2">
+                  <Checkbox
+                    id={`indexed-${index}`}
+                    checked={field.indexed}
+                    onCheckedChange={(checked) =>
+                      updateField(index, { indexed: checked === true })
+                    }
+                  />
+                  <Label htmlFor={`indexed-${index}`}>Indexed</Label>
                 </div>
                 <Button
                   type="button"
