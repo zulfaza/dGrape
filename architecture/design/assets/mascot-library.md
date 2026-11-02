@@ -149,3 +149,7 @@ The second strip (`exec-d55667d9-…`) is used. Its heads and faces are consiste
 - The aligned union is fitted into 768×384 frames (scale 1.607). The forearms rest at about y = 300 in every frame, matching `lying.png`, so the hero layout is unchanged.
 
 Output: `public/brand/mascot/lying-frames/sprite.webp`, six 768×384 frames in one 4608×384 sheet, WebP quality 88 with lossless alpha (216 KB; the PNG sheet was 1 MB). The torso drifts slightly between frames, as hand-drawn frames do; the head does not move.
+
+### Landing direction change — 2026-11-02
+
+The animated hero sloth did not look smooth: drawn frames crossfade with a slight body wobble, and several motions overlapped. The user kept the hero with a simple animation and moved the other landing sections to a PostHog-like direction (product first, few still mascots). The hero now shows `lying.png` as one still drawing that settles once and breathes slowly. The sprite (`public/brand/mascot/lying-frames/`) and `scripts/build-sloth-sprite.py` were removed; restore them from git history if needed.

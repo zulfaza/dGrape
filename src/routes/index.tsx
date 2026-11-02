@@ -1,5 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { useCallback, useRef } from "react"
+import {
+  Cable,
+  CalendarClock,
+  KeyRound,
+  LayoutDashboard,
+  Paperclip,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { HeroDashboard } from "@/components/landing/hero-dashboard"
 import { LyingSloth } from "@/components/landing/lying-sloth"
@@ -8,29 +16,39 @@ import { Button } from "@/components/ui/button"
 
 export const Route = createFileRoute("/")({ component: Home })
 
-const planned = [
+const planned: ReadonlyArray<{
+  title: string
+  icon: LucideIcon
+  body: string
+}> = [
   {
     title: "Connect and compute",
+    icon: Cable,
     body: "Connectors will gather API data. Fixed recipes will map, combine, and total it without a model call on each run.",
   },
   {
     title: "Run on your schedule",
+    icon: CalendarClock,
     body: "Plan one-off or recurring runs, inspect history, retry failures, and see when data was last refreshed.",
   },
   {
     title: "Keep the source",
+    icon: Paperclip,
     body: "Store private files next to your data, with previews of the material behind your work.",
   },
   {
     title: "Make the view yours",
+    icon: LayoutDashboard,
     body: "Build versioned pages with tables, metrics, charts, and isolated custom HTML reports.",
   },
   {
     title: "Connect without pasting",
+    icon: KeyRound,
     body: "Agent registration will let your agent ask for access, and you approve it in DFE.",
   },
   {
     title: "Stay in control",
+    icon: ShieldCheck,
     body: "Credentials for other services will use secret references, so records never show their values.",
   },
 ]
@@ -54,22 +72,7 @@ function WorkspaceLink({
 }
 
 /** The example dashboard with the sloth resting on its top edge. */
-/** A lazy bob when the dashboard changes view, without re-creating the sloth. */
-const BOB: Keyframe[] = [
-  { translate: "0 0", rotate: "0deg" },
-  { translate: "0 -6px", rotate: "-1.5deg", offset: 0.45 },
-  { translate: "0 0", rotate: "0deg" },
-]
-
 function HeroShowcase() {
-  const bob = useRef<HTMLDivElement>(null)
-  const views = useRef(0)
-  const onViewChange = useCallback(() => {
-    views.current += 1
-    if (views.current < 2) return
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
-    bob.current?.animate(BOB, { duration: 900, easing: "ease-in-out" })
-  }, [])
   // The sloth's belly line sits at 78% of its height (it is 2:1), so a top
   // padding of width x 1/2 x 0.78 puts the belly on the window's top edge:
   // 45% wide and centered on phones (17.5%), 20% wide on the right above.
@@ -77,12 +80,10 @@ function HeroShowcase() {
     <div className="relative mt-14 w-full pt-[17.5%] text-left sm:pt-[7.8%]">
       <div className="pointer-events-none absolute top-0 left-1/2 z-10 w-[45%] -translate-x-1/2 sm:right-[6%] sm:left-auto sm:w-[20%] sm:translate-x-0">
         <div className="dfe-anim dfe-sloth-settle">
-          <div ref={bob} className="origin-bottom">
-            <LyingSloth />
-          </div>
+          <LyingSloth />
         </div>
       </div>
-      <HeroDashboard onChange={onViewChange} />
+      <HeroDashboard />
     </div>
   )
 }
@@ -176,11 +177,16 @@ function Home() {
             </p>
             <ul className="mt-10 grid gap-x-12 sm:grid-cols-2 lg:grid-cols-3">
               {planned.map((item) => (
-                <li key={item.title} className="border-t py-6">
-                  <h3 className="text-lg font-semibold">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {item.body}
-                  </p>
+                <li key={item.title} className="flex gap-4 border-t py-6">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
+                    <item.icon aria-hidden className="size-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-lg font-semibold">{item.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      {item.body}
+                    </p>
+                  </div>
                 </li>
               ))}
             </ul>

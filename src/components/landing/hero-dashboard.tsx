@@ -275,18 +275,12 @@ function useFitScale() {
   return { ref, scale }
 }
 
-export function HeroDashboard({
-  onChange,
-}: {
-  /** Called with the use case index each time the view changes. */
-  onChange?: (index: number) => void
-}) {
+export function HeroDashboard() {
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const [index, setIndex] = useRotation(USE_CASES.length, hovered || focused)
   const active = USE_CASES[index] ?? USE_CASES[0]
   const { ref, scale } = useFitScale()
-  useEffect(() => onChange?.(index), [index, onChange])
 
   return (
     <div

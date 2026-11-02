@@ -310,28 +310,24 @@ function RecordsMock({ step }: { step: number }) {
 const STEPS: ReadonlyArray<{
   title: string
   body: string
-  pose: MascotPose
   length: number
   Mock: (props: { step: number }) => ReactNode
 }> = [
   {
     title: "Make a collection",
     body: "Name the fields you care about, such as company, salary, and applied. There is no database to set up, and you can add fields later.",
-    pose: "chart",
     length: 6,
     Mock: CollectionMock,
   },
   {
     title: "Connect your agent",
     body: "Create a credential and add DFE to your agent over MCP with one command. Choose read only, or read and write.",
-    pose: "laptop",
     length: TERMINAL_LINES.length,
     Mock: AgentMock,
   },
   {
     title: "Let it fill the table",
     body: "Your agent adds and updates records while it works. You see each change here, and retries never make duplicates.",
-    pose: "celebrate",
     length: NEW_RECORDS.length,
     Mock: RecordsMock,
   },
@@ -435,9 +431,7 @@ function StepRow({
           {step.body}
         </p>
       </div>
-      <MockWithSloth pose={step.pose} side={mockFirst ? "right" : "left"}>
-        <Mock step={current} />
-      </MockWithSloth>
+      <Mock step={current} />
     </li>
   )
 }
