@@ -271,6 +271,9 @@ export class AgentApi extends Context.Service<
     readonly recipeCancel: (
       input: typeof Recipes.CancelInput.Type
     ) => Call<typeof Schema.Null.Type>
+    readonly recipeRetry: (
+      input: typeof Recipes.RetryInput.Type
+    ) => Call<typeof Schema.String.Type>
     readonly recipeSetRunAccess: (
       input: typeof Recipes.AccessInput.Type
     ) => Call<typeof Schema.Null.Type>
@@ -465,6 +468,11 @@ export const layer = (baseUrl: string) =>
           send(
             json(HttpClientRequest.post(url("/agent/recipes/cancel")), input),
             Schema.Null
+          ),
+        recipeRetry: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/recipes/retry")), input),
+            Schema.String
           ),
         recipeSetRunAccess: (input) =>
           send(

@@ -335,6 +335,15 @@ const RecipeCancel = Tool.make("recipes_cancel", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Destructive, false)
 
+const RecipeRetry = Tool.make("recipes_retry", {
+  description:
+    "Retry a failed or cancelled run. Starts a new run of the same recipe version, linked by retryOf. Use a new idempotencyKey for each retry, and reuse it to repeat the same request. Requires recipe run permission and write access.",
+  parameters: Recipes.RetryInput,
+  success: Schema.String,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, true)
+
 const RecipeSetRunAccess = Tool.make("recipes_set_run_access", {
   description:
     "Grant or remove recipe run permission. Requires creator and write access.",
@@ -415,6 +424,7 @@ const DfeToolkit = Toolkit.make(
   RecipeSetEnabled,
   ScheduleUpdate,
   RecipeCancel,
+  RecipeRetry,
   RecipeSetRunAccess,
 
   QuerySave,
@@ -460,6 +470,7 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       recipes_set_enabled: (input) => api.recipeSetEnabled(input),
       schedules_update: (input) => api.recipeUpdateSchedule(input),
       recipes_cancel: (input) => api.recipeCancel(input),
+      recipes_retry: (input) => api.recipeRetry(input),
       recipes_set_run_access: (input) => api.recipeSetRunAccess(input),
       queries_save: (input) => api.querySave(input),
       queries_list: (input) => api.queryList(input),
