@@ -1,3 +1,4 @@
+import { Match } from "effect"
 import { useAction } from "convex/react"
 import { useEffect, useState } from "react"
 import { api } from "../../convex/_generated/api"
@@ -65,26 +66,30 @@ export function ArtifactPreview({
         <DialogDescription>
           Private file preview. Text is displayed without running file content.
         </DialogDescription>
-        {preview.status === "loading" ? (
-          <p role="status">Loading preview…</p>
-        ) : preview.status === "unavailable" ? (
-          <p role="status">{preview.message}</p>
-        ) : (
-          <>
-            <p className="text-xs text-muted-foreground">
-              File uploaded{" "}
-              <time dateTime={new Date(preview.capturedAt).toISOString()}>
-                {new Date(preview.capturedAt).toLocaleString()}
-              </time>
-            </p>
-            <pre
-              tabIndex={0}
-              aria-label={`${name} content`}
-              className="max-h-[65vh] overflow-auto rounded-lg border p-4 text-sm break-words whitespace-pre-wrap"
-            >
-              {preview.text}
-            </pre>
-          </>
+        {Match.value(preview).pipe(
+          Match.when({ status: "loading" }, () => (
+            <p role="status">Loading preview…</p>
+          )),
+          Match.when({ status: "unavailable" }, (preview) => (
+            <p role="status">{preview.message}</p>
+          )),
+          Match.orElse((preview) => (
+            <>
+              <p className="text-xs text-muted-foreground">
+                File uploaded{" "}
+                <time dateTime={new Date(preview.capturedAt).toISOString()}>
+                  {new Date(preview.capturedAt).toLocaleString()}
+                </time>
+              </p>
+              <pre
+                tabIndex={0}
+                aria-label={`${name} content`}
+                className="max-h-[65vh] overflow-auto rounded-lg border p-4 text-sm break-words whitespace-pre-wrap"
+              >
+                {preview.text}
+              </pre>
+            </>
+          ))
         )}
       </DialogContent>
     </Dialog>
