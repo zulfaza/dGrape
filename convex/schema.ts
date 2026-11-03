@@ -83,6 +83,7 @@ export default defineSchema({
     key: v.string(),
     name: v.string(),
     contentType: v.string(),
+    dataTimestamp: v.optional(v.number()),
     size: v.number(),
     createdBy: artifactCreatorValidator,
   }).index("by_workspaceId", ["workspaceId"]),

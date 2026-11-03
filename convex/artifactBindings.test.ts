@@ -79,11 +79,7 @@ test("file links authorize identity and workspace, retry safely, enforce MIME an
       artifactId: foreignFile,
     })
   ).toBeNull()
-  for (const type of [
-    "image/svg+xml",
-    "text/html",
-    "application/octet-stream",
-  ]) {
+  for (const type of ["image/svg+xml", "application/octet-stream"]) {
     const id = await file(type)
     await expect(
       owner.mutation(api.artifactBindings.bind, {
@@ -100,6 +96,28 @@ test("file links authorize identity and workspace, retry safely, enforce MIME an
       })
     ).rejects.toThrow("File type")
   }
+  const html = await file("text/html")
+  await expect(
+    owner.mutation(api.artifactBindings.bind, {
+      recordId,
+      artifactId: html,
+      relation: "report",
+    })
+  ).rejects.toThrow("timestamp")
+  await owner.mutation(api.artifacts.setDataTimestamp, {
+    artifactId: html,
+    dataTimestamp: 1000,
+  })
+  await owner.mutation(api.artifactBindings.bind, {
+    recordId,
+    artifactId: html,
+    relation: "report",
+  })
+  await owner.mutation(api.artifactBindings.unbind, {
+    recordId,
+    artifactId: html,
+    relation: "report",
+  })
   const image = await file("image/png")
   await owner.mutation(api.artifactBindings.bind, {
     recordId,

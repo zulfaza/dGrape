@@ -37,6 +37,7 @@ export const artifactValidator = v.object({
   key: v.string(),
   name: v.string(),
   contentType: v.string(),
+  dataTimestamp: v.optional(v.number()),
   size: v.number(),
   createdBy: artifactCreatorValidator,
 })

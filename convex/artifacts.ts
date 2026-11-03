@@ -1,5 +1,6 @@
 import {
   MAX_PREVIEW_BYTES,
+  MAX_RASTER_BYTES,
   previewKind,
   readPreview,
 } from "./lib/artifactPreview"
@@ -312,6 +313,12 @@ export const getPreview = action({
       status: v.literal("ready"),
       text: v.string(),
       capturedAt: v.number(),
+      kind: v.union(
+        v.literal("text"),
+        v.literal("json"),
+        v.literal("html"),
+        v.literal("raster")
+      ),
     })
   ),
   handler: async (
@@ -319,7 +326,12 @@ export const getPreview = action({
     { artifactId }
   ): Promise<
     | { status: "unavailable"; message: string }
-    | { status: "ready"; text: string; capturedAt: number }
+    | {
+        status: "ready"
+        text: string
+        capturedAt: number
+        kind: "text" | "json" | "html" | "raster"
+      }
   > => {
     const artifact = await ctx.runQuery(internal.artifacts.getArtifact, {
       artifactId,
@@ -328,17 +340,26 @@ export const getPreview = action({
     await ctx.runQuery(internal.artifacts.membership, {
       workspaceId: artifact.workspaceId,
     })
-    if (previewKind(artifact.contentType) === "unsupported")
+    const kind = previewKind(artifact.contentType)
+    if (kind === "html" && artifact.dataTimestamp === undefined)
+      return {
+        status: "unavailable",
+        message:
+          "Set the report data timestamp to enable this static HTML snapshot.",
+      }
+    if (kind === "unsupported")
       return {
         status: "unavailable",
         message:
           "Preview is not available for this file type. Download the file to view it.",
       }
-    if (artifact.size > MAX_PREVIEW_BYTES)
+    if (
+      artifact.size > (kind === "raster" ? MAX_RASTER_BYTES : MAX_PREVIEW_BYTES)
+    )
       return {
         status: "unavailable",
         message:
-          "Preview supports files up to 512 KB. Download the file to view it.",
+          "Preview supports text/HTML up to 512 KB and raster images up to 1 MB. Download the file to view it.",
       }
     try {
       const response = await fetch(await downloadUrl(artifact.key), {
@@ -347,12 +368,20 @@ export const getPreview = action({
         signal: AbortSignal.timeout(10000),
       })
       const text = await readPreview(response, artifact.contentType)
-      return { status: "ready", text, capturedAt: artifact._creationTime }
+      return {
+        status: "ready",
+        text,
+        kind,
+        capturedAt:
+          kind === "html"
+            ? (artifact.dataTimestamp ?? artifact._creationTime)
+            : artifact._creationTime,
+      }
     } catch {
       return {
         status: "unavailable",
         message:
-          "The file could not be previewed. It may be unavailable or contain invalid text.",
+          "The file could not be previewed. It may be unavailable, invalid, or exceed the preview size limit.",
       }
     }
   },
@@ -374,5 +403,32 @@ export const metadata = query({
       contentType: artifact.contentType,
       size: artifact.size,
     }
+  },
+})
+
+/** Explicit report data time, independent of upload time; workspace members only. */
+export const setDataTimestamp = mutation({
+  args: {
+    artifactId: v.id("artifacts"),
+    dataTimestamp: v.union(v.number(), v.null()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { artifactId, dataTimestamp }) => {
+    const artifact = await ctx.db.get(artifactId)
+    if (!artifact) throw new Error("Artifact not found")
+    await requireMembership(ctx, artifact.workspaceId)
+    if (previewKind(artifact.contentType) !== "html")
+      throw new Error("Only HTML snapshots have a data timestamp")
+    if (
+      dataTimestamp !== null &&
+      (!Number.isSafeInteger(dataTimestamp) ||
+        dataTimestamp < 0 ||
+        dataTimestamp > Date.now())
+    )
+      throw new Error("Data timestamp must be a valid past date")
+    await ctx.db.patch(artifactId, {
+      dataTimestamp: dataTimestamp ?? undefined,
+    })
+    return null
   },
 })

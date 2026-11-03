@@ -3,6 +3,7 @@ import type { Id } from "./_generated/dataModel"
 import { mutation, query, type QueryCtx } from "./_generated/server"
 import { requireMembership } from "./lib/auth"
 import { bindingFields, supportsRelation } from "./lib/artifactBindingDomain"
+import { previewKind } from "./lib/artifactPreview"
 
 async function recordWorkspace(
   ctx: QueryCtx,
@@ -24,6 +25,12 @@ export const bind = mutation({
       throw new Error("Artifact unavailable in this workspace")
     if (!supportsRelation(artifact.contentType, args.relation))
       throw new Error("File type does not support this relation")
+    if (
+      args.relation === "report" &&
+      previewKind(artifact.contentType) === "html" &&
+      artifact.dataTimestamp === undefined
+    )
+      throw new Error("Set the report data timestamp first")
     const bindings = await ctx.db
       .query("artifactBindings")
       .withIndex("by_recordId", (q) => q.eq("recordId", args.recordId))
