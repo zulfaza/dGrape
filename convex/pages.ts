@@ -21,6 +21,7 @@ import { workspaceBudgets } from "./lib/budgets"
 import { firstPageWithinBudget, runSavedQuery } from "./lib/savedQueries"
 import { recordAuditEvent, type AuditActor } from "./lib/auditEvents"
 import {
+  chartNumericFields,
   pageDefinitionValidator,
   pageValidator,
   pageVersionValidator,
@@ -86,9 +87,10 @@ async function bindingProblem(
     return block.operation === "count" || numeric(block.field)
       ? null
       : `Metric requires a numeric result field; "${block.field}" is not one. ${available}`
-  return has(block.chart.labelField) && numeric(block.chart.valueField)
+  const chartNumbers = chartNumericFields(block.chart)
+  return has(block.chart.labelField) && chartNumbers.every(numeric)
     ? null
-    : `Chart requires a label and numeric result field; got label "${block.chart.labelField}" and value "${block.chart.valueField}". ${available}`
+    : `Chart requires a label and numeric result fields; got label "${block.chart.labelField}" and numeric ${chartNumbers.map((id) => `"${id}"`).join(", ")}. ${available}`
 }
 
 async function validateBindings(

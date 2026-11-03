@@ -212,6 +212,50 @@ test("page bindings pin query revisions, validate result fields and expose schem
       },
     })
   ).rejects.toThrow("Chart requires")
+  await expect(
+    owner.mutation(api.pages.save, {
+      workspaceId,
+      definition: {
+        title: "Bad scatter",
+        blocks: [
+          {
+            kind: "chart",
+            title: "Bad scatter",
+            binding: saved,
+            chart: {
+              type: "scatter",
+              labelField: "amount",
+              xField: "missing",
+              xUnit: "",
+              valueField: "amount",
+              unit: "USD",
+            },
+          },
+        ],
+      },
+    })
+  ).rejects.toThrow("Chart requires")
+  await owner.mutation(api.pages.save, {
+    workspaceId,
+    definition: {
+      title: "Scatter",
+      blocks: [
+        {
+          kind: "chart",
+          title: "Scatter",
+          binding: saved,
+          chart: {
+            type: "scatter",
+            labelField: "amount",
+            xField: "amount",
+            xUnit: "",
+            valueField: "amount",
+            unit: "USD",
+          },
+        },
+      ],
+    },
+  })
   await t.run((ctx) =>
     ctx.db.insert("workspaceMembers", {
       workspaceId: otherWorkspaceId,
@@ -529,4 +573,27 @@ test("agent credentials draft, publish, get and list pages with clear binding er
   expect(await call("get", { pageId: foreignPageId })).toMatchObject({
     status: 403,
   })
+  const scatter = {
+    title: "Scatter",
+    blocks: [
+      {
+        kind: "chart" as const,
+        title: "Amounts",
+        binding: { queryId, revision: 1 },
+        chart: {
+          type: "scatter" as const,
+          labelField: "amount",
+          xField: "amount",
+          xUnit: "",
+          valueField: "amount",
+          unit: "USD",
+        },
+      },
+    ],
+  }
+  const scatterDraft = await call("saveDraft", { definition: scatter })
+  expect(scatterDraft).toMatchObject({ status: 200 })
+  expect(
+    await call("get", { pageId: scatterDraft.body.pageId, revision: 1 }, reader)
+  ).toMatchObject({ status: 200, body: { version: { definition: scatter } } })
 }, 30_000)

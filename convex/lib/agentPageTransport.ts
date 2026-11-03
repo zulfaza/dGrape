@@ -38,12 +38,22 @@ export const Definition = Schema.Struct({
         Schema.Struct({
           kind: Schema.Literal("chart"),
           ...DataBlock,
-          chart: Schema.Struct({
-            type: Schema.Literals(["bar", "line"]),
-            labelField: Schema.String,
-            valueField: Schema.String,
-            unit: Schema.String,
-          }),
+          chart: Schema.Union([
+            Schema.Struct({
+              type: Schema.Literals(["bar", "line", "area", "pie"]),
+              labelField: Schema.String,
+              valueField: Schema.String,
+              unit: Schema.String,
+            }),
+            Schema.Struct({
+              type: Schema.Literal("scatter"),
+              labelField: Schema.String,
+              xField: Schema.String,
+              xUnit: Schema.String,
+              valueField: Schema.String,
+              unit: Schema.String,
+            }),
+          ]),
         }),
         Schema.Struct({
           kind: Schema.Literal("artifact"),

@@ -9,6 +9,44 @@ type ArtifactIdValidator =
   | VString<string, "required">
 
 /**
+ * App-owned ChartSpec. Each variant names only the fields its geometry reads.
+ * - Category charts plot one numeric `valueField` per `labelField` category,
+ *   in saved query order. Pie values must be zero or more.
+ * - Scatter plots numeric `xField` against numeric `valueField`; `labelField`
+ *   names each point in tooltips and the table view.
+ */
+export const chartSpecValidator = v.union(
+  v.object({
+    type: v.union(
+      v.literal("bar"),
+      v.literal("line"),
+      v.literal("area"),
+      v.literal("pie")
+    ),
+    labelField: v.string(),
+    valueField: v.string(),
+    unit: v.string(),
+  }),
+  v.object({
+    type: v.literal("scatter"),
+    labelField: v.string(),
+    xField: v.string(),
+    xUnit: v.string(),
+    valueField: v.string(),
+    unit: v.string(),
+  })
+)
+export type ChartSpec = Infer<typeof chartSpecValidator>
+export type ChartType = ChartSpec["type"]
+export const chartTypes = [
+  "bar",
+  "line",
+  "area",
+  "pie",
+  "scatter",
+] as const satisfies readonly ChartType[]
+
+/**
  * Builds the page protocol with typed IDs (stored pages) or plain strings
  * (agent input, before resolvePageIds in convex/agentPages.ts checks them).
  */
@@ -40,12 +78,7 @@ function pageDefinition<
         v.object({
           kind: v.literal("chart"),
           ...dataFields,
-          chart: v.object({
-            type: v.union(v.literal("bar"), v.literal("line")),
-            labelField: v.string(),
-            valueField: v.string(),
-            unit: v.string(),
-          }),
+          chart: chartSpecValidator,
         }),
         v.object({
           kind: v.literal("artifact"),
@@ -84,15 +117,7 @@ export function validatePage(definition: PageDefinition) {
     if (!block.title.trim() || block.title.length > 100)
       throw new Error(`${at}: block title must be 1 to 100 characters`)
     if (block.kind === "artifact") continue
-    if (
-      block.kind === "chart" &&
-      (!block.chart.labelField.trim() ||
-        !block.chart.valueField.trim() ||
-        block.chart.unit.length > 100)
-    )
-      throw new Error(
-        `${at}: charts require label and numeric fields and a unit up to 100 characters`
-      )
+    if (block.kind === "chart") validateChart(block.chart, at)
     if (
       !Number.isSafeInteger(block.binding.revision) ||
       block.binding.revision < 1
@@ -106,6 +131,26 @@ export function validatePage(definition: PageDefinition) {
     )
       throw new Error(`${at}: tables require 1 to 20 unique fields`)
   }
+}
+
+function validateChart(chart: ChartSpec, at: string) {
+  if (
+    !chart.labelField.trim() ||
+    !chart.valueField.trim() ||
+    chart.unit.length > 100 ||
+    (chart.type === "scatter" &&
+      (!chart.xField.trim() || chart.xUnit.length > 100))
+  )
+    throw new Error(
+      `${at}: charts require label and numeric fields and a unit up to 100 characters`
+    )
+}
+
+/** Numeric result fields that a chart reads. */
+export function chartNumericFields(chart: ChartSpec) {
+  return chart.type === "scatter"
+    ? [chart.xField, chart.valueField]
+    : [chart.valueField]
 }
 
 export const pageFields = {

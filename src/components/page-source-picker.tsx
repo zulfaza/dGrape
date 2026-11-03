@@ -1,8 +1,13 @@
 import { useQuery } from "convex/react"
-import { useState } from "react"
+import { useId, useState } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
-import type { PageBlock } from "../../convex/lib/pageDomain"
+import {
+  chartTypes,
+  type ChartSpec,
+  type ChartType,
+  type PageBlock,
+} from "../../convex/lib/pageDomain"
 import {
   Field,
   FieldGroup,
@@ -21,6 +26,14 @@ import {
   SelectValue,
 } from "./ui/select"
 
+const chartTypeLabels: Record<ChartType, string> = {
+  bar: "Bar",
+  line: "Line",
+  area: "Area",
+  pie: "Pie",
+  scatter: "Scatter",
+}
+
 export function PageSourcePicker({
   workspaceId,
   disabled,
@@ -35,13 +48,28 @@ export function PageSourcePicker({
   const [fields, setFields] = useState<string[]>([])
   const [title, setTitle] = useState("Live data")
   const [unit, setUnit] = useState("")
-  const [chartType, setChartType] = useState<"bar" | "line">("bar")
+  const [chartType, setChartType] = useState<ChartType>("bar")
   const [labelField, setLabelField] = useState("")
   const [valueField, setValueField] = useState("")
+  const [xField, setXField] = useState("")
+  const [xUnit, setXUnit] = useState("")
+  const xUnitId = useId()
   const source = sources?.find((item) => item.queryId === queryId)
   const numeric = source?.fields.find(
     (field) => fields.includes(field.id) && field.type === "number"
   )
+  const numericFields =
+    source?.fields.filter((field) => field.type === "number") ?? []
+  const isNumeric = (id: string) => numericFields.some((f) => f.id === id)
+  const chart: ChartSpec | null =
+    !source?.fields.some((field) => field.id === labelField) ||
+    !isNumeric(valueField)
+      ? null
+      : chartType === "scatter"
+        ? isNumeric(xField)
+          ? { type: chartType, labelField, xField, xUnit, valueField, unit }
+          : null
+        : { type: chartType, labelField, valueField, unit }
   return (
     <fieldset disabled={disabled} className="space-y-3 rounded-md border p-3">
       <legend>Add live block</legend>
@@ -61,6 +89,7 @@ export function PageSourcePicker({
           setFields([])
           setLabelField("")
           setValueField("")
+          setXField("")
         }}
       >
         <SelectTrigger aria-label="Saved query" disabled={disabled}>
@@ -113,7 +142,8 @@ export function PageSourcePicker({
             <Select
               value={chartType}
               onValueChange={(value) => {
-                if (value === "bar" || value === "line") setChartType(value)
+                const type = chartTypes.find((item) => item === value)
+                if (type) setChartType(type)
               }}
             >
               <SelectTrigger aria-label="Chart type">
@@ -121,14 +151,19 @@ export function PageSourcePicker({
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="bar">Bar</SelectItem>
-                  <SelectItem value="line">Line</SelectItem>
+                  {chartTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {chartTypeLabels[type]}
+                    </SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
           <Field>
-            <FieldLabel>Label field</FieldLabel>
+            <FieldLabel>
+              {chartType === "scatter" ? "Point label field" : "Label field"}
+            </FieldLabel>
             <Select
               value={labelField}
               onValueChange={(value) => setLabelField(value ?? "")}
@@ -147,8 +182,43 @@ export function PageSourcePicker({
               </SelectContent>
             </Select>
           </Field>
+          {chartType === "scatter" && (
+            <>
+              <Field>
+                <FieldLabel>X field</FieldLabel>
+                <Select
+                  value={xField}
+                  onValueChange={(value) => setXField(value ?? "")}
+                >
+                  <SelectTrigger aria-label="X field">
+                    <SelectValue placeholder="Select numeric field" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {numericFields.map((field) => (
+                        <SelectItem key={field.id} value={field.id}>
+                          {field.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={xUnitId}>X unit</FieldLabel>
+                <Input
+                  id={xUnitId}
+                  value={xUnit}
+                  maxLength={100}
+                  onChange={(event) => setXUnit(event.target.value)}
+                />
+              </Field>
+            </>
+          )}
           <Field>
-            <FieldLabel>Value field</FieldLabel>
+            <FieldLabel>
+              {chartType === "scatter" ? "Y field" : "Value field"}
+            </FieldLabel>
             <Select
               value={valueField}
               onValueChange={(value) => setValueField(value ?? "")}
@@ -158,28 +228,19 @@ export function PageSourcePicker({
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  {source?.fields
-                    .filter((field) => field.type === "number")
-                    .map((field) => (
-                      <SelectItem key={field.id} value={field.id}>
-                        {field.label}
-                      </SelectItem>
-                    ))}
+                  {numericFields.map((field) => (
+                    <SelectItem key={field.id} value={field.id}>
+                      {field.label}
+                    </SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
           <Button
-            disabled={
-              disabled ||
-              !title.trim() ||
-              !source?.fields.some((field) => field.id === labelField) ||
-              !source?.fields.some(
-                (field) => field.id === valueField && field.type === "number"
-              )
-            }
+            disabled={disabled || !title.trim() || !chart}
             onClick={() => {
-              if (source)
+              if (source && chart)
                 add({
                   kind: "chart",
                   title,
@@ -187,7 +248,7 @@ export function PageSourcePicker({
                     queryId: source.queryId,
                     revision: source.revision,
                   },
-                  chart: { type: chartType, labelField, valueField, unit },
+                  chart,
                 })
             }}
           >
