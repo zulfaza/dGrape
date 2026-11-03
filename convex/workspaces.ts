@@ -12,6 +12,7 @@ import type { QueryCtx } from "./_generated/server"
 import { mutation, query } from "./_generated/server"
 import { requireMembership, requireUserId } from "./lib/auth"
 import { workspaceBudgets } from "./lib/budgets"
+import { recordCountValidator } from "./lib/recordCounts"
 import {
   addField as addFieldToDefinition,
   checkCollection,
@@ -133,6 +134,7 @@ export const createCollection = mutation({
 
 const collectionValidator = v.object({
   dataRevision: v.optional(v.number()),
+  recordCount: v.optional(recordCountValidator),
   _id: v.id("collections"),
   _creationTime: v.number(),
   workspaceId: v.id("workspaces"),

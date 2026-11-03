@@ -1,11 +1,18 @@
 import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
 import { indexEntries, type RecordValues } from "./collectionDomain"
+import {
+  countAfterDelete,
+  countAfterInsert,
+  recordBudgetProblem,
+  startRecordCount,
+  type RecordCount,
+} from "./recordCounts"
 
 /**
  * The only write path for records. Each function keeps the record's index
- * entries (the recordIndexEntries table) in step with its values. Callers
- * check access and validate `values` first.
+ * entries (the recordIndexEntries table) and the collection's record count
+ * in step with its values. Callers check access and validate `values` first.
  */
 
 async function replaceIndexEntries(
@@ -40,6 +47,11 @@ export async function insertRecord(
   values: RecordValues,
   idempotencyKey?: string
 ) {
+  // Re-read: a caller that inserts several records passes the same document.
+  const current = await ctx.db.get(collection._id)
+  if (!current) throw new Error("Collection missing")
+  const problem = await recordBudgetProblem(ctx, current)
+  if (problem) throw new Error(problem)
   const recordId = await ctx.db.insert("collectionRecords", {
     collectionId: collection._id,
     schemaVersion: collection.definition.version,
@@ -47,7 +59,7 @@ export async function insertRecord(
     values,
     idempotencyKey,
   })
-  await advanceDataRevision(ctx, collection._id)
+  await advanceDataRevision(ctx, collection._id, countAfterInsert)
   await replaceIndexEntries(ctx, collection, recordId, values)
   return recordId
 }
@@ -78,7 +90,9 @@ export async function deleteRecord(
   if (!record) throw new Error("Record missing")
   const collection = await ctx.db.get(record.collectionId)
   if (!collection) throw new Error("Collection missing")
-  await advanceDataRevision(ctx, collection._id)
+  await advanceDataRevision(ctx, collection._id, (state) =>
+    countAfterDelete(state, record)
+  )
   await removeIndexEntries(ctx, recordId)
   for await (const identity of ctx.db
     .query("recordIdentities")
@@ -87,8 +101,16 @@ export async function deleteRecord(
   await ctx.db.delete(recordId)
 }
 
-async function advanceDataRevision(ctx: MutationCtx, id: Id<"collections">) {
+/** `count` is given when the write adds or removes a record. */
+async function advanceDataRevision(
+  ctx: MutationCtx,
+  id: Id<"collections">,
+  count?: (state: RecordCount) => RecordCount
+) {
   const collection = await ctx.db.get(id)
   if (!collection) throw new Error("Collection missing")
-  await ctx.db.patch(id, { dataRevision: (collection.dataRevision ?? 0) + 1 })
+  const dataRevision = (collection.dataRevision ?? 0) + 1
+  if (!count) return ctx.db.patch(id, { dataRevision })
+  const state = collection.recordCount ?? (await startRecordCount(ctx, id))
+  await ctx.db.patch(id, { dataRevision, recordCount: count(state) })
 }
