@@ -1,4 +1,5 @@
 import { PageChart } from "./page-chart"
+import { SourceFreshness } from "./source-freshness"
 import { useQuery } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -42,8 +43,17 @@ export function PageLiveBlock({
         {partial
           ? "Partial result · first bounded sample, not a complete total"
           : "Complete result"}{" "}
-        · Live
+        · Read at{" "}
+        <time dateTime={new Date(result.evaluatedAt).toISOString()}>
+          {new Date(result.evaluatedAt).toISOString()} (UTC)
+        </time>
       </p>
+      <p>
+        <SourceFreshness source={result.source} />
+      </p>
+      {block.kind !== "table" && result.page.length === 0 && (
+        <p>No matching records.</p>
+      )}
       {/* oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- JSX follows the serializable block discriminant. */}
       {block.kind === "chart" ? (
         <PageChart
