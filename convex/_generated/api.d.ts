@@ -30,9 +30,11 @@ import type * as lib_identityAssertion from "../lib/identityAssertion.js";
 import type * as lib_r2 from "../lib/r2.js";
 import type * as lib_recipeDomain from "../lib/recipeDomain.js";
 import type * as lib_recipeSchedule from "../lib/recipeSchedule.js";
+import type * as lib_recipeState from "../lib/recipeState.js";
 import type * as lib_recordQuery from "../lib/recordQuery.js";
 import type * as lib_records from "../lib/records.js";
 import type * as savedQueries from "../savedQueries.js";
+import type * as recipes from "../recipes.js";
 import type * as workspaces from "../workspaces.js";
 
 import type {
@@ -64,9 +66,11 @@ declare const fullApi: ApiFromModules<{
   "lib/r2": typeof lib_r2;
   "lib/recipeDomain": typeof lib_recipeDomain;
   "lib/recipeSchedule": typeof lib_recipeSchedule;
+  "lib/recipeState": typeof lib_recipeState;
   "lib/recordQuery": typeof lib_recordQuery;
   "lib/records": typeof lib_records;
   savedQueries: typeof savedQueries;
+  recipes: typeof recipes;
   workspaces: typeof workspaces;
 }>;
 
