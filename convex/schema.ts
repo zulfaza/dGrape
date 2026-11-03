@@ -4,7 +4,7 @@ import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
 import { recordQueryValidator } from "./lib/recordQuery"
-import { agentScopeValidator } from "./lib/agentScope"
+import { storedScopesValidator } from "./lib/agentScope"
 import { artifactCreatorValidator } from "./lib/artifactDomain"
 import {
   agentClaimAttemptValidator,
@@ -52,7 +52,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     owner: v.string(),
     digest: v.string(),
-    scope: agentScopeValidator,
+    scope: storedScopesValidator,
     state: v.union(v.literal("active"), v.literal("revoked")),
     expiresAt: v.number(),
     /** Set for tokens issued to an auth.md registration. */

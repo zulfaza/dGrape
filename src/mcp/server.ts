@@ -31,7 +31,7 @@ const DescribeWorkspace = Tool.make("workspace_describe", {
 
 const ListCapabilities = Tool.make("capabilities_list", {
   description:
-    "List what this credential can do: its workspace, its scope (readonly or readwrite), and each capability with `allowed` true or false. Call this first to plan which tools you can use.",
+    "List what this credential can do: its workspace, its scopes, and each capability with the scopes it needs and `allowed` true or false. Call this first to plan which tools you can use.",
   parameters: Tool.EmptyParams,
   success: AgentApi.Capabilities,
   failure: AgentApi.AgentApiError,
@@ -124,7 +124,7 @@ const DownloadArtifact = Tool.make("artifacts_download_url", {
 
 const CreateArtifactUpload = Tool.make("artifacts_create_upload", {
   description:
-    "Start a file upload (at most 25 MB). Returns `uploadUrl` and `uploadId`. Then PUT the file bytes to `uploadUrl` with a Content-Type header (for example with curl --upload-file), and call artifacts_complete_upload with the `uploadId` within 15 minutes. Needs a read-and-write credential.",
+    "Start a file upload (at most 25 MB). Returns `uploadUrl` and `uploadId`. Then PUT the file bytes to `uploadUrl` with a Content-Type header (for example with curl --upload-file), and call artifacts_complete_upload with the `uploadId` within 15 minutes. Needs the artifacts.write scope.",
   parameters: Schema.Struct({ name: Schema.String }),
   success: AgentApi.ArtifactUpload,
   failure: AgentApi.AgentApiError,
@@ -133,7 +133,7 @@ const CreateArtifactUpload = Tool.make("artifacts_create_upload", {
 
 const CompleteArtifactUpload = Tool.make("artifacts_complete_upload", {
   description:
-    "Finish an upload after you PUT the file to its `uploadUrl`. Returns the artifact `id`. Needs a read-and-write credential.",
+    "Finish an upload after you PUT the file to its `uploadUrl`. Returns the artifact `id`. Needs the artifacts.write scope.",
   parameters: Schema.Struct({ uploadId: Schema.String }),
   success: AgentApi.CreatedArtifact,
   failure: AgentApi.AgentApiError,
@@ -144,7 +144,7 @@ const FieldsDescription =
   'Use integer for exact money in minor units (safe integers only), with a separate currency field (three uppercase letters, e.g. USD). Keep totals separate by currency. Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", "boolean", "integer", or "currency". Set `optional` to true when a record may leave the field out. Set `indexed` to true for fields you will filter or sort by (at most 5; indexed text is at most 200 characters).'
 
 const CreateCollection = Tool.make("collections_create", {
-  description: `Create a collection in the workspace. Needs a read-and-write credential. ${FieldsDescription} Give 1 to 50 fields.`,
+  description: `Create a collection in the workspace. Needs the data.write scope. ${FieldsDescription} Give 1 to 50 fields.`,
   parameters: Schema.Struct({
     name: Schema.String,
     fields: Schema.Array(AgentApi.Field),
@@ -156,7 +156,7 @@ const CreateCollection = Tool.make("collections_create", {
 
 const AddField = Tool.make("collections_add_field", {
   description:
-    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, a `type`: "text", "number", "boolean", "integer", or "currency", and `indexed: true` when you will filter or sort by it. Returns the new schema version. Needs a read-and-write credential.',
+    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, a `type`: "text", "number", "boolean", "integer", or "currency", and `indexed: true` when you will filter or sort by it. Returns the new schema version. Needs the data.write scope.',
   parameters: Schema.Struct({
     collectionId: Schema.String,
     field: Schema.Struct({
@@ -179,7 +179,7 @@ const AddField = Tool.make("collections_add_field", {
 
 const CreateRecord = Tool.make("records_create", {
   description:
-    'Create a record. `values` must have one value for each required field of the collection, keyed by field id, with the field\'s type. Optional fields may be left out. Send an `idempotencyKey` (for example a source ID) so a retry returns the existing record instead of a duplicate (status "existing"). Needs a read-and-write credential.',
+    'Create a record. `values` must have one value for each required field of the collection, keyed by field id, with the field\'s type. Optional fields may be left out. Send an `idempotencyKey` (for example a source ID) so a retry returns the existing record instead of a duplicate (status "existing"). Needs the data.write scope.',
   parameters: Schema.Struct({
     collectionId: Schema.String,
     values: AgentApi.RecordValues,
@@ -192,7 +192,7 @@ const CreateRecord = Tool.make("records_create", {
 
 const UpdateRecord = Tool.make("records_update", {
   description:
-    "Replace all values of a record. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you retry. Needs a read-and-write credential.",
+    "Replace all values of a record. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you retry. Needs the data.write scope.",
   parameters: Schema.Struct({
     collectionId: Schema.String,
     recordId: Schema.String,
@@ -206,7 +206,7 @@ const UpdateRecord = Tool.make("records_update", {
 
 const DeleteRecord = Tool.make("records_delete", {
   description:
-    "Delete a record. You cannot undo this. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you decide to delete it. Needs a read-and-write credential.",
+    "Delete a record. You cannot undo this. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you decide to delete it. Needs the data.write scope.",
   parameters: Schema.Struct({
     collectionId: Schema.String,
     recordId: Schema.String,
@@ -241,7 +241,7 @@ const ListTemplates = Tool.make("collections_templates", {
 
 const RecipePublish = Tool.make("recipes_publish", {
   description:
-    "Publish an immutable recipe. Use recipes_validate and recipes_preview first. Requires write access.",
+    "Publish an immutable recipe. Use recipes_validate and recipes_preview first. Requires jobs.manage, and connections.use for a fetch step.",
   parameters: Recipes.PublishInput,
   success: Schema.String,
   failure: AgentApi.AgentApiError,
@@ -293,7 +293,7 @@ const RecipeHistory = Tool.make("recipes_history", {
 
 const RecipeTrigger = Tool.make("recipes_trigger", {
   description:
-    "Start a recipe. Reuse idempotencyKey to retry. Requires write access.",
+    "Start a recipe. Reuse idempotencyKey to retry. Requires jobs.run, and connections.use for a fetch step.",
   parameters: Recipes.TriggerInput,
   success: Schema.String,
   failure: AgentApi.AgentApiError,
@@ -302,7 +302,7 @@ const RecipeTrigger = Tool.make("recipes_trigger", {
 
 const RecipeSchedule = Tool.make("recipes_schedule", {
   description:
-    "Create a UTC schedule. Only the recipe creator can manage it. Requires write access. Overlap: a due run is skipped while the schedule's prior run is active. Catch-up: after missed occurrences, one run starts for the latest due time only.",
+    "Create a UTC schedule. Only the recipe creator can manage it. Requires jobs.manage, and connections.use for a fetch step. Overlap: a due run is skipped while the schedule's prior run is active. Catch-up: after missed occurrences, one run starts for the latest due time only.",
   parameters: Recipes.ScheduleInput,
   success: Schema.String,
   failure: AgentApi.AgentApiError,
@@ -319,7 +319,7 @@ const RecipeSchedules = Tool.make("recipes_schedules", {
 
 const RecipeSetEnabled = Tool.make("recipes_set_enabled", {
   description:
-    "Enable or disable a schedule. Requires creator and write access.",
+    "Enable or disable a schedule. Requires creator and jobs.manage. Enabling a recipe with a fetch step also requires connections.use.",
   parameters: Recipes.EnabledInput,
   success: Schema.Null,
   failure: AgentApi.AgentApiError,
@@ -328,7 +328,7 @@ const RecipeSetEnabled = Tool.make("recipes_set_enabled", {
 
 const ScheduleUpdate = Tool.make("schedules_update", {
   description:
-    "Change the timing and the pinned recipe version of a schedule. Read the schedule with recipes_schedules and pass its `revision` (0 when absent) as `expectedRevision`; if it changed, the call fails with the current revision. The next run time is computed again from now. Returns the new revision. Requires creator and write access. Overlap: a due run is skipped while the schedule's prior run is active. Catch-up: after missed occurrences, one run starts for the latest due time only.",
+    "Change the timing and the pinned recipe version of a schedule. Read the schedule with recipes_schedules and pass its `revision` (0 when absent) as `expectedRevision`; if it changed, the call fails with the current revision. The next run time is computed again from now. Returns the new revision. Requires creator and jobs.manage, and connections.use for a fetch step. Overlap: a due run is skipped while the schedule's prior run is active. Catch-up: after missed occurrences, one run starts for the latest due time only.",
   parameters: Recipes.UpdateScheduleInput,
   success: Recipes.UpdateScheduleResult,
   failure: AgentApi.AgentApiError,
@@ -336,7 +336,7 @@ const ScheduleUpdate = Tool.make("schedules_update", {
 }).annotate(Tool.Destructive, true)
 
 const RecipeCancel = Tool.make("recipes_cancel", {
-  description: "Cancel a run. Requires recipe run permission and write access.",
+  description: "Cancel a run. Requires recipe run permission and jobs.run.",
   parameters: Recipes.CancelInput,
   success: Schema.Null,
   failure: AgentApi.AgentApiError,
@@ -354,7 +354,7 @@ const RecipeRetry = Tool.make("recipes_retry", {
 
 const RecipeSetRunAccess = Tool.make("recipes_set_run_access", {
   description:
-    "Grant or remove recipe run permission. Requires creator and write access.",
+    "Grant or remove recipe run permission. Requires creator and jobs.manage.",
   parameters: Recipes.AccessInput,
   success: Schema.Null,
   failure: AgentApi.AgentApiError,
@@ -362,7 +362,7 @@ const RecipeSetRunAccess = Tool.make("recipes_set_run_access", {
 }).annotate(Tool.Destructive, false)
 
 const QuerySave = Tool.make("queries_save", {
-  description: `Save a records query so pages can show its results. \`query\` has the records_query shape: \`fieldId\` (an indexed field), \`order\`, and \`where\`. Each save makes a new immutable revision. To change a saved query, pass its \`queryId\` and its current \`revision\` as \`expectedRevision\`; if it changed since you read it, the call fails and you must list it again. Returns \`queryId\` and \`revision\`. Needs a read-and-write credential.`,
+  description: `Save a records query so pages can show its results. \`query\` has the records_query shape: \`fieldId\` (an indexed field), \`order\`, and \`where\`. Each save makes a new immutable revision. To change a saved query, pass its \`queryId\` and its current \`revision\` as \`expectedRevision\`; if it changed since you read it, the call fails and you must list it again. Returns \`queryId\` and \`revision\`. Needs the data.write scope.`,
   parameters: Queries.SaveInput,
   success: Queries.Saved,
   failure: AgentApi.AgentApiError,
@@ -386,7 +386,7 @@ const QueryRun = Tool.make("queries_run", {
 }).annotate(Tool.Readonly, true)
 
 const PageSaveDraft = Tool.make("pages_save_draft", {
-  description: `Save a page definition as a new draft revision. A draft is not visible on the published page until pages_publish. \`definition\` has a \`title\` and up to 20 \`blocks\`: markdown \`{ kind, text }\`, artifact \`{ kind, title, artifactId }\`, htmlReport \`{ kind, title, artifactId }\` (an HTML file with a report data timestamp, shown as a sandboxed static snapshot), and live blocks bound to a saved query revision (\`binding: { queryId, revision }\` from queries_list): table \`{ fields }\`, metric \`{ field, unit, operation: "sum" | "count" }\`, chart \`{ chart: { type: "bar" | "line" | "area" | "pie", labelField, valueField, unit } }\` or \`{ chart: { type: "scatter", labelField, xField, xUnit, valueField, unit } }\`. Bound fields must be in the query result, and sum and chart values (and the scatter \`xField\`) must be number fields. Pie values must be zero or more. An invalid block fails with its block number and the result fields. Omit \`pageId\` to create a page. To change a page, pass its \`pageId\` and its current \`revision\` as \`expectedRevision\`. Needs a read-and-write credential.`,
+  description: `Save a page definition as a new draft revision. A draft is not visible on the published page until pages_publish. \`definition\` has a \`title\` and up to 20 \`blocks\`: markdown \`{ kind, text }\`, artifact \`{ kind, title, artifactId }\`, htmlReport \`{ kind, title, artifactId }\` (an HTML file with a report data timestamp, shown as a sandboxed static snapshot), and live blocks bound to a saved query revision (\`binding: { queryId, revision }\` from queries_list): table \`{ fields }\`, metric \`{ field, unit, operation: "sum" | "count" }\`, chart \`{ chart: { type: "bar" | "line" | "area" | "pie", labelField, valueField, unit } }\` or \`{ chart: { type: "scatter", labelField, xField, xUnit, valueField, unit } }\`. Bound fields must be in the query result, and sum and chart values (and the scatter \`xField\`) must be number fields. Pie values must be zero or more. An invalid block fails with its block number and the result fields. Omit \`pageId\` to create a page. To change a page, pass its \`pageId\` and its current \`revision\` as \`expectedRevision\`. Needs the pages.write scope.`,
   parameters: Pages.SaveDraftInput,
   success: Pages.SavedDraft,
   failure: AgentApi.AgentApiError,
@@ -395,7 +395,7 @@ const PageSaveDraft = Tool.make("pages_save_draft", {
 
 const PagePublish = Tool.make("pages_publish", {
   description:
-    "Publish a stored revision of a page, or roll back to an earlier one. Pass the page's current `revision` as `expectedRevision` and its current `publishedRevision` (null when never published) as `expectedPublishedRevision`, from pages_get or pages_list. If the page changed, the call fails: read it again. Bindings are checked again before publication. Needs a read-and-write credential.",
+    "Publish a stored revision of a page, or roll back to an earlier one. Pass the page's current `revision` as `expectedRevision` and its current `publishedRevision` (null when never published) as `expectedPublishedRevision`, from pages_get or pages_list. If the page changed, the call fails: read it again. Bindings are checked again before publication. Needs the pages.write scope.",
   parameters: Pages.PublishInput,
   success: Pages.Published,
   failure: AgentApi.AgentApiError,
@@ -535,7 +535,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. " +
+      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. " +
       "Recipes fetch and transform data without a model. A recipe fetch step uses a connection: connections_list and connections_describe show each connection's origin, routes, and credential status, never secret values. A person adds credentials in the dashboard. recipes_publish saves an immutable recipe version (fetch, map, filter, join, aggregate, upsert, snapshot, and artifact steps); recipes_versions lists versions. recipes_trigger starts a run (reuse its idempotencyKey to retry), recipes_runs lists runs, recipes_history lists the attempts of one run, and recipes_cancel stops a run. recipes_schedule creates a UTC schedule, recipes_schedules lists schedules, recipes_set_enabled turns one on or off, and recipes_set_run_access lets another user run a recipe. Only the recipe creator manages schedules and run access.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)

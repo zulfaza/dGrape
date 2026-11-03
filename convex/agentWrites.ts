@@ -5,7 +5,8 @@ import {
 import { v, type Infer } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { internalMutation, type MutationCtx } from "./_generated/server"
-import { resolveGrant } from "./lib/agentGrant"
+import { resolveScopedGrant } from "./lib/agentGrant"
+import { missingScopeMessage } from "./lib/agentScope"
 import { workspaceBudgets } from "./lib/budgets"
 import { recordBudgetProblem } from "./lib/recordCounts"
 import {
@@ -27,7 +28,7 @@ import {
 } from "./lib/records"
 
 /**
- * Writes made with a "readwrite" agent credential. convex/http.ts calls these
+ * Writes made with an agent credential that has the `data.write` scope. convex/http.ts calls these
  * after it parses the request. Each result is a tagged value, so the HTTP
  * layer maps it to a status without parsing error strings.
  */
@@ -50,14 +51,17 @@ async function writableWorkspace(
 ): Promise<
   Denied | { status: "ok"; workspaceId: Id<"workspaces">; actor: AuditActor }
 > {
-  const grant = await resolveGrant(ctx, digest, Date.now())
-  if (!grant) return deny("The credential is missing, expired, or revoked.")
-  if (grant.scope !== "readwrite")
-    return deny("This credential is read-only. Create a read-and-write one.")
+  const scoped = await resolveScopedGrant(ctx, digest, Date.now(), [
+    "data.write",
+  ])
+  if (scoped.status === "denied")
+    return deny("The credential is missing, expired, or revoked.")
+  if (scoped.status === "missing_scope")
+    return deny(missingScopeMessage(scoped.missing))
   return {
     status: "ok",
-    workspaceId: grant.workspaceId,
-    actor: auditActor(grant.owner, grant),
+    workspaceId: scoped.grant.workspaceId,
+    actor: auditActor(scoped.grant.owner, scoped.grant),
   }
 }
 

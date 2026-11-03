@@ -14,7 +14,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server"
-import { resolveGrant } from "./lib/agentGrant"
+import { resolveScopedGrant } from "./lib/agentGrant"
 import { requireMembership, requireUserId } from "./lib/auth"
 import { recordAuditEvent } from "./lib/auditEvents"
 import {
@@ -294,8 +294,12 @@ export const agentList = internalQuery({
   ),
   // Callers (convex/agentDiscoveryHttp.ts) validate limit and cursor size.
   handler: async (ctx, args) => {
-    const grant = await resolveGrant(ctx, args.digest, args.now)
-    if (!grant) return "denied"
+    // Connection metadata helps an agent build recipes; it has no secrets.
+    const scoped = await resolveScopedGrant(ctx, args.digest, args.now, [
+      "jobs.read",
+    ])
+    if (scoped.status !== "ok") return "denied"
+    const grant = scoped.grant
     const connections = await ctx.db
       .query("connections")
       .withIndex("by_workspaceId", (q) =>
@@ -319,8 +323,12 @@ export const agentDescribe = internalQuery({
   args: { digest: v.string(), connectionId: v.string(), now: v.number() },
   returns: v.union(v.literal("denied"), agentConnectionValidator),
   handler: async (ctx, args) => {
-    const grant = await resolveGrant(ctx, args.digest, args.now)
-    if (!grant) return "denied"
+    // Connection metadata helps an agent build recipes; it has no secrets.
+    const scoped = await resolveScopedGrant(ctx, args.digest, args.now, [
+      "jobs.read",
+    ])
+    if (scoped.status !== "ok") return "denied"
+    const grant = scoped.grant
     const id = ctx.db.normalizeId("connections", args.connectionId)
     const connection = id && (await ctx.db.get(id))
     if (

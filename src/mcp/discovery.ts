@@ -1,4 +1,4 @@
-import { SCOPES } from "../../convex/lib/agentRegistration"
+import { OFFERED_SCOPES } from "../../convex/lib/agentScope"
 
 /**
  * RFC 9728 discovery for the MCP server. The Convex deployment is the
@@ -20,7 +20,7 @@ export function mcpResourceMetadata(origin: string) {
     resource: `${origin}/mcp`,
     resource_name: "DFE MCP",
     authorization_servers: [authorizationServer],
-    scopes_supported: SCOPES.readwrite,
+    scopes_supported: OFFERED_SCOPES,
     bearer_methods_supported: ["header"],
   }
 }

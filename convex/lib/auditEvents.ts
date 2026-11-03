@@ -1,7 +1,7 @@
 import { v, type Infer, type PropertyValidators } from "convex/values"
 import type { Id } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
-import { agentScopeValidator } from "./agentScope"
+import { storedScopesValidator } from "./agentScope"
 
 /**
  * Audit events: an append-only history of the changes in a workspace.
@@ -106,12 +106,13 @@ export const auditEventValidator = v.union(
   op("secret.delete", { secretId: v.id("secretRefs") }),
   op("agentGrant.create", {
     grantId: v.id("agentGrants"),
-    scope: agentScopeValidator,
+    /** A legacy level in older events, a scope set in newer ones. */
+    scope: storedScopesValidator,
   }),
   op("agentGrant.revoke", { grantId: v.id("agentGrants") }),
   op("agentRegistration.claim", {
     registrationId: v.id("agentRegistrations"),
-    scope: agentScopeValidator,
+    scope: storedScopesValidator,
   }),
   op("agentRegistration.revoke", {
     registrationId: v.id("agentRegistrations"),

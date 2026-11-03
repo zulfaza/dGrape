@@ -266,9 +266,14 @@ test("agent discovery reports capabilities by scope and describes one collection
   const get = (path: string) =>
     t.fetch(path, { headers: { Authorization: `Bearer ${bearer}` } })
   const capabilities = await (await get("/agent/capabilities")).json()
-  expect(capabilities.scope).toBe("readonly")
+  expect(capabilities.scopes).toEqual([
+    "data.read",
+    "artifacts.read",
+    "jobs.read",
+  ])
+  // A legacy read-only credential keeps exactly its read capabilities.
   for (const capability of capabilities.capabilities)
-    expect(capability.allowed).toBe(capability.access === "read")
+    expect(capability.allowed).toBe(capability.id.endsWith(".read"))
   expect(
     await (
       await get(`/agent/collections/describe?collectionId=${collectionId}`)

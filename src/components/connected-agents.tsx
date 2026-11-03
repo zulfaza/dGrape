@@ -2,15 +2,10 @@ import { useMutation, usePaginatedQuery } from "convex/react"
 import { useState } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
-import type { AgentScope } from "../../convex/lib/agentScope"
+import { scopeSummary } from "@/components/scope-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
-
-const SCOPE_LABELS: Record<AgentScope, string> = {
-  readonly: "Read only",
-  readwrite: "Read and write",
-}
 
 /**
  * Agents connected through auth.md registration (the /claim page). Revoking
@@ -67,8 +62,8 @@ export function ConnectedAgents({
                   {agent.email}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {agent.status === "claimed" && agent.scope && agent.claimedAt
-                    ? `${SCOPE_LABELS[agent.scope]} · connected ${new Date(agent.claimedAt).toLocaleDateString()}`
+                  {agent.status === "claimed" && agent.scopes && agent.claimedAt
+                    ? `${scopeSummary(agent.scopes)} · connected ${new Date(agent.claimedAt).toLocaleDateString()}`
                     : agent.revokedAt
                       ? `Disconnected ${new Date(agent.revokedAt).toLocaleDateString()}`
                       : ""}

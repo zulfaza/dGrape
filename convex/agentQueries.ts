@@ -36,7 +36,7 @@ export const save = internalMutation({
     revision: v.number(),
   }),
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["data.write"], async (grant) => {
       const collectionId = ctx.db.normalizeId("collections", args.collectionId)
       if (!collectionId) throw new Error("Collection access denied")
       const queryId =
@@ -82,7 +82,7 @@ export const list = internalQuery({
     continueCursor: v.string(),
   }),
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, args.now, "read", async (grant) => {
+    withGrant(ctx, args.digest, args.now, ["data.read"], async (grant) => {
       const result = await listSavedQueries(ctx, grant.workspaceId, {
         numItems: args.numItems,
         cursor: args.cursor,
@@ -124,7 +124,7 @@ export const run = internalQuery({
     source: sourceStatusValidator,
   }),
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, args.now, "read", async (grant) => {
+    withGrant(ctx, args.digest, args.now, ["data.read"], async (grant) => {
       const queryId = ctx.db.normalizeId("queryDefinitions", args.queryId)
       if (!queryId) throw new Error("Query access denied")
       const budgets = await workspaceBudgets(ctx, grant.workspaceId)

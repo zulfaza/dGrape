@@ -9,9 +9,13 @@ import {
   mutation,
   query,
 } from "./_generated/server"
-import { agentScopeValidator } from "./lib/agentScope"
+import {
+  agentScopeValidator,
+  grantedScopes,
+  parseRequestedScopes,
+} from "./lib/agentScope"
 import { capabilitiesFor, capabilityValidator } from "./lib/agentCapabilities"
-import { resolveGrant } from "./lib/agentGrant"
+import { resolveGrant, resolveScopedGrant } from "./lib/agentGrant"
 import { requireMembership } from "./lib/auth"
 import { recordAuditEvent } from "./lib/auditEvents"
 import {
@@ -29,7 +33,7 @@ const metadata = v.object({
   _creationTime: v.number(),
   expiresAt: v.number(),
   state: v.union(v.literal("active"), v.literal("revoked")),
-  scope: agentScopeValidator,
+  scopes: v.array(agentScopeValidator),
 })
 
 export const insert = internalMutation({
@@ -38,7 +42,7 @@ export const insert = internalMutation({
     owner: v.string(),
     digest: v.string(),
     days: v.number(),
-    scope: agentScopeValidator,
+    scopes: v.array(agentScopeValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -55,6 +59,8 @@ export const insert = internalMutation({
       args.days > MAX_GRANT_DAYS
     )
       throw new Error("Invalid duration")
+    const scopes = parseRequestedScopes(args.scopes)
+    if (!scopes) throw new Error("Invalid scopes")
     const now = Date.now()
     const active = await ctx.db
       .query("agentGrants")
@@ -74,7 +80,7 @@ export const insert = internalMutation({
       workspaceId: args.workspaceId,
       owner: args.owner,
       digest: args.digest,
-      scope: args.scope,
+      scope: scopes,
       state: "active",
       expiresAt: now + args.days * DAY_MS,
     })
@@ -82,7 +88,7 @@ export const insert = internalMutation({
       ctx,
       args.workspaceId,
       { kind: "user", userId: args.owner },
-      { operation: "agentGrant.create", grantId, scope: args.scope }
+      { operation: "agentGrant.create", grantId, scope: scopes }
     )
     return null
   },
@@ -117,7 +123,7 @@ export const list = query({
           _creationTime,
           expiresAt,
           state,
-          scope,
+          scopes: [...grantedScopes(scope)],
         })
       ),
     }
@@ -166,9 +172,9 @@ export const describe = internalQuery({
     })
   ),
   handler: async (ctx, { digest, now }) => {
-    const grant = await resolveGrant(ctx, digest, now)
-    if (!grant) return "denied"
-    const { workspaceId } = grant
+    const scoped = await resolveScopedGrant(ctx, digest, now, ["data.read"])
+    if (scoped.status !== "ok") return "denied"
+    const { workspaceId } = scoped.grant
     const workspace = await ctx.db.get(workspaceId)
     if (!workspace) return "denied"
     const collections = await ctx.db
@@ -196,10 +202,11 @@ export const capabilities = internalQuery({
     v.literal("denied"),
     v.object({
       workspace: v.object({ id: v.id("workspaces"), name: v.string() }),
-      scope: agentScopeValidator,
+      scopes: v.array(agentScopeValidator),
       capabilities: v.array(capabilityValidator),
     })
   ),
+  // Any valid credential may read its own scopes.
   handler: async (ctx, { digest, now }) => {
     const grant = await resolveGrant(ctx, digest, now)
     if (!grant) return "denied"
@@ -207,8 +214,8 @@ export const capabilities = internalQuery({
     if (!workspace) return "denied"
     return {
       workspace: { id: workspace._id, name: workspace.name },
-      scope: grant.scope,
-      capabilities: capabilitiesFor(grant.scope),
+      scopes: [...grant.scopes],
+      capabilities: capabilitiesFor(grant.scopes),
     }
   },
 })
@@ -226,11 +233,13 @@ export const describeCollection = internalQuery({
     })
   ),
   handler: async (ctx, args) => {
-    const grant = await resolveGrant(ctx, args.digest, args.now)
-    if (!grant) return "denied"
+    const scoped = await resolveScopedGrant(ctx, args.digest, args.now, [
+      "data.read",
+    ])
+    if (scoped.status !== "ok") return "denied"
     const id = ctx.db.normalizeId("collections", args.collectionId)
     const collection = id && (await ctx.db.get(id))
-    if (!collection || collection.workspaceId !== grant.workspaceId)
+    if (!collection || collection.workspaceId !== scoped.grant.workspaceId)
       return "denied"
     return {
       id: collection._id,
@@ -256,9 +265,11 @@ export const read = internalQuery({
   ),
   // Callers (convex/http.ts) validate limit and cursor size at the boundary.
   handler: async (ctx, args) => {
-    const grant = await resolveGrant(ctx, args.digest, args.now)
-    if (!grant) return "denied"
-    const { workspaceId } = grant
+    const scoped = await resolveScopedGrant(ctx, args.digest, args.now, [
+      "data.read",
+    ])
+    if (scoped.status !== "ok") return "denied"
+    const { workspaceId } = scoped.grant
     const id = ctx.db.normalizeId("collections", args.collectionId)
     if (!id) return "invalid"
     const collection = await ctx.db.get(id)
@@ -292,11 +303,13 @@ export const queryPage = internalQuery({
   returns: queryPageResult,
   // Callers (convex/http.ts) validate limit and cursor size at the boundary.
   handler: async (ctx, args): Promise<Infer<typeof queryPageResult>> => {
-    const grant = await resolveGrant(ctx, args.digest, args.now)
-    if (!grant) return { status: "denied" }
+    const scoped = await resolveScopedGrant(ctx, args.digest, args.now, [
+      "data.read",
+    ])
+    if (scoped.status !== "ok") return { status: "denied" }
     const id = ctx.db.normalizeId("collections", args.collectionId)
     const collection = id && (await ctx.db.get(id))
-    if (!collection || collection.workspaceId !== grant.workspaceId)
+    if (!collection || collection.workspaceId !== scoped.grant.workspaceId)
       return { status: "denied" }
     const result = await queryRecords(ctx, collection, args.query, {
       cursor: args.cursor,
@@ -315,8 +328,17 @@ export const resolve = internalQuery({
     v.object({
       grantId: v.id("agentGrants"),
       workspaceId: v.id("workspaces"),
-      scope: agentScopeValidator,
+      scopes: v.array(agentScopeValidator),
     })
   ),
-  handler: (ctx, { digest, now }) => resolveGrant(ctx, digest, now),
+  handler: async (ctx, { digest, now }) => {
+    const grant = await resolveGrant(ctx, digest, now)
+    return (
+      grant && {
+        grantId: grant.grantId,
+        workspaceId: grant.workspaceId,
+        scopes: [...grant.scopes],
+      }
+    )
+  },
 })
