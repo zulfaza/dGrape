@@ -4,6 +4,7 @@ import {
   Database,
   FileText,
   Files,
+  Gauge,
   History,
   PanelsTopLeft,
   Plug,
@@ -58,6 +59,11 @@ const WORKSPACE_SECTIONS = [
     label: "Activity",
     icon: History,
     to: "/dashboard/workspaces/$workspaceId/activity",
+  },
+  {
+    label: "Usage",
+    icon: Gauge,
+    to: "/dashboard/workspaces/$workspaceId/usage",
   },
 ] as const
 
