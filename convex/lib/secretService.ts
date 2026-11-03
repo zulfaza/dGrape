@@ -33,10 +33,10 @@ const failure = () =>
 /** Opt-in adapter. No API calls occur until an operator enables this provider. */
 export function workosSecretLayer(apiKey: string) {
   const vault = new WorkOS(apiKey, { timeout: 10000, maxRetries: 0 }).vault
-  const context = (scope: SecretScope) => ({
-    workspace_id: scope.workspaceId,
-    ...(scope.userId === null ? {} : { user_id: scope.userId }),
-  })
+  const context = (scope: SecretScope) => {
+    if (scope.userId === null) return { workspace_id: scope.workspaceId }
+    return { workspace_id: scope.workspaceId, user_id: scope.userId }
+  }
   const find: SecretStore["find"] = (scope, name) =>
     Effect.tryPromise({
       try: async () => {
@@ -46,8 +46,8 @@ export function workosSecretLayer(apiKey: string) {
           for (const [key, value] of Object.entries(expected)) {
             if (object.metadata.context[key] !== value) throw failure()
           }
-          if (typeof object.value !== "string") throw failure()
-          return { id: object.id, value: Redacted.make(object.value) }
+          const value = Schema.decodeUnknownSync(Schema.String)(object.value)
+          return { id: object.id, value: Redacted.make(value) }
         } catch (error) {
           if (error instanceof NotFoundException) return null
           throw failure()

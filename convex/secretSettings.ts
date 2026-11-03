@@ -1,4 +1,4 @@
-import { Effect, Redacted } from "effect"
+import { Effect, Redacted, Schema } from "effect"
 import { httpAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { SecretService, configuredSecretLayer } from "./lib/secretService"
@@ -31,19 +31,13 @@ export const save = httpAction(async (ctx, request) => {
     } finally {
       await reader.cancel()
     }
-    const body: unknown = JSON.parse(text + decoder.decode())
-    if (
-      typeof body !== "object" ||
-      body === null ||
-      !("secretRef" in body) ||
-      typeof body.secretRef !== "string" ||
-      !("value" in body) ||
-      typeof body.value !== "string" ||
-      body.value.length > 8192 ||
-      !("revision" in body) ||
-      !Number.isSafeInteger(body.revision)
-    )
-      throw new Error("Invalid request")
+    const body = Schema.decodeUnknownSync(
+      Schema.Struct({
+        secretRef: Schema.String,
+        value: Schema.String.check(Schema.isMaxLength(8192)),
+        revision: Schema.Number.check(Schema.makeFilter(Number.isSafeInteger)),
+      })
+    )(JSON.parse(text + decoder.decode()))
     // Normalize IDs through a query so callers cannot forge typed IDs.
     const credentialValue = body.value
     const reference = await ctx.runQuery(internal.secretSettingsLookup.lookup, {

@@ -1,4 +1,4 @@
-import { Effect, Redacted } from "effect"
+import { Effect, Redacted, Schema } from "effect"
 import { SecretService, type SecretScope } from "./secretService"
 import type { ConnectorRoute } from "./secretDomain"
 
@@ -100,50 +100,43 @@ export function fetchConnectorPage(
           text.includes(encodeURIComponent(token))
         )
           throw denied()
-        if (
-          typeof body !== "object" ||
-          body === null ||
-          !("rows" in body) ||
-          !Array.isArray(body.rows) ||
-          body.rows.length > input.limits.maxRows
+        const safeText = Schema.String.check(
+          Schema.makeFilter(
+            (value) =>
+              !value.includes(token) &&
+              !value.includes(encodeURIComponent(token))
+          )
         )
-          throw denied()
+        const page = Schema.decodeUnknownSync(
+          Schema.Struct({
+            rows: Schema.Array(
+              Schema.Record(Schema.String, Schema.Unknown)
+            ).check(Schema.isMaxLength(input.limits.maxRows)),
+            nextCursor: Schema.optionalKey(
+              Schema.NullOr(safeText.check(Schema.isMaxLength(2048)))
+            ),
+          })
+        )(body)
+        const parseValue = Schema.decodeUnknownSync(
+          Schema.Union([
+            safeText.check(Schema.isMaxLength(8192)),
+            Schema.Number,
+            Schema.Boolean,
+            Schema.Null,
+            Schema.Undefined,
+          ])
+        )
         const rows: Row[] = []
-        for (const item of body.rows) {
-          if (typeof item !== "object" || item === null || Array.isArray(item))
-            throw denied()
+        for (const item of page.rows) {
           const row: Row = {}
           for (const field of route.fields) {
-            const value: unknown = Reflect.get(item, field)
+            const value = parseValue(item[field])
             if (value === undefined || value === null) continue
-            if (
-              value !== null &&
-              typeof value !== "string" &&
-              typeof value !== "number" &&
-              typeof value !== "boolean"
-            )
-              throw denied()
-            if (
-              typeof value === "string" &&
-              (value.includes(token) ||
-                value.includes(encodeURIComponent(token)))
-            )
-              throw denied()
-            if (typeof value === "string" && value.length > 8192) throw denied()
             row[field] = value
           }
           rows.push(row)
         }
-        const nextCursor: unknown =
-          "nextCursor" in body ? body.nextCursor : null
-        if (
-          nextCursor !== null &&
-          (typeof nextCursor !== "string" ||
-            nextCursor.length > 2048 ||
-            nextCursor.includes(token) ||
-            nextCursor.includes(encodeURIComponent(token)))
-        )
-          throw denied()
+        const nextCursor = page.nextCursor ?? null
         return { rows, nextCursor, bytesRead }
       },
       catch: denied,

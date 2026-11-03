@@ -1,3 +1,10 @@
+import { Schema, Option } from "effect"
+import type {
+  FunctionArgs,
+  FunctionReference,
+  FunctionReturnType,
+} from "convex/server"
+import type { UsePaginatedQueryReturnType } from "convex/react"
 import { useState } from "react"
 import { useMutation, usePaginatedQuery } from "convex/react"
 import { useAccessToken } from "@workos/authkit-tanstack-react-start/client"
@@ -7,6 +14,37 @@ import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Field, FieldGroup, FieldLabel } from "./ui/field"
 import { Badge } from "./ui/badge"
+
+type Mutation<Ref extends FunctionReference<"mutation">> = (
+  args: FunctionArgs<Ref>
+) => Promise<FunctionReturnType<Ref>>
+
+/** The view receives list state and commands from the authenticated client. */
+export interface WorkspaceConnectionService {
+  secrets: UsePaginatedQueryReturnType<typeof api.secrets.list>
+  connections: UsePaginatedQueryReturnType<typeof api.connectors.list>
+  prepare: Mutation<typeof api.secrets.prepare>
+  rotate: Mutation<typeof api.secrets.rotate>
+  beginDelete: Mutation<typeof api.secrets.beginDelete>
+  createConnection: Mutation<typeof api.connectors.create>
+  removeConnection: Mutation<typeof api.connectors.remove>
+  update: (
+    id: Id<"secretRefs">,
+    revision: number,
+    value: string
+  ) => Promise<void>
+}
+
+const credentialForm = Schema.Struct({
+  label: Schema.String,
+  value: Schema.String,
+})
+const connectionForm = Schema.Struct({
+  label: Schema.String,
+  origin: Schema.String,
+  path: Schema.String,
+  fields: Schema.String,
+})
 
 /** Credentials go only to the authenticated HTTP ingress, never an action. */
 export function WorkspaceConnections({
@@ -30,18 +68,18 @@ export function WorkspaceConnections({
   const createConnection = useMutation(api.connectors.create)
   const removeConnection = useMutation(api.connectors.remove)
   const { getAccessToken } = useAccessToken()
-  const [message, setMessage] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [selected, setSelected] = useState<Id<"secretRefs"> | null>(null)
   async function update(id: Id<"secretRefs">, revision: number, value: string) {
     const token = await getAccessToken()
-    const site: unknown = import.meta.env.VITE_CONVEX_SITE_URL
-    if (
-      !token ||
-      typeof site !== "string" ||
-      (!site.startsWith("https://") && !site.startsWith("http://127.0.0.1:"))
-    )
-      throw new Error("Settings unavailable")
+    const site = Schema.decodeUnknownSync(
+      Schema.String.check(
+        Schema.makeFilter(
+          (value) =>
+            value.startsWith("https://") ||
+            value.startsWith("http://127.0.0.1:")
+        )
+      )
+    )(import.meta.env.VITE_CONVEX_SITE_URL)
+    if (!token) throw new Error("Settings unavailable")
     const response = await fetch(`${site}/settings/secrets`, {
       method: "POST",
       headers: {
@@ -53,6 +91,43 @@ export function WorkspaceConnections({
     })
     if (!response.ok) throw new Error("Save failed")
   }
+  return (
+    <WorkspaceConnectionsView
+      workspaceId={workspaceId}
+      service={{
+        secrets,
+        connections,
+        prepare,
+        rotate,
+        beginDelete,
+        createConnection,
+        removeConnection,
+        update,
+      }}
+    />
+  )
+}
+
+export function WorkspaceConnectionsView({
+  workspaceId,
+  service,
+}: {
+  workspaceId: Id<"workspaces">
+  service: WorkspaceConnectionService
+}) {
+  const {
+    secrets,
+    connections,
+    prepare,
+    rotate,
+    beginDelete,
+    createConnection,
+    removeConnection,
+    update,
+  } = service
+  const [message, setMessage] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [selected, setSelected] = useState<Id<"secretRefs"> | null>(null)
   async function perform(task: () => Promise<void>) {
     setBusy(true)
     setMessage("")
@@ -82,10 +157,13 @@ export function WorkspaceConnections({
           event.preventDefault()
           const form = event.currentTarget
           const data = new FormData(form)
-          const label = data.get("label")
-          const value = data.get("credential")
+          const parsed = Schema.decodeUnknownOption(credentialForm)({
+            label: data.get("label"),
+            value: data.get("credential"),
+          })
           form.reset()
-          if (typeof label !== "string" || typeof value !== "string") return
+          if (Option.isNone(parsed)) return
+          const { label, value } = parsed.value
           void perform(async () => {
             const id = await prepare({
               workspaceId,
@@ -195,10 +273,14 @@ export function WorkspaceConnections({
               onSubmit={(event) => {
                 event.preventDefault()
                 const form = event.currentTarget
-                const value = new FormData(form).get("credential")
+                const value = Schema.decodeUnknownOption(Schema.String)(
+                  new FormData(form).get("credential")
+                )
                 form.reset()
-                if (typeof value === "string")
-                  void perform(() => update(secret.id, secret.revision, value))
+                if (Option.isSome(value))
+                  void perform(() =>
+                    update(secret.id, secret.revision, value.value)
+                  )
               }}
             >
               <FieldGroup>
@@ -249,17 +331,14 @@ export function WorkspaceConnections({
           onSubmit={(event) => {
             event.preventDefault()
             const data = new FormData(event.currentTarget)
-            const label = data.get("label")
-            const origin = data.get("origin")
-            const path = data.get("path")
-            const fields = data.get("fields")
-            if (
-              typeof label !== "string" ||
-              typeof origin !== "string" ||
-              typeof path !== "string" ||
-              typeof fields !== "string"
-            )
-              return
+            const parsed = Schema.decodeUnknownOption(connectionForm)({
+              label: data.get("label"),
+              origin: data.get("origin"),
+              path: data.get("path"),
+              fields: data.get("fields"),
+            })
+            if (Option.isNone(parsed)) return
+            const { label, origin, path, fields } = parsed.value
             void perform(async () => {
               await createConnection({
                 workspaceId,

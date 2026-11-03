@@ -1,3 +1,4 @@
+import type { Json } from "effect/Schema"
 // @vitest-environment edge-runtime
 /// <reference types="vite/client" />
 import { describe, expect, it, vi } from "vitest"
@@ -351,7 +352,7 @@ describe("settings list pagination", () => {
 })
 
 describe("provider-independent connector boundary", () => {
-  async function run(body: unknown, request: PageRequest = input) {
+  async function run(body: Json, request: PageRequest = input) {
     const memory = memoryStore()
     await Effect.runPromise(
       memory.store.put(config.scope, config.name, Redacted.make(token))
@@ -379,7 +380,7 @@ describe("provider-independent connector boundary", () => {
     expect(page.nextCursor).toBe("page2")
     expect(page.bytesRead).toBeGreaterThan(0)
   })
-  it.each([
+  it.each<Json>([
     { rows: [{ id: token }] },
     { rows: [{ ignored: token }] },
     { rows: [], nextCursor: token },
