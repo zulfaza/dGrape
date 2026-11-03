@@ -49,8 +49,29 @@ export const Route = createRootRouteWithContext<{
         content: "website",
       },
       {
+        property: "og:image",
+        content: "https://dfe.makarima.dev/og-image.png",
+      },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:type", content: "image/png" },
+      {
+        property: "og:image:alt",
+        content:
+          "DFE — Dashboard for Everything. Your data, recipes, artifacts, and reports. One calm workspace.",
+      },
+      {
+        name: "twitter:image",
+        content: "https://dfe.makarima.dev/og-image.png",
+      },
+      {
+        name: "twitter:image:alt",
+        content:
+          "DFE — Dashboard for Everything. Your data, recipes, artifacts, and reports. One calm workspace.",
+      },
+      {
         name: "twitter:card",
-        content: "summary",
+        content: "summary_large_image",
       },
       {
         name: "twitter:title",
@@ -64,8 +85,12 @@ export const Route = createRootRouteWithContext<{
     ],
     links: [
       { rel: "stylesheet", href: appCssUrl },
-      { rel: "icon", href: "/favicon.ico", sizes: "any" },
-      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "icon", href: "/favicon.ico?v=sloth-head", sizes: "any" },
+      {
+        rel: "icon",
+        href: "/favicon.svg?v=sloth-head",
+        type: "image/svg+xml",
+      },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/manifest.json" },
     ],

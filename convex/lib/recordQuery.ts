@@ -48,7 +48,7 @@ const TYPE_OF: Record<CollectionField["type"], string> = {
 const invalid = (message: string): Checked<never> => ({ ok: false, message })
 
 /** Checks that the field is indexed and every value has the field's type. */
-function checkQuery(
+export function checkQuery(
   fields: ReadonlyArray<CollectionField>,
   query: RecordQuery
 ): Checked<RecordQuery> {

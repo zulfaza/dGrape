@@ -1,18 +1,28 @@
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+import { pageFields, pageVersionFields } from "./lib/pageDomain"
+import { defineSchema, defineTable } from "convex/server"
+import { v } from "convex/values"
 
-import { agentScopeValidator } from "./lib/agentScope";
-import { artifactCreatorValidator } from "./lib/artifactDomain";
+import { recordQueryValidator } from "./lib/recordQuery"
+import { agentScopeValidator } from "./lib/agentScope"
+import { artifactCreatorValidator } from "./lib/artifactDomain"
 import {
   agentClaimAttemptValidator,
   agentRegistrationValidator,
-} from "./lib/agentRegistration";
+} from "./lib/agentRegistration"
 import {
   collectionDefinitionValidator,
   recordValueValidator,
-} from "./lib/collectionDomain";
+} from "./lib/collectionDomain"
+
+import { recipeTables } from "./lib/recipeState"
 
 export default defineSchema({
+  ...recipeTables,
+  pages: defineTable(pageFields).index("by_workspaceId", ["workspaceId"]),
+  pageVersions: defineTable(pageVersionFields).index("by_pageId_and_revision", [
+    "pageId",
+    "revision",
+  ]),
   agentGrants: defineTable({
     workspaceId: v.id("workspaces"),
     owner: v.string(),
@@ -89,6 +99,61 @@ export default defineSchema({
    * and sorted by that field with a bounded index range. convex/lib/records.ts
    * keeps these rows in step with every record write.
    */
+  queryDefinitions: defineTable({
+    workspaceId: v.id("workspaces"),
+    collectionId: v.id("collections"),
+    name: v.string(),
+    revision: v.number(),
+  }).index("by_workspaceId", ["workspaceId"]),
+  queryDefinitionVersions: defineTable({
+    queryId: v.id("queryDefinitions"),
+    revision: v.number(),
+    schemaVersion: v.number(),
+    resultSchema: collectionDefinitionValidator,
+    query: recordQueryValidator,
+  }).index("by_queryId_and_revision", ["queryId", "revision"]),
+  recordIdentities: defineTable({
+    collectionId: v.id("collections"),
+    source: v.string(),
+    key: v.string(),
+    recordId: v.id("collectionRecords"),
+  })
+    .index("by_collectionId_and_source_and_key", [
+      "collectionId",
+      "source",
+      "key",
+    ])
+    .index("by_recordId", ["recordId"]),
+  sourceCursors: defineTable({
+    collectionId: v.id("collections"),
+    source: v.string(),
+    cursor: v.string(),
+  }).index("by_collectionId_and_source", ["collectionId", "source"]),
+  snapshotGenerations: defineTable({
+    collectionId: v.id("collections"),
+    generation: v.string(),
+    schemaVersion: v.number(),
+    published: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_collectionId_and_generation", ["collectionId", "generation"]),
+  snapshotChunks: defineTable({
+    generationId: v.id("snapshotGenerations"),
+    chunkId: v.string(),
+    digest: v.string(),
+    count: v.number(),
+  }).index("by_generationId_and_chunkId", ["generationId", "chunkId"]),
+  snapshotRows: defineTable({
+    generationId: v.id("snapshotGenerations"),
+    chunkId: v.string(),
+    values: v.record(v.string(), recordValueValidator),
+  }).index("by_generationId", ["generationId"]),
+  snapshotPublications: defineTable({
+    collectionId: v.id("collections"),
+    generation: v.string(),
+    generationId: v.id("snapshotGenerations"),
+    publishedAt: v.number(),
+    rowCount: v.number(),
+  }).index("by_collectionId", ["collectionId"]),
   recordIndexEntries: defineTable({
     collectionId: v.id("collections"),
     recordId: v.id("collectionRecords"),
@@ -101,4 +166,4 @@ export default defineSchema({
       "value",
     ])
     .index("by_recordId", ["recordId"]),
-});
+})

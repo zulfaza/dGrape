@@ -73,5 +73,9 @@ export async function deleteRecord(
   recordId: Id<"collectionRecords">
 ) {
   await removeIndexEntries(ctx, recordId)
+  for await (const identity of ctx.db
+    .query("recordIdentities")
+    .withIndex("by_recordId", (q) => q.eq("recordId", recordId)))
+    await ctx.db.delete(identity._id)
   await ctx.db.delete(recordId)
 }
