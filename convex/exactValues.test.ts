@@ -1,4 +1,9 @@
-import { collectionTemplates } from "./lib/collectionTemplates"
+import {
+  collectionTemplates,
+  githubTemplateRecipe,
+} from "./lib/collectionTemplates"
+import { githubRoutes } from "./lib/githubConnector"
+import { transform, validateRecipe } from "./lib/recipeDomain"
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
@@ -10,6 +15,7 @@ import {
   type CollectionField,
   type RecordValues,
 } from "./lib/collectionDomain"
+import type { CollectionTemplate } from "./lib/collectionTemplates"
 import { checkQuery } from "./lib/recordQuery"
 import { parseCreateCollection } from "./lib/agentRequests"
 import { Field } from "../src/mcp/agent-api"
@@ -155,6 +161,41 @@ test("human, agent, source upserts and snapshot staging enforce exact values and
   ).toBe(1)
 })
 
+/** Runs a connector-shaped GitHub item through the template recipe's map step. */
+function githubRow(template: CollectionTemplate, collectionId: string) {
+  if (template.source.kind !== "github") throw new Error("Expected GitHub")
+  const recipe = githubTemplateRecipe(template, {
+    connectionId: "connection",
+    collectionId,
+  })
+  validateRecipe(recipe)
+  const [fetchStep, map] = recipe.steps
+  if (fetchStep?.kind !== "fetch" || map?.kind !== "map")
+    throw new Error("Expected fetch and map steps")
+  const read = githubRoutes.find((route) => route.id === fetchStep.route)
+  expect(read?.response?.next).toEqual({ kind: "none" })
+  for (const field of template.fields) expect(read?.fields).toContain(field.id)
+  const [row] = transform(
+    [
+      {
+        id: 4_000_000_001,
+        number: 12,
+        title: "Add connector",
+        state: "open",
+        html_url: "https://github.com/o/r/pull/12",
+        repository_url: "https://api.github.com/repos/o/r",
+        created_at: "2026-11-01T10:00:00Z",
+        updated_at: "2026-11-02T10:00:00Z",
+        unmapped: "dropped",
+      },
+    ],
+    map,
+    recipe.limits
+  )
+  expect(row).not.toHaveProperty("unmapped")
+  return row ?? {}
+}
+
 test("templates create valid collections through HTTP and MCP contracts", async () => {
   const t = convexTest(schema, modules)
   const owner = t.withIdentity({ subject: "template-owner" })
@@ -170,21 +211,23 @@ test("templates create valid collections through HTTP and MCP contracts", async 
       name: template.name,
       fields: template.fields,
     })
-    const values: RecordValues =
-      template.id === "transactions"
-        ? {
-            date: "2026-11-03",
-            amount: -123,
-            currency: "USD",
-            category: "Food",
-          }
-        : {
-            company: "Example",
-            role: "Engineer",
-            stage: "Applied",
-            source: "Website",
-            date: "2026-11-03",
-          }
+    const examples: Record<CollectionTemplate["id"], () => RecordValues> = {
+      transactions: () => ({
+        date: "2026-11-03",
+        amount: -123,
+        currency: "USD",
+        category: "Food",
+      }),
+      applications: () => ({
+        company: "Example",
+        role: "Engineer",
+        stage: "Applied",
+        source: "Website",
+        date: "2026-11-03",
+      }),
+      github_pull_requests: () => githubRow(template, String(collectionId)),
+    }
+    const values = examples[template.id]()
     const recordId = await owner.mutation(api.workspaces.createRecord, {
       collectionId,
       values,
