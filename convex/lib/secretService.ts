@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Schema, Redacted } from "effect"
-import { WorkOS, NotFoundException } from "@workos-inc/node"
+import { WorkOS, NotFoundException } from "@workos-vault/node"
 
 export class SecretFailure extends Schema.TaggedError<SecretFailure>()(
   "SecretFailure",
