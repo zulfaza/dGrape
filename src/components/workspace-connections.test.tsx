@@ -22,6 +22,7 @@ function service(
     rotate: unavailable,
     beginDelete: unavailable,
     createConnection: unavailable,
+    createGithubConnection: unavailable,
     removeConnection: unavailable,
     update: unavailable,
   }

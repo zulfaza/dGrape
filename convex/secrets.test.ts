@@ -14,10 +14,20 @@ import {
 } from "./lib/secretService"
 import {
   fetchConnectorPage,
+  httpRoutes,
   type ConnectorConfig,
   type PageRequest,
 } from "./lib/connectorFetch"
-import { checkRoute, type ResponseMapping } from "./lib/secretDomain"
+import {
+  checkRoute,
+  type ConnectorRoute,
+  type ResponseMapping,
+} from "./lib/secretDomain"
+import {
+  githubHeaders,
+  githubOrigin,
+  githubRoutes,
+} from "./lib/githubConnector"
 
 const modules = import.meta.glob("./**/*.ts")
 const paginationOpts = { numItems: 100, cursor: null }
@@ -43,16 +53,16 @@ function memoryStore() {
   }
   return { store, values, layer: Layer.succeed(SecretService, store) }
 }
+const storedRoute: ConnectorRoute = {
+  path: "/items",
+  method: "GET",
+  queryKeys: ["cursor"],
+  fields: ["id", "total"],
+}
 const config: ConnectorConfig = {
   origin: "https://api.example.com",
-  routes: [
-    {
-      path: "/items",
-      method: "GET",
-      queryKeys: ["cursor"],
-      fields: ["id", "total"],
-    },
-  ],
+  routes: httpRoutes([storedRoute]),
+  headers: {},
   name: "object",
   scope: { workspaceId: "workspace", userId: null },
 }
@@ -118,7 +128,7 @@ describe("secret reference authorization and lifecycle", () => {
       secretRef,
       label: "API",
       origin: config.origin,
-      routes: config.routes,
+      routes: [storedRoute],
     })
     const use = { workspaceId, connectionId, principalUserId: "owner" }
     await expect(
@@ -166,7 +176,7 @@ describe("secret reference authorization and lifecycle", () => {
       secretRef,
       label: "API",
       origin: config.origin,
-      routes: config.routes,
+      routes: [storedRoute],
     })
     await t.run(async (ctx) => {
       await ctx.db.insert("workspaceMembers", {
@@ -290,7 +300,7 @@ describe("settings list pagination", () => {
         secretRef,
         label: "Connection",
         origin: config.origin,
-        routes: config.routes,
+        routes: [storedRoute],
       }
       for (let i = 0; i < 100; i++) {
         await ctx.db.insert("connections", { ...fields, createdBy: "owner" })
@@ -538,6 +548,116 @@ describe("connector response mapping and pagination", () => {
   })
 })
 
+describe("GitHub read-only connector", () => {
+  const github: ConnectorConfig = {
+    ...config,
+    origin: githubOrigin,
+    routes: githubRoutes,
+    headers: githubHeaders,
+  }
+  async function read(
+    request: Partial<PageRequest>,
+    reply: (url: URL) => Response
+  ) {
+    const memory = memoryStore()
+    await Effect.runPromise(
+      memory.store.put(config.scope, config.name, Redacted.make(token))
+    )
+    const sent: { url: URL; headers: Headers; method: string }[] = []
+    const transport: typeof fetch = async (url, init) => {
+      const parsed = new URL(String(url))
+      sent.push({
+        url: parsed,
+        headers: new Headers(init?.headers),
+        method: init?.method ?? "",
+      })
+      return reply(parsed)
+    }
+    const page = await Effect.runPromise(
+      fetchConnectorPage(
+        github,
+        { ...input, route: "authored_pull_requests", ...request },
+        transport
+      ).pipe(Effect.provide(memory.layer))
+    )
+    return { page, sent }
+  }
+  const next = `${githubOrigin}/search/issues?q=is%3Apr+author%3A%40me&sort=updated&order=desc&per_page=50&page=2`
+  it("reads authored pull requests with a fixed query and GitHub headers", async () => {
+    const { page, sent } = await read({}, () =>
+      Response.json(
+        {
+          total_count: 1,
+          items: [{ id: 7, number: 3, title: "Fix", body: "discard" }],
+        },
+        { headers: { Link: `<${next}>; rel="next"` } }
+      )
+    )
+    expect(page).toMatchObject({
+      rows: [{ id: 7, number: 3, title: "Fix" }],
+      nextCursor: next,
+    })
+    const request = sent[0]
+    expect(request?.method).toBe("GET")
+    expect(request?.url.pathname).toBe("/search/issues")
+    expect(request?.url.searchParams.get("q")).toBe("is:pr author:@me")
+    expect(request?.headers.get("X-GitHub-Api-Version")).toBe("2022-11-28")
+    expect(request?.headers.get("Authorization")).toBe(`Bearer ${token}`)
+  })
+  it("keeps the fixed query when a caller or cursor tries to change it", async () => {
+    const { sent } = await read(
+      { cursor: next.replace("author%3A%40me", "author%3Aother") },
+      () => Response.json({ items: [] })
+    )
+    expect(sent[0]?.url.searchParams.get("q")).toBe("is:pr author:@me")
+    expect(sent[0]?.url.searchParams.get("page")).toBe("2")
+    const denied: Partial<PageRequest>[] = [
+      { query: { q: "repo:private/repo" } },
+      { route: "/search/issues" },
+      { method: "POST" },
+    ]
+    for (const request of denied)
+      await expect(
+        read(request, () => Response.json({ items: [] }))
+      ).rejects.toThrow("Connector request failed")
+  })
+  it("creates a connection without stored routes or an origin allowlist", async () => {
+    vi.stubEnv("CONNECTOR_ALLOWED_ORIGINS", "")
+    const { t, owner, other, workspaceId, secretRef } = await fixture()
+    await expect(
+      other.mutation(api.connectors.createGithub, {
+        workspaceId,
+        secretRef,
+        label: "GitHub",
+      })
+    ).rejects.toThrow("access denied")
+    const connectionId = await owner.mutation(api.connectors.createGithub, {
+      workspaceId,
+      secretRef,
+      label: "GitHub",
+    })
+    const listed = await owner.query(api.connectors.list, {
+      workspaceId,
+      paginationOpts,
+    })
+    expect(listed.page).toEqual([
+      {
+        id: connectionId,
+        kind: "github",
+        label: "GitHub",
+        secretRef,
+        reads: githubRoutes.map((route) => route.id),
+      },
+    ])
+    const execution = await t.query(internal.connectors.executionConfig, {
+      workspaceId,
+      connectionId,
+      principalUserId: "owner",
+    })
+    expect(execution.connector).toEqual({ kind: "github" })
+  })
+})
+
 describe("authenticated HTTP settings recovery", () => {
   it("stores no plaintext metadata and reconciles a failed rotation cleanup", async () => {
     const { owner, other, workspaceId, secretRef } = await fixture()
@@ -626,7 +746,7 @@ describe("agent connection discovery", () => {
       secretRef,
       label: "API",
       origin: config.origin,
-      routes: config.routes,
+      routes: [storedRoute],
     })
     const { digestToken } = await import("./agentAccess")
     const bearer = "b".repeat(64)
@@ -655,8 +775,9 @@ describe("agent connection discovery", () => {
     const expected = {
       id: connectionId,
       label: "API",
+      kind: "http",
       origin: config.origin,
-      routes: config.routes,
+      routes: [storedRoute],
       credential: { label: "API", owner: "user", status: "ready" },
       usable: true,
     }
@@ -668,6 +789,24 @@ describe("agent connection discovery", () => {
       `/agent/connections/describe?connectionId=${connectionId}`
     )
     expect(await one.json()).toEqual(expected)
+    const githubId = await owner.mutation(api.connectors.createGithub, {
+      workspaceId,
+      secretRef,
+      label: "GitHub",
+    })
+    expect(
+      await (
+        await get(`/agent/connections/describe?connectionId=${githubId}`)
+      ).json()
+    ).toEqual({
+      ...expected,
+      id: githubId,
+      label: "GitHub",
+      kind: "github",
+      origin: undefined,
+      routes: undefined,
+      reads: githubRoutes.map((route) => route.id),
+    })
     const meta = await owner.query(internal.secrets.metadata, { secretRef })
     if (meta.state.kind !== "ready") throw new Error("Expected ready")
     for (const hidden of [secretRef, meta.state.name, meta.state.objectId])

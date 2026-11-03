@@ -142,18 +142,9 @@ export const CollectionDescription = Schema.Struct({
 })
 
 /** A connection without secret values: only the credential's safe metadata. */
-export const Connection = Schema.Struct({
+const connectionBase = {
   id: Schema.String,
   label: Schema.String,
-  origin: Schema.String,
-  routes: Schema.Array(
-    Schema.Struct({
-      path: Schema.String,
-      method: Schema.Literals(["GET", "POST"]),
-      queryKeys: Schema.Array(Schema.String),
-      fields: Schema.Array(Schema.String),
-    })
-  ),
   credential: Schema.Struct({
     label: Schema.String,
     owner: Schema.Literals(["workspace", "user"]),
@@ -166,7 +157,28 @@ export const Connection = Schema.Struct({
     ]),
   }),
   usable: Schema.Boolean,
-})
+}
+/** An HTTP connection has stored routes. A GitHub connection names its read IDs. */
+export const Connection = Schema.Union([
+  Schema.Struct({
+    ...connectionBase,
+    kind: Schema.Literal("http"),
+    origin: Schema.String,
+    routes: Schema.Array(
+      Schema.Struct({
+        path: Schema.String,
+        method: Schema.Literals(["GET", "POST"]),
+        queryKeys: Schema.Array(Schema.String),
+        fields: Schema.Array(Schema.String),
+      })
+    ),
+  }),
+  Schema.Struct({
+    ...connectionBase,
+    kind: Schema.Literal("github"),
+    reads: Schema.Array(Schema.String),
+  }),
+])
 
 export const ConnectionPage = Schema.Struct({
   page: Schema.Array(Connection),

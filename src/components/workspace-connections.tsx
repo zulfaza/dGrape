@@ -27,6 +27,7 @@ export interface WorkspaceConnectionService {
   rotate: Mutation<typeof api.secrets.rotate>
   beginDelete: Mutation<typeof api.secrets.beginDelete>
   createConnection: Mutation<typeof api.connectors.create>
+  createGithubConnection: Mutation<typeof api.connectors.createGithub>
   removeConnection: Mutation<typeof api.connectors.remove>
   update: (
     id: Id<"secretRefs">,
@@ -66,6 +67,7 @@ export function WorkspaceConnections({
   const rotate = useMutation(api.secrets.rotate)
   const beginDelete = useMutation(api.secrets.beginDelete)
   const createConnection = useMutation(api.connectors.create)
+  const createGithubConnection = useMutation(api.connectors.createGithub)
   const removeConnection = useMutation(api.connectors.remove)
   const { getAccessToken } = useAccessToken()
   async function update(id: Id<"secretRefs">, revision: number, value: string) {
@@ -101,6 +103,7 @@ export function WorkspaceConnections({
         rotate,
         beginDelete,
         createConnection,
+        createGithubConnection,
         removeConnection,
         update,
       }}
@@ -122,6 +125,7 @@ export function WorkspaceConnectionsView({
     rotate,
     beginDelete,
     createConnection,
+    createGithubConnection,
     removeConnection,
     update,
   } = service
@@ -400,6 +404,23 @@ export function WorkspaceConnectionsView({
             <Button
               type="button"
               variant="outline"
+              disabled={busy}
+              onClick={() =>
+                void perform(async () => {
+                  await createGithubConnection({
+                    workspaceId,
+                    secretRef: selected,
+                    label: "GitHub",
+                  })
+                  setSelected(null)
+                })
+              }
+            >
+              Create GitHub read-only connection
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => setSelected(null)}
             >
               Cancel
@@ -412,8 +433,9 @@ export function WorkspaceConnectionsView({
           <strong>{connection.label}</strong>
           <code className="text-xs break-all">{connection.id}</code>
           <p className="text-sm">
-            {connection.origin}
-            {connection.routes[0]?.path}
+            {connection.kind === "github"
+              ? `GitHub reads: ${connection.reads.join(", ")}`
+              : `${connection.origin}${connection.routes[0]?.path ?? ""}`}
           </p>
           <Button
             variant="outline"
