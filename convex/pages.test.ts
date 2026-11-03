@@ -242,3 +242,72 @@ test("page bindings pin query revisions, validate result fields and expose schem
     })
   ).rejects.toThrow("schema is stale")
 })
+
+test("live blocks authorize stored addresses, bound results and report stale sources", async () => {
+  const { t, owner, other, workspaceId } = await fixture()
+  const collectionId = await t.run((ctx) =>
+    ctx.db.insert("collections", {
+      workspaceId,
+      name: "Live",
+      definition: {
+        version: 1,
+        fields: [
+          { id: "amount", label: "Amount", type: "number", indexed: true },
+        ],
+      },
+    })
+  )
+  const binding = await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "Live",
+    query: { fieldId: "amount", order: "asc" },
+  })
+  const page = await owner.mutation(api.pages.save, {
+    workspaceId,
+    definition: {
+      title: "Live",
+      blocks: [{ kind: "table", title: "Rows", binding, fields: ["amount"] }],
+    },
+  })
+  const address = { pageId: page.pageId, revision: 1, blockIndex: 0 }
+  expect(
+    (await owner.query(api.pages.liveBlock, address)).result?.page
+  ).toEqual([])
+  await expect(other.query(api.pages.liveBlock, address)).rejects.toThrow(
+    "Workspace access denied"
+  )
+  await expect(
+    owner.query(api.pages.liveBlock, { ...address, blockIndex: 0.5 })
+  ).rejects.toThrow("Invalid block address")
+  expect(
+    (await owner.query(api.pages.liveBlock, { ...address, revision: 99 }))
+      .problem
+  ).toContain("unavailable")
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 60; i++) {
+      const recordId = await ctx.db.insert("collectionRecords", {
+        collectionId,
+        schemaVersion: 1,
+        revision: 1,
+        values: { amount: i },
+      })
+      await ctx.db.insert("recordIndexEntries", {
+        collectionId,
+        recordId,
+        fieldId: "amount",
+        value: i,
+      })
+    }
+  })
+  const live = await owner.query(api.pages.liveBlock, address)
+  expect(live.result?.page).toHaveLength(50)
+  expect(live.result?.completeness).toBe("partial")
+  expect(await owner.query(api.pages.sources, { workspaceId })).toHaveLength(1)
+  await t.run((ctx) =>
+    ctx.db.patch(collectionId, { definition: { version: 2, fields: [] } })
+  )
+  expect((await owner.query(api.pages.liveBlock, address)).problem).toContain(
+    "schema is stale"
+  )
+  expect(await owner.query(api.pages.sources, { workspaceId })).toEqual([])
+})

@@ -6,6 +6,8 @@ import type { Id } from "../../convex/_generated/dataModel"
 import type { PageDefinition } from "../../convex/lib/pageDomain"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
+import { PageLiveBlock } from "./page-live-block"
+import { PageSourcePicker } from "./page-source-picker"
 
 type Draft = {
   definition: PageDefinition
@@ -20,6 +22,14 @@ type Draft = {
 )
 
 export function WorkspacePages({
+  workspaceId,
+}: {
+  workspaceId: Id<"workspaces">
+}) {
+  return <WorkspacePagesEditor key={workspaceId} workspaceId={workspaceId} />
+}
+
+function WorkspacePagesEditor({
   workspaceId,
 }: {
   workspaceId: Id<"workspaces">
@@ -201,8 +211,10 @@ export function WorkspacePages({
                   </label>
                 ) : (
                   <p key={index} className="rounded-md border p-3">
-                    Unsupported {block.kind} block: {block.title}. This block is
-                    kept unchanged.
+                    {block.kind} block: {block.title}.{" "}
+                    {block.kind === "table" || block.kind === "metric"
+                      ? "Remove and add a block to change its binding."
+                      : "This block is kept unchanged."}
                   </p>
                 )
               )}
@@ -224,6 +236,16 @@ export function WorkspacePages({
                   Remove block {index + 1} ({block.kind})
                 </Button>
               ))}
+              <PageSourcePicker
+                workspaceId={workspaceId}
+                disabled={pending || draft.definition.blocks.length >= 20}
+                add={(block) =>
+                  change({
+                    ...draft.definition,
+                    blocks: [...draft.definition.blocks, block],
+                  })
+                }
+              />
               <Button
                 variant="outline"
                 disabled={pending || draft.definition.blocks.length >= 20}
@@ -249,6 +271,20 @@ export function WorkspacePages({
                       <ReactMarkdown skipHtml disallowedElements={["img"]}>
                         {block.text}
                       </ReactMarkdown>
+                    ) : block.kind === "table" || block.kind === "metric" ? (
+                      draft.kind === "saved" && !dirty ? (
+                        <PageLiveBlock
+                          pageId={draft.pageId}
+                          revision={draft.revision}
+                          blockIndex={index}
+                          block={block}
+                        />
+                      ) : (
+                        <p>
+                          Save changes to preview live {block.kind}:{" "}
+                          {block.title}.
+                        </p>
+                      )
                     ) : (
                       <p>
                         Preview unavailable for {block.kind}: {block.title}.

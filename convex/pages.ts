@@ -1,8 +1,17 @@
-import { paginationOptsValidator } from "convex/server"
+import {
+  collectionRecordValidator,
+  collectionDefinitionValidator,
+  collectionFieldValidator,
+} from "./lib/collectionDomain"
+import {
+  paginationOptsValidator,
+  paginationResultValidator,
+} from "convex/server"
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 import { mutation, query, type QueryCtx } from "./_generated/server"
 import { requireMembership } from "./lib/auth"
+import { runSavedQuery } from "./lib/savedQueries"
 import {
   pageDefinitionValidator,
   pageValidator,
@@ -235,5 +244,104 @@ export const history = query({
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     }
+  },
+})
+
+/** Only stored, authorized block bindings can execute. No client query input. */
+const liveResultValidator = paginationResultValidator(
+  collectionRecordValidator
+).extend({
+  queryId: v.id("queryDefinitions"),
+  revision: v.number(),
+  resultSchema: collectionDefinitionValidator,
+  completeness: v.union(v.literal("complete"), v.literal("partial")),
+  freshness: v.literal("live"),
+  readAt: v.number(),
+})
+export const liveBlock = query({
+  returns: v.union(
+    v.object({ problem: v.string(), result: v.null() }),
+    v.object({ problem: v.null(), result: liveResultValidator })
+  ),
+  args: { pageId: v.id("pages"), revision: v.number(), blockIndex: v.number() },
+  handler: async (ctx, args) => {
+    const page = await ctx.db.get(args.pageId)
+    if (!page) throw new Error("Page access denied")
+    await requireMembership(ctx, page.workspaceId)
+    if (
+      !Number.isSafeInteger(args.revision) ||
+      args.revision < 1 ||
+      !Number.isSafeInteger(args.blockIndex) ||
+      args.blockIndex < 0 ||
+      args.blockIndex >= 20
+    )
+      throw new Error("Invalid block address")
+    const version = await getVersion(ctx, page._id, args.revision)
+    const block = version?.definition.blocks[args.blockIndex]
+    if (!block || (block.kind !== "table" && block.kind !== "metric"))
+      return { problem: "Live block is unavailable", result: null }
+    const problem = await bindingProblem(ctx, page.workspaceId, block)
+    if (problem) return { problem, result: null }
+    try {
+      const result = await runSavedQuery(ctx, {
+        queryId: block.binding.queryId,
+        expectedRevision: block.binding.revision,
+        paginationOpts: {
+          cursor: null,
+          numItems: 50,
+          maximumRowsRead: 100,
+          maximumBytesRead: 1_000_000,
+        },
+      })
+      return { problem: null, result }
+    } catch {
+      return {
+        problem:
+          "Live query could not be read within its budget. Check the source and binding.",
+        result: null,
+      }
+    }
+  },
+})
+
+/** A bounded picker of current, schema-valid saved revisions. */
+export const sources = query({
+  returns: v.array(
+    v.object({
+      queryId: v.id("queryDefinitions"),
+      revision: v.number(),
+      name: v.string(),
+      fields: v.array(collectionFieldValidator),
+    })
+  ),
+  args: { workspaceId: v.id("workspaces") },
+  handler: async (ctx, args) => {
+    await requireMembership(ctx, args.workspaceId)
+    const saved = await ctx.db
+      .query("queryDefinitions")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+      .take(50)
+    const sources = []
+    for (const item of saved) {
+      const version = await ctx.db
+        .query("queryDefinitionVersions")
+        .withIndex("by_queryId_and_revision", (q) =>
+          q.eq("queryId", item._id).eq("revision", item.revision)
+        )
+        .unique()
+      const collection = await ctx.db.get(item.collectionId)
+      if (
+        version &&
+        collection?.workspaceId === args.workspaceId &&
+        collection.definition.version === version.schemaVersion
+      )
+        sources.push({
+          queryId: item._id,
+          revision: item.revision,
+          name: item.name,
+          fields: version.resultSchema.fields,
+        })
+    }
+    return sources
   },
 })
