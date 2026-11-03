@@ -16,6 +16,7 @@
     "check": "oxfmt --check \"**/*.{ts,tsx,js,jsx,json,jsonc}\"",
     "typecheck": "tsrs --noEmit && tsrs --noEmit -p tsconfig.worker.json",
     "typecheck:backend": "tsrs --noEmit -p convex/tsconfig.json",
+    "import:jobs": "node scripts/import-job-folder.ts",
     "cf:deploy": "cf deploy",
     "typecheck:design-system": "tsrs --noEmit -p design-system/tsconfig.json",
     "design-system:build": "vite build --config design-system.vite.config.ts",
