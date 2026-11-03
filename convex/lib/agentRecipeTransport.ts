@@ -80,6 +80,7 @@ const Version = Schema.Struct({
 const Run = Schema.Struct({
   ...Workspace,
   scheduleId: Schema.optionalKey(Schema.String),
+  retryOf: Schema.optionalKey(Schema.String),
   key: Schema.String,
   state: Schema.Literals([
     "pending",
@@ -194,6 +195,10 @@ export const UpdateScheduleInput = Schema.Struct({
 })
 export const UpdateScheduleResult = Schema.Struct({ revision: Schema.Number })
 export const CancelInput = Schema.Struct({ runId: Schema.String })
+export const RetryInput = Schema.Struct({
+  runId: Schema.String,
+  idempotencyKey: Schema.String,
+})
 export const AccessInput = Schema.Struct({
   versionId: Schema.String,
   userId: Schema.String,

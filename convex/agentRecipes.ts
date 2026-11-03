@@ -270,6 +270,23 @@ export const cancel = internalMutation({
       return recipes.cancelForPrincipal(ctx, { ...input, runId }, grant.owner)
     }),
 })
+export const retry = internalMutation({
+  args: { digest: v.string(), ...recipes.retryArgs.fields, runId: v.string() },
+  returns: recipes.retryResult,
+  handler: (ctx, args) =>
+    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+      const { digest, ...input } = args
+      void digest
+      const runId = ctx.db.normalizeId("recipeRuns", input.runId)
+      const document = runId ? await ctx.db.get(runId) : null
+      if (!runId || !document || document.workspaceId !== grant.workspaceId)
+        throw new ConvexError({
+          status: 403,
+          message: "Workspace access denied",
+        })
+      return recipes.retryForPrincipal(ctx, { ...input, runId }, grant.owner)
+    }),
+})
 export const setRunAccess = internalMutation({
   args: {
     digest: v.string(),

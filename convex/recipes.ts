@@ -368,12 +368,19 @@ export const history = query({
   handler: (ctx, args) => historyForPrincipal(ctx, args),
 })
 
+/** A run is started manually, by a schedule, or as a retry of a prior run. */
+type RunOrigin =
+  | { kind: "manual" }
+  | { kind: "schedule"; scheduleId: Id<"recipeSchedules"> }
+  | { kind: "retry"; retryOf: Id<"recipeRuns"> }
+
 async function enqueue(
   ctx: MutationCtx,
   version: Doc<"recipeVersions">,
   key: string,
-  scheduleId?: Id<"recipeSchedules">
+  origin: RunOrigin
 ) {
+  const retryOf = origin.kind === "retry" ? origin.retryOf : undefined
   const existing = await ctx.db
     .query("recipeRuns")
     .withIndex("by_workspaceId_and_key", (q) =>
@@ -383,12 +390,15 @@ async function enqueue(
   if (existing) {
     if (existing.versionId !== version._id)
       throw new Error("Idempotency key belongs to another recipe version")
+    if (existing.retryOf !== retryOf)
+      throw new Error("Idempotency key belongs to another retry")
     return existing._id
   }
   return ctx.db.insert("recipeRuns", {
     workspaceId: version.workspaceId,
     versionId: version._id,
-    scheduleId,
+    scheduleId: origin.kind === "schedule" ? origin.scheduleId : undefined,
+    retryOf,
     key,
     state: "pending",
     cancelRequested: false,
@@ -396,6 +406,10 @@ async function enqueue(
     epoch: 0,
     nextStep: 0,
   })
+}
+function checkIdempotencyKey(key: string) {
+  if (!key || key.length > 200)
+    throw new Error("Idempotency key must be 1 to 200 characters")
 }
 export const triggerArgs = v.object({
   versionId: v.id("recipeVersions"),
@@ -410,14 +424,48 @@ export async function triggerForPrincipal(
   const version = await ctx.db.get(args.versionId)
   if (!version) throw new Error("Recipe not found")
   await requireRecipeAccess(ctx, version, "run", principal)
-  if (!args.idempotencyKey || args.idempotencyKey.length > 200)
-    throw new Error("Idempotency key must be 1 to 200 characters")
-  return enqueue(ctx, version, `manual:${args.idempotencyKey}`)
+  checkIdempotencyKey(args.idempotencyKey)
+  return enqueue(ctx, version, `manual:${args.idempotencyKey}`, {
+    kind: "manual",
+  })
 }
 export const trigger = mutation({
   args: triggerArgs.fields,
   returns: triggerResult,
   handler: (ctx, args) => triggerForPrincipal(ctx, args),
+})
+export const retryArgs = v.object({
+  runId: v.id("recipeRuns"),
+  idempotencyKey: v.string(),
+})
+export const retryResult = v.id("recipeRuns")
+/**
+ * Starts a new run of a failed or cancelled run's pinned recipe version.
+ * The new run links to the original through `retryOf`. Reuse
+ * `idempotencyKey` to repeat the request without a second run.
+ */
+export async function retryForPrincipal(
+  ctx: MutationCtx,
+  args: Infer<typeof retryArgs>,
+  principal?: string
+) {
+  const run = await ctx.db.get(args.runId)
+  if (!run) throw new Error("Run not found")
+  const version = await ctx.db.get(run.versionId)
+  if (!version) throw new Error("Recipe not found")
+  await requireRecipeAccess(ctx, version, "run", principal)
+  if (run.state !== "failed" && run.state !== "cancelled")
+    throw new Error("Only a failed or cancelled run can be retried")
+  checkIdempotencyKey(args.idempotencyKey)
+  return enqueue(ctx, version, `retry:${args.idempotencyKey}`, {
+    kind: "retry",
+    retryOf: run._id,
+  })
+}
+export const retry = mutation({
+  args: retryArgs.fields,
+  returns: retryResult,
+  handler: (ctx, args) => retryForPrincipal(ctx, args),
 })
 export const scheduleArgs = v.object({
   versionId: v.id("recipeVersions"),
@@ -611,12 +659,10 @@ export const dispatch = internalMutation({
       const active = item.activeRunId
         ? await ctx.db.get(item.activeRunId)
         : null
-      const runId = await enqueue(
-        ctx,
-        version,
-        occurrenceId(item._id, at),
-        item._id
-      )
+      const runId = await enqueue(ctx, version, occurrenceId(item._id, at), {
+        kind: "schedule",
+        scheduleId: item._id,
+      })
       if (active && !terminal(active))
         await ctx.db.patch(runId, { state: "skipped", finishedAt: now })
       const next = nextOccurrence(item.timing, now)
