@@ -180,6 +180,16 @@ describe("recipe lifecycle", () => {
       await expect(
         owner.mutation(api.recipes.updateSchedule, update)
       ).rejects.toThrow("current revision is 1")
+      const events = await owner.query(api.auditEvents.list, {
+        workspaceId,
+        paginationOpts: { numItems: 1, cursor: null },
+      })
+      expect(events.page[0]?.event).toEqual({
+        operation: "schedule.update",
+        scheduleId,
+        versionId: next,
+        revision: 1,
+      })
       const updated = await t.run(async (ctx) => ctx.db.get(scheduleId))
       expect(updated).toMatchObject({
         versionId: next,
