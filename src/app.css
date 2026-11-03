@@ -297,6 +297,37 @@
   animation: dfe-sloth-foot 5.2s ease-in-out infinite;
 }
 
+@keyframes dfe-footer-wave {
+  0%,
+  12%,
+  65%,
+  100% {
+    rotate: 0deg;
+  }
+  24%,
+  48% {
+    rotate: 18deg;
+  }
+  36% {
+    rotate: -12deg;
+  }
+}
+.dfe-wave-sprite {
+  background-image: url("/brand/mascot/wave-layers.png");
+  background-size: 200% 100%;
+}
+.dfe-wave-body {
+  background-position: 0 0;
+  clip-path: inset(2% 15% 4% 25%);
+}
+.dfe-wave-arm {
+  background-position: 100% 0;
+  clip-path: inset(29% 56% 42% 12%);
+  transform-origin: 38% 50%;
+  translate: -3% 0;
+  animation: dfe-footer-wave 4.8s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .dfe-sloth-still {
     display: none;
