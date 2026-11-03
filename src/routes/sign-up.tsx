@@ -8,9 +8,9 @@ export const Route = createFileRoute("/sign-up")({
         const returnPathname = new URL(request.url).searchParams.get(
           "returnPathname"
         )
-        const url = await getSignUpUrl(
-          returnPathname ? { data: { returnPathname } } : undefined
-        )
+        const url = await getSignUpUrl({
+          data: { returnPathname: returnPathname || "/dashboard/workspaces" },
+        })
         return new Response(null, {
           status: 307,
           headers: { Location: url },

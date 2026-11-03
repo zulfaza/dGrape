@@ -8,9 +8,9 @@ export const Route = createFileRoute("/sign-in")({
         const returnPathname = new URL(request.url).searchParams.get(
           "returnPathname"
         )
-        const url = await getSignInUrl(
-          returnPathname ? { data: { returnPathname } } : undefined
-        )
+        const url = await getSignInUrl({
+          data: { returnPathname: returnPathname || "/dashboard/workspaces" },
+        })
         return new Response(null, {
           status: 307,
           headers: { Location: url },
