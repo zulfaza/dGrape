@@ -103,6 +103,13 @@ export function registerAgentRecipeRoutes(
   )
   agentRoute(
     router,
+    "/agent/recipes/retry",
+    Transport.RetryInput,
+    (ctx, digest, input) =>
+      ctx.runMutation(internal.agentRecipes.retry, { ...input, digest })
+  )
+  agentRoute(
+    router,
     "/agent/recipes/setRunAccess",
     Transport.AccessInput,
     (ctx, digest, input) =>

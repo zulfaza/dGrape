@@ -308,6 +308,57 @@ describe("recipe lifecycle", () => {
     expect(await t.mutation(internal.recipes.dispatch, {})).toHaveLength(4)
     expect(await t.mutation(internal.recipes.dispatch, {})).toHaveLength(0)
   })
+  it("retries only failed or cancelled runs as new linked runs of the pinned version", async () => {
+    const { t, owner, versionId } = await setup()
+    const runId = await owner.mutation(api.recipes.trigger, {
+      versionId,
+      idempotencyKey: "original",
+    })
+    await expect(
+      owner.mutation(api.recipes.retry, { runId, idempotencyKey: "early" })
+    ).rejects.toThrow("Only a failed or cancelled run")
+    await owner.mutation(api.recipes.cancel, { runId })
+    await expect(
+      t
+        .withIdentity({ tokenIdentifier: "test|other" })
+        .mutation(api.recipes.retry, { runId, idempotencyKey: "other" })
+    ).rejects.toThrow("access denied")
+    const retryId = await owner.mutation(api.recipes.retry, {
+      runId,
+      idempotencyKey: "again",
+    })
+    expect(retryId).not.toBe(runId)
+    expect(
+      await owner.mutation(api.recipes.retry, {
+        runId,
+        idempotencyKey: "again",
+      })
+    ).toBe(retryId)
+    const retried = await t.run((ctx) => ctx.db.get(retryId))
+    expect(retried).toMatchObject({
+      versionId,
+      retryOf: runId,
+      state: "pending",
+      key: "retry:again",
+    })
+    await t.run((ctx) =>
+      ctx.db.patch(retryId, { state: "failed", finishedAt: Date.now() })
+    )
+    await expect(
+      owner.mutation(api.recipes.retry, {
+        runId: retryId,
+        idempotencyKey: "again",
+      })
+    ).rejects.toThrow("another retry")
+    const [claim] = await t.mutation(internal.recipes.dispatch, {})
+    expect(claim).toBeUndefined()
+    const next = await owner.mutation(api.recipes.retry, {
+      runId: retryId,
+      idempotencyKey: "third",
+    })
+    const [nextClaim] = await t.mutation(internal.recipes.dispatch, {})
+    expect(nextClaim._id).toBe(next)
+  })
 })
 
 describe("recipe credentials", () => {
@@ -423,6 +474,14 @@ describe("recipe credentials", () => {
     expect(await t.run(async (ctx) => (await ctx.db.get(runId))?.state)).toBe(
       "cancelled"
     )
+    const retryId = await t.mutation(internal.agentRecipes.retry, {
+      digest: "runner",
+      runId,
+      idempotencyKey: "agent-retry",
+    })
+    expect(
+      await t.run(async (ctx) => (await ctx.db.get(retryId))?.retryOf)
+    ).toBe(runId)
     await t.mutation(internal.agentRecipes.setRunAccess, {
       digest: "owner",
       versionId,
@@ -490,6 +549,13 @@ describe("recipe credentials", () => {
     ).rejects.toThrow("denied")
     await expect(
       t.mutation(internal.agentRecipes.cancel, { digest, runId: foreignRun })
+    ).rejects.toThrow("denied")
+    await expect(
+      t.mutation(internal.agentRecipes.retry, {
+        digest,
+        runId: foreignRun,
+        idempotencyKey: "foreign",
+      })
     ).rejects.toThrow("denied")
     const foreignIds = await t.run(async (ctx) => {
       const version = await ctx.db.get(foreign)
@@ -576,6 +642,7 @@ describe("recipe credentials", () => {
       ).status
     ).toBe(403)
     expect((await request("trigger", "{}")).status).toBe(400)
+    expect((await request("retry", "{}")).status).toBe(400)
     expect((await request("publish", "x".repeat(256 * 1024 + 1))).status).toBe(
       413
     )

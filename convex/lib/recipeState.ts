@@ -45,6 +45,8 @@ export const recipeTables = {
     workspaceId: v.id("workspaces"),
     versionId: v.id("recipeVersions"),
     scheduleId: v.optional(v.id("recipeSchedules")),
+    /** The failed or cancelled run that this run retries. */
+    retryOf: v.optional(v.id("recipeRuns")),
     key: v.string(),
     state: runStateValidator,
     cancelRequested: v.boolean(),
