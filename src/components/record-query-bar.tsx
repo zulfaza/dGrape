@@ -1,3 +1,4 @@
+import { Match } from "effect"
 import {
   isNumericField,
   checkRecordValues,
@@ -161,13 +162,11 @@ export function RecordQueryBar({
                   id="query-equals"
                   className="w-44"
                   type={isNumericField(field.type) ? "number" : "text"}
-                  step={
-                    field.type === "integer"
-                      ? 1
-                      : field.type === "number"
-                        ? "any"
-                        : undefined
-                  }
+                  step={Match.value(field.type).pipe(
+                    Match.when("integer", () => 1),
+                    Match.when("number", () => "any"),
+                    Match.orElse(() => undefined)
+                  )}
                   maxLength={200}
                   placeholder="Any value"
                   value={filterText}

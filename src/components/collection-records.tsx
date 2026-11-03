@@ -1,3 +1,4 @@
+import { Match } from "effect"
 import {
   isNumericField,
   checkRecordValues,
@@ -433,13 +434,11 @@ export function CollectionRecords({
                         disabled={saving}
                         id={`record-${field.id}`}
                         type={isNumericField(field.type) ? "number" : "text"}
-                        step={
-                          field.type === "integer"
-                            ? 1
-                            : field.type === "number"
-                              ? "any"
-                              : undefined
-                        }
+                        step={Match.value(field.type).pipe(
+                          Match.when("integer", () => 1),
+                          Match.when("number", () => "any"),
+                          Match.orElse(() => undefined)
+                        )}
                         maxLength={field.type === "text" ? 10000 : undefined}
                         required={isNumericField(field.type) && !field.optional}
                         value={String(draft.values[field.id] ?? "")}
