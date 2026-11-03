@@ -255,7 +255,7 @@ describe("recipe lifecycle", () => {
           expectedRevision: 2,
           digest: "reader",
         })
-      ).rejects.toThrow("denied")
+      ).rejects.toThrow("does not have the scope jobs.manage")
     } finally {
       vi.useRealTimers()
     }
@@ -617,6 +617,20 @@ describe("recipe credentials", () => {
       error: expect.stringContaining("artifacts.write"),
     })
     expect((await t.fetch("/agent/workspace", { headers })).status).toBe(403)
+    expect(
+      (await t.fetch("/agent/collections/describe?collectionId=x", { headers }))
+        .status
+    ).toBe(403)
+    expect((await t.fetch("/agent/connections", { headers })).status).toBe(200)
+    const capabilities = await (
+      await t.fetch("/agent/capabilities", { headers })
+    ).json()
+    expect(capabilities.scopes).toEqual(["jobs.read"])
+    expect(
+      capabilities.capabilities
+        .filter((capability: { allowed: boolean }) => capability.allowed)
+        .map((capability: { id: string }) => capability.id)
+    ).toEqual(["connections.read", "recipes.read"])
     const write = await t.fetch("/agent/collections", {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },
