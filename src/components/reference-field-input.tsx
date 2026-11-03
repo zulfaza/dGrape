@@ -1,18 +1,42 @@
-import { useQuery } from "convex/react"
+import { usePaginatedQuery, useQuery } from "convex/react"
+import type { ReactNode } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Doc, Id } from "../../convex/_generated/dataModel"
 import {
   SelectFieldInput,
   type SelectItemOption,
 } from "@/components/choice-field-input"
+import { Button } from "@/components/ui/button"
 
 /**
- * Inputs that choose a reference target. Each lists the first page of
- * targets (at most 50), and keeps the current value in the list when it is
- * not on that page. Agents and the API can reference any target.
+ * Inputs that choose a reference target. Each lists targets one page (50)
+ * at a time, with a button that loads the next page, and keeps the current
+ * value in the list when no loaded page has it.
  */
 
-const FIRST_PAGE = { numItems: 50, cursor: null }
+const PAGE_SIZE = 50
+
+/** The select, and a "Load more" button while more targets exist. */
+function PagedSelect({
+  canLoadMore,
+  onLoadMore,
+  children,
+}: {
+  canLoadMore: boolean
+  onLoadMore: () => void
+  children: ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">{children}</div>
+      {canLoadMore && (
+        <Button type="button" variant="outline" size="sm" onClick={onLoadMore}>
+          Load more
+        </Button>
+      )}
+    </div>
+  )
+}
 
 /** Adds the current value when the page does not have it. */
 function withCurrent(
@@ -38,26 +62,32 @@ export function CollectionTargetInput({
   disabled: boolean
   onChange: (value: Id<"collections">) => void
 }) {
-  const collections = useQuery(api.workspaces.listCollections, {
-    workspaceId,
-    paginationOpts: FIRST_PAGE,
-  })
-  const page = collections?.page ?? []
+  const collections = usePaginatedQuery(
+    api.workspaces.listCollections,
+    { workspaceId },
+    { initialNumItems: PAGE_SIZE }
+  )
+  const page = collections.results
   return (
-    <SelectFieldInput
-      id={id}
-      options={page.map((collection) => ({
-        value: collection._id,
-        label: collection.name,
-      }))}
-      optional={false}
-      value={value ?? ""}
-      disabled={disabled || collections === undefined}
-      onChange={(next) => {
-        const target = page.find((collection) => collection._id === next)
-        if (target) onChange(target._id)
-      }}
-    />
+    <PagedSelect
+      canLoadMore={collections.status === "CanLoadMore"}
+      onLoadMore={() => collections.loadMore(PAGE_SIZE)}
+    >
+      <SelectFieldInput
+        id={id}
+        options={page.map((collection) => ({
+          value: collection._id,
+          label: collection.name,
+        }))}
+        optional={false}
+        value={value ?? ""}
+        disabled={disabled || collections.status === "LoadingFirstPage"}
+        onChange={(next) => {
+          const target = page.find((collection) => collection._id === next)
+          if (target) onChange(target._id)
+        }}
+      />
+    </PagedSelect>
   )
 }
 
@@ -91,26 +121,32 @@ export function RecordReferenceInput({
   onChange: (value: string) => void
 }) {
   const target = useQuery(api.workspaces.getCollection, { collectionId })
-  const records = useQuery(api.workspaces.listRecords, {
-    collectionId,
-    paginationOpts: FIRST_PAGE,
-  })
+  const records = usePaginatedQuery(
+    api.workspaces.listRecords,
+    { collectionId },
+    { initialNumItems: PAGE_SIZE }
+  )
   const fields = target?.definition.fields ?? []
   return (
-    <SelectFieldInput
-      id={id}
-      options={withCurrent(
-        (records?.page ?? []).map((record) => ({
-          value: record._id,
-          label: recordLabel(fields, record),
-        })),
-        value
-      )}
-      optional={optional}
-      value={value}
-      disabled={disabled || records === undefined}
-      onChange={onChange}
-    />
+    <PagedSelect
+      canLoadMore={records.status === "CanLoadMore"}
+      onLoadMore={() => records.loadMore(PAGE_SIZE)}
+    >
+      <SelectFieldInput
+        id={id}
+        options={withCurrent(
+          records.results.map((record) => ({
+            value: record._id,
+            label: recordLabel(fields, record),
+          })),
+          value
+        )}
+        optional={optional}
+        value={value}
+        disabled={disabled || records.status === "LoadingFirstPage"}
+        onChange={onChange}
+      />
+    </PagedSelect>
   )
 }
 
@@ -130,24 +166,30 @@ export function ArtifactReferenceInput({
   disabled: boolean
   onChange: (value: string) => void
 }) {
-  const artifacts = useQuery(api.artifacts.list, {
-    workspaceId,
-    paginationOpts: FIRST_PAGE,
-  })
+  const artifacts = usePaginatedQuery(
+    api.artifacts.list,
+    { workspaceId },
+    { initialNumItems: PAGE_SIZE }
+  )
   return (
-    <SelectFieldInput
-      id={id}
-      options={withCurrent(
-        (artifacts?.page ?? []).map((artifact) => ({
-          value: artifact._id,
-          label: artifact.name,
-        })),
-        value
-      )}
-      optional={optional}
-      value={value}
-      disabled={disabled || artifacts === undefined}
-      onChange={onChange}
-    />
+    <PagedSelect
+      canLoadMore={artifacts.status === "CanLoadMore"}
+      onLoadMore={() => artifacts.loadMore(PAGE_SIZE)}
+    >
+      <SelectFieldInput
+        id={id}
+        options={withCurrent(
+          artifacts.results.map((artifact) => ({
+            value: artifact._id,
+            label: artifact.name,
+          })),
+          value
+        )}
+        optional={optional}
+        value={value}
+        disabled={disabled || artifacts.status === "LoadingFirstPage"}
+        onChange={onChange}
+      />
+    </PagedSelect>
   )
 }

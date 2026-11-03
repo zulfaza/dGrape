@@ -170,11 +170,12 @@ export async function referencingRecord(
   ctx: QueryCtx,
   recordId: Id<"collectionRecords">
 ): Promise<Id<"collectionRecords"> | null> {
-  const rows = await ctx.db
+  // Self references are at most one per field, so this scan stays small.
+  for await (const row of ctx.db
     .query("recordReferences")
-    .withIndex("by_targetRecordId", (q) => q.eq("targetRecordId", recordId))
-    .take(2)
-  return rows.find((row) => row.recordId !== recordId)?.recordId ?? null
+    .withIndex("by_targetRecordId", (q) => q.eq("targetRecordId", recordId)))
+    if (row.recordId !== recordId) return row.recordId
+  return null
 }
 
 /** A record that references `artifactId`, or null. */

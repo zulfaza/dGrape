@@ -60,6 +60,7 @@ import type * as lib_recordCounts from "../lib/recordCounts.js";
 import type * as lib_recordPublication from "../lib/recordPublication.js";
 import type * as lib_recordQuery from "../lib/recordQuery.js";
 import type * as lib_records from "../lib/records.js";
+import type * as lib_references from "../lib/references.js";
 import type * as lib_savedQueries from "../lib/savedQueries.js";
 import type * as lib_secretDomain from "../lib/secretDomain.js";
 import type * as lib_secretService from "../lib/secretService.js";
@@ -139,6 +140,7 @@ declare const fullApi: ApiFromModules<{
   "lib/recordPublication": typeof lib_recordPublication;
   "lib/recordQuery": typeof lib_recordQuery;
   "lib/records": typeof lib_records;
+  "lib/references": typeof lib_references;
   "lib/savedQueries": typeof lib_savedQueries;
   "lib/secretDomain": typeof lib_secretDomain;
   "lib/secretService": typeof lib_secretService;

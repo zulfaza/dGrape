@@ -648,3 +648,42 @@ test("audit events name the actor and objects but never record values", async ()
       })
   ).rejects.toThrow("Workspace access denied")
 })
+
+test("self references do not hide another record's reference", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const workspaceId = await owner.mutation(api.workspaces.create, {
+    name: "People",
+  })
+  const people = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "People",
+    fields: [{ id: "name", label: "Name", type: "text" }],
+  })
+  for (const id of ["manager", "mentor"])
+    await owner.mutation(api.workspaces.addField, {
+      collectionId: people,
+      field: { id, label: id, type: "recordReference", collectionId: people },
+    })
+  const lead = await owner.mutation(api.workspaces.createRecord, {
+    collectionId: people,
+    values: { name: "Lead" },
+  })
+  await owner.mutation(api.workspaces.updateRecord, {
+    collectionId: people,
+    recordId: lead,
+    expectedRevision: 1,
+    values: { name: "Lead", manager: lead, mentor: lead },
+  })
+  await owner.mutation(api.workspaces.createRecord, {
+    collectionId: people,
+    values: { name: "Report", manager: lead },
+  })
+  expect(
+    await owner.mutation(api.workspaces.deleteRecord, {
+      collectionId: people,
+      recordId: lead,
+      expectedRevision: 2,
+    })
+  ).toBe("referenced")
+})
