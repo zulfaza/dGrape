@@ -1,3 +1,4 @@
+import * as Pages from "../../convex/lib/agentPageTransport"
 import * as Queries from "../../convex/lib/agentQueryTransport"
 import * as Recipes from "../../convex/lib/agentRecipeTransport"
 import { Context, Effect, Layer, Schema } from "effect"
@@ -282,6 +283,18 @@ export class AgentApi extends Context.Service<
     readonly queryRun: (
       input: typeof Queries.RunInput.Type
     ) => Call<typeof Queries.RunPage.Type>
+    readonly pageSaveDraft: (
+      input: typeof Pages.SaveDraftInput.Type
+    ) => Call<typeof Pages.SavedDraft.Type>
+    readonly pagePublish: (
+      input: typeof Pages.PublishInput.Type
+    ) => Call<typeof Pages.Published.Type>
+    readonly pageGet: (
+      input: typeof Pages.GetInput.Type
+    ) => Call<typeof Pages.PageDetail.Type>
+    readonly pageList: (
+      input: typeof Pages.ListInput.Type
+    ) => Call<typeof Pages.PageList.Type>
     readonly describeWorkspace: Call<typeof WorkspaceDescription.Type>
     readonly capabilities: Call<typeof Capabilities.Type>
     readonly describeCollection: (input: {
@@ -475,6 +488,26 @@ export const layer = (baseUrl: string) =>
           send(
             json(HttpClientRequest.post(url("/agent/queries/run")), input),
             Queries.RunPage
+          ),
+        pageSaveDraft: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/pages/saveDraft")), input),
+            Pages.SavedDraft
+          ),
+        pagePublish: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/pages/publish")), input),
+            Pages.Published
+          ),
+        pageGet: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/pages/get")), input),
+            Pages.PageDetail
+          ),
+        pageList: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/pages/list")), input),
+            Pages.PageList
           ),
         describeWorkspace: send(
           HttpClientRequest.get(url("/agent/workspace")),

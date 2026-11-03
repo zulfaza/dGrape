@@ -1,3 +1,4 @@
+import * as Pages from "../../convex/lib/agentPageTransport"
 import * as Queries from "../../convex/lib/agentQueryTransport"
 import * as Recipes from "../../convex/lib/agentRecipeTransport"
 import { collectionTemplates } from "../../convex/lib/collectionTemplates"
@@ -367,6 +368,40 @@ const QueryRun = Tool.make("queries_run", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Readonly, true)
 
+const PageSaveDraft = Tool.make("pages_save_draft", {
+  description: `Save a page definition as a new draft revision. A draft is not visible on the published page until pages_publish. \`definition\` has a \`title\` and up to 20 \`blocks\`: markdown \`{ kind, text }\`, artifact \`{ kind, title, artifactId }\`, and live blocks bound to a saved query revision (\`binding: { queryId, revision }\` from queries_list): table \`{ fields }\`, metric \`{ field, unit, operation: "sum" | "count" }\`, chart \`{ chart: { type: "bar" | "line", labelField, valueField, unit } }\`. Bound fields must be in the query result, and sum and chart values must be number fields. An invalid block fails with its block number and the result fields. Omit \`pageId\` to create a page. To change a page, pass its \`pageId\` and its current \`revision\` as \`expectedRevision\`. Needs a read-and-write credential.`,
+  parameters: Pages.SaveDraftInput,
+  success: Pages.SavedDraft,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const PagePublish = Tool.make("pages_publish", {
+  description:
+    "Publish a stored revision of a page, or roll back to an earlier one. Pass the page's current `revision` as `expectedRevision` and its current `publishedRevision` (null when never published) as `expectedPublishedRevision`, from pages_get or pages_list. If the page changed, the call fails: read it again. Bindings are checked again before publication. Needs a read-and-write credential.",
+  parameters: Pages.PublishInput,
+  success: Pages.Published,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, true)
+
+const PageGet = Tool.make("pages_get", {
+  description:
+    "Get a page and one version: `revision`, or the published one when you omit it (`version` is null when nothing is published). `bindings` has one entry for each block: null when the block is valid, or the problem (for example a stale query schema).",
+  parameters: Pages.GetInput,
+  success: Pages.PageDetail,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const PageList = Tool.make("pages_list", {
+  description: `List the workspace's pages, newest first, with \`revision\` and \`publishedRevision\`. Returns up to \`limit\` (1 to ${Pages.MAX_PAGE_SIZE}). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\`.`,
+  parameters: Pages.ListInput,
+  success: Pages.PageList,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
 const DfeToolkit = Toolkit.make(
   RecipeValidate,
   RecipePreview,
@@ -385,6 +420,10 @@ const DfeToolkit = Toolkit.make(
   QuerySave,
   QueryList,
   QueryRun,
+  PageSaveDraft,
+  PagePublish,
+  PageGet,
+  PageList,
 
   ListTemplates,
   ListCapabilities,
@@ -425,6 +464,10 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       queries_save: (input) => api.querySave(input),
       queries_list: (input) => api.queryList(input),
       queries_run: (input) => api.queryRun(input),
+      pages_save_draft: (input) => api.pageSaveDraft(input),
+      pages_publish: (input) => api.pagePublish(input),
+      pages_get: (input) => api.pageGet(input),
+      pages_list: (input) => api.pageList(input),
       collections_templates: () => Effect.succeed(collectionTemplates()),
       capabilities_list: () => api.capabilities,
       workspace_describe: () => api.describeWorkspace,
@@ -473,7 +516,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. " +
+      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. " +
       "Recipes fetch and transform data without a model. A recipe fetch step uses a connection: connections_list and connections_describe show each connection's origin, routes, and credential status, never secret values. A person adds credentials in the dashboard. recipes_publish saves an immutable recipe version (fetch, map, filter, join, aggregate, upsert, snapshot, and artifact steps); recipes_versions lists versions. recipes_trigger starts a run (reuse its idempotencyKey to retry), recipes_runs lists runs, recipes_history lists the attempts of one run, and recipes_cancel stops a run. recipes_schedule creates a UTC schedule, recipes_schedules lists schedules, recipes_set_enabled turns one on or off, and recipes_set_run_access lets another user run a recipe. Only the recipe creator manages schedules and run access.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)
