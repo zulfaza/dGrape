@@ -1,3 +1,4 @@
+import { collectionTemplates } from "../../convex/lib/collectionTemplates"
 import { isFieldType } from "../../convex/lib/collectionDomain"
 import { useMutation } from "convex/react"
 import { Plus, Trash2 } from "lucide-react"
@@ -28,7 +29,13 @@ import { toast } from "@/components/ui/toast"
 
 type FieldType =
   import("../../convex/lib/collectionDomain").CollectionField["type"]
-type Field = { id: string; label: string; type: FieldType; indexed: boolean }
+type Field = {
+  id: string
+  label: string
+  type: FieldType
+  indexed: boolean
+  optional?: true
+}
 
 const MAX_FIELDS = 50
 const MAX_INDEXED_FIELDS = 5
@@ -116,6 +123,32 @@ export function CreateCollectionDialog({
             Name the collection and add the fields each record has.
           </DialogDescription>
         </DialogHeader>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-muted-foreground">
+            Start with a template, then edit its fields. Transaction amounts use
+            minor units. Keep currencies separate.
+          </p>
+          <div className="flex gap-2">
+            {collectionTemplates().map((template) => (
+              <Button
+                key={template.id}
+                variant="outline"
+                disabled={saving}
+                onClick={() => {
+                  setName(template.name)
+                  setFields(
+                    template.fields.map((field) => ({
+                      ...field,
+                      indexed: field.indexed === true,
+                    }))
+                  )
+                }}
+              >
+                {template.name}
+              </Button>
+            ))}
+          </div>
+        </div>
         <form onSubmit={submit} className="flex flex-col gap-6">
           <div className="grid gap-2">
             <Label htmlFor="collection-name">Name</Label>
@@ -139,7 +172,7 @@ export function CreateCollectionDialog({
             {fields.map((field, index) => (
               <div
                 key={index}
-                className="grid items-end gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_1fr_8rem_auto_auto]"
+                className="grid items-end gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_1fr_12rem_auto_auto]"
               >
                 <div className="grid gap-2">
                   <Label htmlFor={`label-${index}`}>Label</Label>

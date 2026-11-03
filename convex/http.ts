@@ -1,3 +1,4 @@
+import { collectionTemplates } from "./lib/collectionTemplates"
 import { httpRouter } from "convex/server"
 import type { Id } from "./_generated/dataModel"
 import { httpAction, type ActionCtx } from "./_generated/server"
@@ -119,6 +120,19 @@ http.route({
   path: "/settings/secrets",
   method: "OPTIONS",
   handler: secretOptions,
+})
+// The catalog is public metadata. Creation still requires workspace write access.
+http.route({
+  path: "/agent/collections/templates",
+  method: "OPTIONS",
+  handler: preflight,
+})
+http.route({
+  path: "/agent/collections/templates",
+  method: "GET",
+  handler: httpAction(async () =>
+    Response.json(collectionTemplates(), { headers: corsHeaders })
+  ),
 })
 http.route({ path: "/agent/workspace", method: "OPTIONS", handler: preflight })
 http.route({

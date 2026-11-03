@@ -1,10 +1,15 @@
+import { collectionTemplates } from "./lib/collectionTemplates"
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
 import { Schema } from "effect"
 import schema from "./schema"
 import { api, internal } from "./_generated/api"
-import { checkRecordValues, type CollectionField } from "./lib/collectionDomain"
+import {
+  checkRecordValues,
+  type CollectionField,
+  type RecordValues,
+} from "./lib/collectionDomain"
 import { checkQuery } from "./lib/recordQuery"
 import { parseCreateCollection } from "./lib/agentRequests"
 import { Field } from "../src/mcp/agent-api"
@@ -148,4 +153,46 @@ test("human, agent, source upserts and snapshot staging enforce exact values and
     (await owner.query(api.workspaces.getRecord, { collectionId, recordId }))
       .revision
   ).toBe(1)
+})
+
+test("templates create valid collections through HTTP and MCP contracts", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ subject: "template-owner" })
+  const workspaceId = await owner.mutation(api.workspaces.create, {
+    name: "Templates",
+  })
+  for (const template of collectionTemplates()) {
+    expect(parseCreateCollection(template)?.fields).toEqual(template.fields)
+    for (const field of template.fields)
+      expect(Schema.decodeUnknownSync(Field)(field)).toEqual(field)
+    const collectionId = await owner.mutation(api.workspaces.createCollection, {
+      workspaceId,
+      name: template.name,
+      fields: template.fields,
+    })
+    const values: RecordValues =
+      template.id === "transactions"
+        ? {
+            date: "2026-11-03",
+            amount: -123,
+            currency: "USD",
+            category: "Food",
+          }
+        : {
+            company: "Example",
+            role: "Engineer",
+            stage: "Applied",
+            source: "Website",
+            date: "2026-11-03",
+          }
+    const recordId = await owner.mutation(api.workspaces.createRecord, {
+      collectionId,
+      values,
+    })
+    expect(
+      (await owner.query(api.workspaces.getRecord, { collectionId, recordId }))
+        .values
+    ).toEqual(values)
+  }
+  expect(collectionTemplates()[0]?.fields[0]?.label).toBe("Company")
 })
