@@ -628,4 +628,30 @@ test("agent credentials draft, publish, get and list pages with clear binding er
   expect(
     await call("get", { pageId: scatterDraft.body.pageId, revision: 1 }, reader)
   ).toMatchObject({ status: 200, body: { version: { definition: scatter } } })
+
+  const reportId = await t.run((ctx) =>
+    ctx.db.insert("artifacts", {
+      workspaceId,
+      key: "report",
+      name: "report.html",
+      size: 5,
+      contentType: "text/html",
+      dataTimestamp: 1000,
+      createdBy: { kind: "user", userId: "owner" },
+    })
+  )
+  const report = {
+    title: "Report",
+    blocks: [
+      { kind: "htmlReport" as const, title: "Q3", artifactId: reportId },
+    ],
+  }
+  const reportPage = await call("saveDraft", { definition: report })
+  expect(reportPage).toMatchObject({ status: 200 })
+  expect(
+    await call("get", { pageId: reportPage.body.pageId, revision: 1 }, reader)
+  ).toMatchObject({
+    status: 200,
+    body: { version: { definition: report } },
+  })
 }, 30_000)
