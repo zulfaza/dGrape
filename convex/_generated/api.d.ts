@@ -38,6 +38,7 @@ import type * as lib_r2 from "../lib/r2.js";
 import type * as lib_recipeDomain from "../lib/recipeDomain.js";
 import type * as lib_recipeSchedule from "../lib/recipeSchedule.js";
 import type * as lib_recipeState from "../lib/recipeState.js";
+import type * as lib_recipeTransport from "../lib/recipeTransport.js";
 import type * as lib_recordPublication from "../lib/recordPublication.js";
 import type * as lib_recordQuery from "../lib/recordQuery.js";
 import type * as lib_records from "../lib/records.js";
@@ -93,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   "lib/recipeDomain": typeof lib_recipeDomain;
   "lib/recipeSchedule": typeof lib_recipeSchedule;
   "lib/recipeState": typeof lib_recipeState;
+  "lib/recipeTransport": typeof lib_recipeTransport;
   "lib/recordPublication": typeof lib_recordPublication;
   "lib/recordQuery": typeof lib_recordQuery;
   "lib/records": typeof lib_records;

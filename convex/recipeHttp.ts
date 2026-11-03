@@ -1,3 +1,5 @@
+import { Result, Schema } from "effect"
+import { RecipeRequest } from "./lib/recipeTransport"
 import { httpRouter } from "convex/server"
 import { httpAction } from "./_generated/server"
 import { internal } from "./_generated/api"
@@ -44,8 +46,10 @@ export function registerRecipeRoutes(router: ReturnType<typeof httpRouter>) {
         "Cache-Control": "no-store",
       }
       try {
-        const body: unknown = JSON.parse(text || "{}")
-        if (!body || typeof body !== "object" || Array.isArray(body))
+        const decoded = Schema.decodeUnknownResult(RecipeRequest)(
+          JSON.parse(text || "{}")
+        )
+        if (Result.isFailure(decoded))
           return new Response("Invalid request", { status: 400 })
         if (operation === "dispatch")
           return new Response(
@@ -61,14 +65,8 @@ export function registerRecipeRoutes(router: ReturnType<typeof httpRouter>) {
             ),
             { headers }
           )
-        if (
-          !("runId" in body) ||
-          typeof body.runId !== "string" ||
-          !("epoch" in body) ||
-          typeof body.epoch !== "number" ||
-          !Number.isSafeInteger(body.epoch)
-        )
-          return new Response("Invalid run", { status: 400 })
+        const body = decoded.success
+        if (body === null) return new Response("Invalid run", { status: 400 })
         const runId = await ctx.runQuery(internal.recipeExecution.resolveRun, {
           id: body.runId,
         })
@@ -95,12 +93,7 @@ export function registerRecipeRoutes(router: ReturnType<typeof httpRouter>) {
           await ctx.runMutation(internal.recipeExecution.finishFailed, args)
           return new Response("null", { headers })
         }
-        if (
-          operation === "step" &&
-          "step" in body &&
-          typeof body.step === "number" &&
-          Number.isSafeInteger(body.step)
-        ) {
+        if (operation === "step" && "step" in body) {
           await ctx.runAction(internal.recipeRunner.execute, {
             ...args,
             step: body.step,

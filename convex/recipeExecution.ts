@@ -1,3 +1,4 @@
+import { Result, Schema } from "effect"
 import { v, type Infer } from "convex/values"
 import { internalMutation, internalQuery } from "./_generated/server"
 import { recordValuesValidator } from "./lib/collectionDomain"
@@ -10,6 +11,8 @@ import {
   stageSnapshotChunk,
   publishSnapshot,
 } from "./lib/recordPublication"
+
+const SourceIdentity = Schema.Union([Schema.String, Schema.Number])
 
 export const executionArgs = {
   runId: v.id("recipeRuns"),
@@ -102,25 +105,28 @@ export const commit = internalMutation({
         if (args.rows.length > 100)
           throw new Error("Upsert output permits at most 100 rows")
         for (const row of args.rows) {
-          const key = Object.hasOwn(row, step.identityField)
-            ? row[step.identityField]
-            : undefined
-          if (typeof key !== "string" && typeof key !== "number")
+          const identityKey = Schema.decodeUnknownResult(SourceIdentity)(
+            Object.hasOwn(row, step.identityField)
+              ? row[step.identityField]
+              : undefined
+          )
+          if (Result.isFailure(identityKey))
             throw new Error("Source identity must be a string or number")
+          const key = String(identityKey.success)
           const identity = await ctx.db
             .query("recordIdentities")
             .withIndex("by_collectionId_and_source_and_key", (q) =>
               q
                 .eq("collectionId", collection._id)
                 .eq("source", step.source)
-                .eq("key", String(key))
+                .eq("key", key)
             )
             .unique()
           const record = identity ? await ctx.db.get(identity.recordId) : null
           await upsertSourceRecord(ctx, {
             collection,
             source: step.source,
-            key: String(key),
+            key,
             expectedRevision: record?.revision ?? null,
             values: row,
           })
@@ -183,11 +189,14 @@ export const commit = internalMutation({
     })
     await ctx.db.patch(attempt._id, { state: "succeeded", finishedAt: now })
     const finished = args.step === version.recipe.steps.length - 1
-    await ctx.db.patch(run._id, {
+    const progress = {
       nextStep: args.step + 1,
       leaseUntil: now + 120000,
-      ...(finished ? { state: "succeeded", finishedAt: now } : {}),
-    })
+    }
+    await ctx.db.patch(
+      run._id,
+      finished ? { ...progress, state: "succeeded", finishedAt: now } : progress
+    )
     return null
   },
 })

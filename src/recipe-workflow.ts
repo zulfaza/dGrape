@@ -1,4 +1,11 @@
 /// <reference types="@cloudflare/workers-types" />
+import { Schema } from "effect"
+import {
+  RecipeOperations,
+  type RecipeBody,
+  type RecipeOperation,
+  type RunnerClaims,
+} from "../convex/lib/recipeTransport"
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,
@@ -10,11 +17,11 @@ export interface RecipeEnv {
   RECIPE_DISPATCH_TOKEN: string
   RECIPE_WORKFLOW: Workflow<{ runId: string; epoch: number }>
 }
-async function bridge(
+async function bridge<A>(
   env: RecipeEnv,
-  operation: string,
-  body: object
-): Promise<unknown> {
+  operation: RecipeOperation<A>,
+  body: RecipeBody
+): Promise<A> {
   const url = new URL(env.RECIPE_CONVEX_SITE_URL)
   if (
     url.protocol !== "https:" &&
@@ -24,58 +31,47 @@ async function bridge(
     )
   )
     throw new Error("Invalid recipe backend")
-  const response = await fetch(new URL(`/internal/recipes/${operation}`, url), {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.RECIPE_DISPATCH_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(90000),
-  })
-  if (!response.ok) throw new Error("Recipe operation failed")
-  return response.json()
-}
-function claims(
-  value: unknown
-): { runId: string; epoch: number; timedOut: boolean }[] {
-  if (!Array.isArray(value)) throw new Error("Invalid runner response")
-  return value.map((item: unknown) => {
-    if (
-      !item ||
-      typeof item !== "object" ||
-      !("epoch" in item) ||
-      typeof item.epoch !== "number"
-    )
-      throw new Error("Invalid runner claim")
-    const runId = "runId" in item ? item.runId : "_id" in item ? item._id : null
-    if (typeof runId !== "string") throw new Error("Invalid runner claim")
-    return {
-      runId,
-      epoch: item.epoch,
-      timedOut: "timedOut" in item && item.timedOut === true,
+  const response = await fetch(
+    new URL(`/internal/recipes/${operation.path}`, url),
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.RECIPE_DISPATCH_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(90000),
     }
-  })
+  )
+  if (!response.ok) throw new Error("Recipe operation failed")
+  return Schema.decodeUnknownSync(operation.response)(await response.json())
+}
+function claims(value: RunnerClaims) {
+  return value.map((item) => ({
+    runId: "_id" in item ? item._id : item.runId,
+    epoch: item.epoch,
+    timedOut: item.timedOut === true,
+  }))
 }
 export function workflowId(run: { runId: string; epoch: number }) {
   return `recipe-${run.runId}-${run.epoch}`
 }
 /** One dispatcher owns both lease repair and scheduled/manual delivery. */
 export async function dispatchRecipes(env: RecipeEnv) {
-  for (const run of claims(await bridge(env, "reconcile", {}))) {
+  for (const run of claims(await bridge(env, RecipeOperations.reconcile, {}))) {
     try {
       const instance = await env.RECIPE_WORKFLOW.get(workflowId(run))
       const status = await instance.status()
       if (run.timedOut) {
         await instance.terminate()
-        await bridge(env, "fail", run)
+        await bridge(env, RecipeOperations.fail, run)
       } else if (["errored", "terminated", "complete"].includes(status.status))
-        await bridge(env, "fail", run)
+        await bridge(env, RecipeOperations.fail, run)
     } catch {
-      if (run.timedOut) await bridge(env, "fail", run)
+      if (run.timedOut) await bridge(env, RecipeOperations.fail, run)
     }
   }
-  for (const run of claims(await bridge(env, "dispatch", {}))) {
+  for (const run of claims(await bridge(env, RecipeOperations.dispatch, {}))) {
     const id = workflowId(run)
     try {
       await env.RECIPE_WORKFLOW.create({
@@ -105,29 +101,9 @@ export class RecipeWorkflow extends WorkflowEntrypoint<
       const plan = await step.do(
         "begin",
         { retries: { limit: 2, delay: "2 seconds" }, timeout: "30 seconds" },
-        async () => {
-          const value = await bridge(this.env, "begin", args)
-          if (value === null) return null
-          if (
-            typeof value !== "object" ||
-            !("steps" in value) ||
-            typeof value.steps !== "number" ||
-            !("attempts" in value) ||
-            typeof value.attempts !== "number"
-          )
-            throw new Error("Invalid runner plan")
-          return { steps: value.steps, attempts: value.attempts }
-        }
+        async () => bridge(this.env, RecipeOperations.begin, args)
       )
       if (plan === null) return
-      if (
-        typeof plan !== "object" ||
-        !("steps" in plan) ||
-        typeof plan.steps !== "number" ||
-        !("attempts" in plan) ||
-        typeof plan.attempts !== "number"
-      )
-        throw new Error("Invalid runner plan")
       for (let index = 0; index < plan.steps; index++) {
         await step.do(
           `step-${index}`,
@@ -140,14 +116,17 @@ export class RecipeWorkflow extends WorkflowEntrypoint<
             timeout: "90 seconds",
           },
           async () => {
-            await bridge(this.env, "step", { ...args, step: index })
+            await bridge(this.env, RecipeOperations.step, {
+              ...args,
+              step: index,
+            })
             return null
           }
         )
       }
     } catch {
       await step.do("record-failure", async () => {
-        await bridge(this.env, "fail", args)
+        await bridge(this.env, RecipeOperations.fail, args)
         return null
       })
       throw new Error("Recipe run failed")
