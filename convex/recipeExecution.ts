@@ -1,5 +1,6 @@
 import { v, type Infer } from "convex/values"
 import { internalMutation, internalQuery } from "./_generated/server"
+import { artifactBudgetProblem, changeArtifactUsage } from "./lib/artifactUsage"
 import { recordValuesValidator } from "./lib/collectionDomain"
 import {
   recipeValidator,
@@ -164,14 +165,22 @@ export const commit = internalMutation({
       const expected = `workspaces/${run.workspaceId}/recipes/${run._id}/${args.epoch}/${args.step}/${args.attempt}`
       if (args.artifactKey !== expected)
         throw new Error("Artifact upload is missing")
-      await ctx.db.insert("artifacts", {
+      const size = new TextEncoder().encode(
+        JSON.stringify(args.rows)
+      ).byteLength
+      const problem = await artifactBudgetProblem(ctx, run.workspaceId, size)
+      if (problem) throw new Error(problem)
+      const artifactId = await ctx.db.insert("artifacts", {
         workspaceId: run.workspaceId,
         key: expected,
         name: step.name,
         contentType: "application/json",
-        size: new TextEncoder().encode(JSON.stringify(args.rows)).byteLength,
+        size,
         createdBy: { kind: "user", userId: version.createdBy },
       })
+      const artifact = await ctx.db.get(artifactId)
+      if (!artifact) throw new Error("Artifact missing")
+      await changeArtifactUsage(ctx, artifact, 1)
     }
     await ctx.db.insert("recipeCheckpoints", {
       runId: run._id,

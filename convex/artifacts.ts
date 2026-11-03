@@ -23,13 +23,13 @@ import {
 } from "./_generated/server"
 import {
   DOWNLOAD_URL_SECONDS,
-  MAX_ARTIFACT_BYTES,
   UPLOAD_WINDOW_MS,
   artifactCreatorValidator,
   artifactValidator,
   checkArtifactName,
   newObjectKey,
 } from "./lib/artifactDomain"
+import { artifactBudgetProblem, changeArtifactUsage } from "./lib/artifactUsage"
 import { requireMembership } from "./lib/auth"
 import { r2 } from "./lib/r2"
 
@@ -63,6 +63,9 @@ async function createPendingUpload(
 ): Promise<Infer<typeof createUploadResult>> {
   const name = checkArtifactName(args.name)
   if (!name.ok) return { status: "invalid", message: name.message }
+  // The size is not known yet: refuse only when no byte is left.
+  const full = await artifactBudgetProblem(ctx, args.workspaceId, 1)
+  if (full) return { status: "invalid", message: full }
   const { key, url } = await r2.generateUploadUrl(
     newObjectKey(args.workspaceId)
   )
@@ -99,18 +102,32 @@ export const getUpload = internalQuery({
   },
 })
 
-/** Moves a pending upload to the artifacts table. */
+const insertResult = v.union(
+  v.object({ status: v.literal("missing") }),
+  v.object({ status: v.literal("overBudget"), message: v.string() }),
+  v.object({ status: v.literal("inserted"), artifactId: v.id("artifacts") })
+)
+
+/**
+ * Moves a pending upload to the artifacts table, or removes it when the file
+ * is over the workspace budget. The caller then deletes the object.
+ */
 export const insertArtifact = internalMutation({
   args: { key: v.string(), contentType: v.string(), size: v.number() },
-  returns: v.union(v.null(), v.id("artifacts")),
-  handler: async (ctx, { key, contentType, size }) => {
+  returns: insertResult,
+  handler: async (
+    ctx,
+    { key, contentType, size }
+  ): Promise<Infer<typeof insertResult>> => {
     const upload = await ctx.db
       .query("artifactUploads")
       .withIndex("by_key", (q) => q.eq("key", key))
       .unique()
-    if (!upload) return null
+    if (!upload) return { status: "missing" }
     await ctx.db.delete(upload._id)
-    return ctx.db.insert("artifacts", {
+    const problem = await artifactBudgetProblem(ctx, upload.workspaceId, size)
+    if (problem) return { status: "overBudget", message: problem }
+    const artifactId = await ctx.db.insert("artifacts", {
       workspaceId: upload.workspaceId,
       key,
       name: upload.name,
@@ -118,6 +135,10 @@ export const insertArtifact = internalMutation({
       size,
       createdBy: upload.createdBy,
     })
+    const artifact = await ctx.db.get(artifactId)
+    if (!artifact) throw new Error("Artifact missing")
+    await changeArtifactUsage(ctx, artifact, 1)
+    return { status: "inserted", artifactId }
   },
 })
 
@@ -141,7 +162,7 @@ const completeResult = v.union(
 
 /**
  * Reads the uploaded object's size and type from R2 and records the
- * artifact. A file over the size limit is deleted.
+ * artifact. A file over the workspace budget is deleted.
  */
 async function finishUpload(
   ctx: ActionCtx,
@@ -161,22 +182,18 @@ async function finishUpload(
   const metadata = await r2.getMetadata(ctx, key)
   if (!metadata || metadata.size === undefined)
     return { status: "invalid", message: "Upload the file to the URL first." }
-  if (metadata.size > MAX_ARTIFACT_BYTES) {
-    await r2.deleteObject(ctx, key)
-    await ctx.runMutation(internal.artifacts.deleteUpload, { key })
-    return {
-      status: "invalid",
-      message: `A file can be at most ${MAX_ARTIFACT_BYTES / 1024 / 1024} MB.`,
-    }
-  }
-  const artifactId = await ctx.runMutation(internal.artifacts.insertArtifact, {
+  const result = await ctx.runMutation(internal.artifacts.insertArtifact, {
     key,
     contentType: metadata.contentType ?? "application/octet-stream",
     size: metadata.size,
   })
-  if (!artifactId)
+  if (result.status === "missing")
     return { status: "invalid", message: "The upload does not exist." }
-  return { status: "completed", artifactId }
+  if (result.status === "overBudget") {
+    await r2.deleteObject(ctx, key)
+    return { status: "invalid", message: result.message }
+  }
+  return { status: "completed", artifactId: result.artifactId }
 }
 
 export const completeUploadForWorkspace = internalAction({
@@ -299,6 +316,7 @@ export const remove = mutation({
     if (!artifact) throw new Error("Artifact not found")
     await requireMembership(ctx, artifact.workspaceId)
     await r2.deleteObject(ctx, artifact.key)
+    await changeArtifactUsage(ctx, artifact, -1)
     await ctx.db.delete(artifactId)
     return null
   },
