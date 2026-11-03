@@ -88,6 +88,14 @@ const DASHBOARD_PAGE_TITLES: Record<string, string> = {
   "/dashboard/workspaces": "Workspaces",
 }
 
+const WORKSPACE_SECTION_TITLES: Record<string, string> = {
+  pages: "Pages",
+  data: "Data",
+  jobs: "Jobs",
+  connections: "Connections",
+  artifacts: "Artifacts",
+}
+
 type Crumb = { label: string; href: string }
 
 function buildBreadcrumbs(pathname: string): Crumb[] {
@@ -95,10 +103,17 @@ function buildBreadcrumbs(pathname: string): Crumb[] {
   if (pathname !== "/dashboard" && DASHBOARD_PAGE_TITLES[pathname]) {
     crumbs.push({ label: DASHBOARD_PAGE_TITLES[pathname], href: pathname })
   } else if (pathname.startsWith("/dashboard/workspaces/")) {
+    const [workspaceId, section] = pathname
+      .slice("/dashboard/workspaces/".length)
+      .split("/")
+    const workspaceHref = `/dashboard/workspaces/${workspaceId}`
     crumbs.push(
       { label: "Workspaces", href: "/dashboard/workspaces" },
-      { label: "Workspace", href: pathname }
+      { label: "Workspace", href: workspaceHref }
     )
+    const sectionTitle = section && WORKSPACE_SECTION_TITLES[section]
+    if (sectionTitle)
+      crumbs.push({ label: sectionTitle, href: `${workspaceHref}/${section}` })
   }
   return crumbs
 }
