@@ -1,0 +1,133 @@
+/// <reference types="vite/client" />
+import { convexTest } from "convex-test"
+import { expect, test } from "vitest"
+import schema from "./schema"
+import { api } from "./_generated/api"
+import { insertRecord, replaceRecordValues, deleteRecord } from "./lib/records"
+const modules = import.meta.glob("./**/*.ts")
+
+test("counts rebuild after corrections and deletes and enforce owner access", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const other = t.withIdentity({ tokenIdentifier: "other" })
+  const collectionId = await t.run(async (ctx) => {
+    const workspaceId = await ctx.db.insert("workspaces", { name: "Reports" })
+    await ctx.db.insert("workspaceMembers", {
+      workspaceId,
+      userId: "owner",
+      role: "owner",
+    })
+    return ctx.db.insert("collections", {
+      workspaceId,
+      name: "Rows",
+      definition: {
+        version: 1,
+        fields: [{ id: "name", label: "Name", type: "text", indexed: true }],
+      },
+    })
+  })
+  const saved = await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "Count",
+    query: { fieldId: "name", order: "asc" },
+  })
+  const args = { queryId: saved.queryId, expectedRevision: 1 }
+  expect(await owner.query(api.reportCounts.read, args)).toEqual({
+    state: "pending",
+  })
+  await expect(other.mutation(api.reportCounts.rebuild, args)).rejects.toThrow(
+    "Workspace access denied"
+  )
+  await expect(other.query(api.reportCounts.read, args)).rejects.toThrow(
+    "Workspace access denied"
+  )
+  await owner.mutation(api.reportCounts.rebuild, args)
+  expect(await owner.query(api.reportCounts.read, args)).toMatchObject({
+    state: "complete",
+    count: 0,
+  })
+  const recordId = await t.run(async (ctx) => {
+    const collection = await ctx.db.get(collectionId)
+    if (!collection) throw new Error("Missing collection")
+    return insertRecord(ctx, collection, { name: "a" })
+  })
+  expect(await owner.query(api.reportCounts.read, args)).toMatchObject({
+    state: "stale",
+  })
+  await owner.mutation(api.reportCounts.rebuild, args)
+  expect(await owner.query(api.reportCounts.read, args)).toMatchObject({
+    state: "complete",
+    count: 1,
+  })
+  await t.run(async (ctx) => {
+    const collection = await ctx.db.get(collectionId)
+    const record = await ctx.db.get(recordId)
+    if (!collection || !record) throw new Error("Missing record")
+    await replaceRecordValues(ctx, collection, record, { name: "b" })
+  })
+  expect(await owner.query(api.reportCounts.read, args)).toMatchObject({
+    state: "stale",
+  })
+  await owner.mutation(api.reportCounts.rebuild, args)
+  await t.run((ctx) => deleteRecord(ctx, recordId))
+  expect(await owner.query(api.reportCounts.read, args)).toMatchObject({
+    state: "stale",
+  })
+  await owner.mutation(api.reportCounts.rebuild, args)
+  expect(await owner.query(api.reportCounts.read, args)).toMatchObject({
+    state: "complete",
+    count: 0,
+  })
+  await t.run(async (ctx) => {
+    const collection = await ctx.db.get(collectionId)
+    if (!collection) throw new Error("Missing collection")
+    for (let i = 0; i < 51; i++)
+      await insertRecord(ctx, collection, { name: String(i) })
+  })
+  await owner.mutation(api.reportCounts.rebuild, args)
+  expect(await owner.query(api.reportCounts.read, args)).toMatchObject({
+    state: "failed",
+  })
+})
+
+test("byte budget failures are stored", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const collectionId = await t.run(async (ctx) => {
+    const workspaceId = await ctx.db.insert("workspaces", { name: "Wide" })
+    await ctx.db.insert("workspaceMembers", {
+      workspaceId,
+      userId: "owner",
+      role: "owner",
+    })
+    const id = await ctx.db.insert("collections", {
+      workspaceId,
+      name: "Wide",
+      definition: {
+        version: 1,
+        fields: [{ id: "name", label: "Name", type: "text", indexed: true }],
+      },
+    })
+    const collection = await ctx.db.get(id)
+    if (!collection) throw new Error("Missing collection")
+    for (let i = 0; i < 40; i++)
+      await insertRecord(ctx, collection, {
+        name: String(i),
+        a: "a".repeat(10000),
+        b: "b".repeat(10000),
+        c: "c".repeat(10000),
+      })
+    return id
+  })
+  const saved = await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "Wide",
+    query: { fieldId: "name", order: "asc" },
+  })
+  const args = { queryId: saved.queryId, expectedRevision: 1 }
+  await owner.mutation(api.reportCounts.rebuild, args)
+  expect(await owner.query(api.reportCounts.read, args)).toMatchObject({
+    state: "failed",
+    message: "Report exceeds the result byte budget",
+  })
+})

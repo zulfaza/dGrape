@@ -26,6 +26,7 @@ import type * as lib_artifactDomain from "../lib/artifactDomain.js";
 import type * as lib_artifactPreview from "../lib/artifactPreview.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_collectionDomain from "../lib/collectionDomain.js";
+import type * as lib_collectionTemplates from "../lib/collectionTemplates.js";
 import type * as lib_identityAssertion from "../lib/identityAssertion.js";
 import type * as lib_pageDomain from "../lib/pageDomain.js";
 import type * as lib_r2 from "../lib/r2.js";
@@ -38,6 +39,7 @@ import type * as lib_records from "../lib/records.js";
 import type * as lib_savedQueries from "../lib/savedQueries.js";
 import type * as pages from "../pages.js";
 import type * as recipes from "../recipes.js";
+import type * as reportCounts from "../reportCounts.js";
 import type * as savedQueries from "../savedQueries.js";
 import type * as workspaces from "../workspaces.js";
 
@@ -66,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   "lib/artifactPreview": typeof lib_artifactPreview;
   "lib/auth": typeof lib_auth;
   "lib/collectionDomain": typeof lib_collectionDomain;
+  "lib/collectionTemplates": typeof lib_collectionTemplates;
   "lib/identityAssertion": typeof lib_identityAssertion;
   "lib/pageDomain": typeof lib_pageDomain;
   "lib/r2": typeof lib_r2;
@@ -78,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   "lib/savedQueries": typeof lib_savedQueries;
   pages: typeof pages;
   recipes: typeof recipes;
+  reportCounts: typeof reportCounts;
   savedQueries: typeof savedQueries;
   workspaces: typeof workspaces;
 }>;
