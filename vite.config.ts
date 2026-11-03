@@ -11,7 +11,7 @@ const config = defineConfig({
     !process.env.VITEST && cloudflare({ viteEnvironment: { name: "ssr" } }),
     devtools(),
     tailwindcss(),
-    tanstackStart(),
+    tanstackStart({ server: { entry: "./worker.ts" } }),
     viteReact(),
   ],
 })

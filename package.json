@@ -14,7 +14,7 @@
     "lint:fix": "oxlint --fix",
     "format": "oxfmt --write \"**/*.{ts,tsx,js,jsx,json,jsonc}\"",
     "check": "oxfmt --check \"**/*.{ts,tsx,js,jsx,json,jsonc}\"",
-    "typecheck": "tsrs --noEmit",
+    "typecheck": "tsrs --noEmit && tsrs --noEmit -p tsconfig.worker.json",
     "typecheck:backend": "tsrs --noEmit -p convex/tsconfig.json",
     "cf:deploy": "cf deploy",
     "typecheck:design-system": "tsrs --noEmit -p design-system/tsconfig.json",
@@ -61,6 +61,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "2.0.0-beta.v.9",
+    "@cloudflare/workers-types": "^5.20261102.1",
     "@edge-runtime/vm": "^5.0.0",
     "@oxlint/plugins": "1.90.0",
     "@shadcn/lint": "0.2.5",

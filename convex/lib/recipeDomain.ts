@@ -37,6 +37,7 @@ export const recipeStepValidator = v.union(
     source: v.string(),
     identityField: v.string(),
   }),
+  v.object({ kind: v.literal("snapshot"), collectionId: v.string() }),
   v.object({
     kind: v.literal("artifact"),
     name: v.string(),
@@ -112,6 +113,10 @@ export function validateRecipe(recipe: Recipe): void {
         if (!step.collectionId || !step.source || step.source.length > 100)
           throw new Error("Invalid upsert target")
         field(step.identityField)
+        output = true
+        break
+      case "snapshot":
+        if (!step.collectionId) throw new Error("Invalid snapshot target")
         output = true
         break
       case "artifact":
