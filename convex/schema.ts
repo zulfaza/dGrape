@@ -15,6 +15,7 @@ import {
   recordValueValidator,
 } from "./lib/collectionDomain"
 
+import { artifactUsageValidator } from "./lib/artifactUsage"
 import { budgetOverridesValidator } from "./lib/budgets"
 import { recordCountValidator } from "./lib/recordCounts"
 import { auditEventFields } from "./lib/auditEvents"
@@ -99,6 +100,11 @@ export default defineSchema({
     /** Budgets the owner changed; see convex/lib/budgets.ts. */
     budgets: v.optional(budgetOverridesValidator),
   }),
+  /** One row per workspace; see convex/lib/artifactUsage.ts. */
+  workspaceUsage: defineTable({
+    workspaceId: v.id("workspaces"),
+    artifacts: artifactUsageValidator,
+  }).index("by_workspaceId", ["workspaceId"]),
   workspaceMembers: defineTable({
     workspaceId: v.id("workspaces"),
     userId: v.string(),
