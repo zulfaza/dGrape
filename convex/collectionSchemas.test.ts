@@ -249,6 +249,7 @@ test("agent collection creation and optional additions also preserve versions", 
   ).toHaveLength(2)
 })
 
+// The first HTTP call loads the router, which can be slow on a busy runner.
 test("agent discovery reports capabilities by scope and describes one collection", async () => {
   const { t, collectionId, workspaceId } = await fixture()
   const { digestToken } = await import("./agentAccess")
@@ -289,4 +290,4 @@ test("agent discovery reports capabilities by scope and describes one collection
     (await get("/agent/collections/describe?collectionId=missing")).status
   ).toBe(403)
   expect((await get("/agent/collections/describe")).status).toBe(400)
-})
+}, 20_000)
