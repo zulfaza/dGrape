@@ -19,6 +19,7 @@ import type { CollectionTemplate } from "./lib/collectionTemplates"
 import { checkQuery } from "./lib/recordQuery"
 import { parseCreateCollection } from "./lib/agentRequests"
 import { Field } from "../src/mcp/agent-api"
+import * as Queries from "./lib/agentQueryTransport"
 import { stageSnapshotChunk, upsertSourceRecord } from "./lib/recordPublication"
 const modules = import.meta.glob("./**/*.ts")
 const fields: CollectionField[] = [
@@ -87,8 +88,10 @@ test("timestamps are safe integer milliseconds and dates are real YYYY-MM-DD dat
   expect(
     parseCreateCollection({ name: "Dated", fields: dated })?.fields
   ).toEqual(dated)
-  for (const field of dated)
+  for (const field of dated) {
     expect(Schema.decodeUnknownSync(Field)(field)).toEqual(field)
+    expect(Schema.decodeUnknownSync(Queries.Field)(field)).toEqual(field)
+  }
   for (const at of [0, -1, Date.UTC(2026, 10, 4), 8_640_000_000_000_000])
     expect(checkRecordValues(dated, { at, day: "2024-02-29" }).ok).toBe(true)
   expect(checkRecordValues(dated, { at: 0, day: "0004-02-29" }).ok).toBe(true)

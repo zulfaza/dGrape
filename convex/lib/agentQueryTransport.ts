@@ -15,10 +15,19 @@ const Bound = Schema.Struct({
   value: Value,
   inclusive: Schema.optionalKey(Schema.Boolean),
 })
-const Field = Schema.Struct({
+/** A field of a saved query result; collectionDomain.ts has its rules. */
+export const Field = Schema.Struct({
   id: Schema.String,
   label: Schema.String,
-  type: Schema.Literals(["text", "number", "boolean", "integer", "currency"]),
+  type: Schema.Literals([
+    "text",
+    "number",
+    "boolean",
+    "integer",
+    "currency",
+    "timestamp",
+    "date",
+  ]),
   optional: Schema.optionalKey(Schema.Literal(true)),
   indexed: Schema.optionalKey(Schema.Literal(true)),
 })
