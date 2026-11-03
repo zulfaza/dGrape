@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
+import { recordQueryValidator } from "./lib/recordQuery"
 import { agentScopeValidator } from "./lib/agentScope"
 import { artifactCreatorValidator } from "./lib/artifactDomain"
 import {
@@ -89,6 +90,19 @@ export default defineSchema({
    * and sorted by that field with a bounded index range. convex/lib/records.ts
    * keeps these rows in step with every record write.
    */
+  queryDefinitions: defineTable({
+    workspaceId: v.id("workspaces"),
+    collectionId: v.id("collections"),
+    name: v.string(),
+    revision: v.number(),
+  }).index("by_workspaceId", ["workspaceId"]),
+  queryDefinitionVersions: defineTable({
+    queryId: v.id("queryDefinitions"),
+    revision: v.number(),
+    schemaVersion: v.number(),
+    resultSchema: collectionDefinitionValidator,
+    query: recordQueryValidator,
+  }).index("by_queryId_and_revision", ["queryId", "revision"]),
   recordIdentities: defineTable({
     collectionId: v.id("collections"),
     source: v.string(),
