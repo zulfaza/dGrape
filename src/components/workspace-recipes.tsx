@@ -835,8 +835,15 @@ function RunRow({
     versionId: item.versionId,
   })
   const cancel = useMutation(api.recipes.cancel)
+  const retry = useMutation(api.recipes.retry)
   const { busy, message, perform } = useOperation()
+  // One key per row: a repeated click after a lost response returns the same retry run.
+  const [retryIntent, setRetryIntent] = useState<Intent>(() => ({
+    key: crypto.randomUUID(),
+    runId: null,
+  }))
   const active = item.state === "pending" || item.state === "running"
+  const retryable = item.state === "failed" || item.state === "cancelled"
   return (
     <li className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -861,12 +868,44 @@ function RunRow({
         >
           {item.cancelRequested ? "Cancel requested" : "Cancel run"}
         </Button>
+        {retryable && (
+          <Button
+            variant="outline"
+            disabled={
+              busy || retryIntent.runId !== null || permissions?.canRun !== true
+            }
+            onClick={() =>
+              void perform(async () => {
+                const runId = await retry({
+                  runId: item._id,
+                  idempotencyKey: retryIntent.key,
+                })
+                setRetryIntent({ key: retryIntent.key, runId })
+              })
+            }
+          >
+            {retryIntent.runId ? "Retried" : "Retry run"}
+          </Button>
+        )}
       </div>
       <p>
         Version: <code>{item.versionId}</code> ·{" "}
-        {item.scheduleId ? "Scheduled" : "Manual"} ·{" "}
-        {new Date(item._creationTime).toISOString()} (UTC)
+        {item.retryOf ? (
+          <>
+            Retry of <code>{item.retryOf}</code>
+          </>
+        ) : item.scheduleId ? (
+          "Scheduled"
+        ) : (
+          "Manual"
+        )}{" "}
+        · {new Date(item._creationTime).toISOString()} (UTC)
       </p>
+      {retryIntent.runId && (
+        <p>
+          Retry run: <code>{retryIntent.runId}</code>
+        </p>
+      )}
       <Feedback message={message} />
     </li>
   )
