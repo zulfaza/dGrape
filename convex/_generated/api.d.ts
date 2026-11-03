@@ -37,6 +37,7 @@ import type * as lib_artifactBindingDomain from "../lib/artifactBindingDomain.js
 import type * as lib_artifactDomain from "../lib/artifactDomain.js";
 import type * as lib_artifactPreview from "../lib/artifactPreview.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_budgets from "../lib/budgets.js";
 import type * as lib_collectionDomain from "../lib/collectionDomain.js";
 import type * as lib_collectionSchemas from "../lib/collectionSchemas.js";
 import type * as lib_collectionTemplates from "../lib/collectionTemplates.js";
@@ -64,6 +65,7 @@ import type * as savedQueries from "../savedQueries.js";
 import type * as secretSettings from "../secretSettings.js";
 import type * as secretSettingsLookup from "../secretSettingsLookup.js";
 import type * as secrets from "../secrets.js";
+import type * as workspaceBudgets from "../workspaceBudgets.js";
 import type * as workspaces from "../workspaces.js";
 
 import type {
@@ -102,6 +104,7 @@ declare const fullApi: ApiFromModules<{
   "lib/artifactDomain": typeof lib_artifactDomain;
   "lib/artifactPreview": typeof lib_artifactPreview;
   "lib/auth": typeof lib_auth;
+  "lib/budgets": typeof lib_budgets;
   "lib/collectionDomain": typeof lib_collectionDomain;
   "lib/collectionSchemas": typeof lib_collectionSchemas;
   "lib/collectionTemplates": typeof lib_collectionTemplates;
@@ -129,6 +132,7 @@ declare const fullApi: ApiFromModules<{
   secretSettings: typeof secretSettings;
   secretSettingsLookup: typeof secretSettingsLookup;
   secrets: typeof secrets;
+  workspaceBudgets: typeof workspaceBudgets;
   workspaces: typeof workspaces;
 }>;
 

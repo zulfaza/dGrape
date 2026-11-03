@@ -15,6 +15,7 @@ import {
   recordValueValidator,
 } from "./lib/collectionDomain"
 
+import { budgetOverridesValidator } from "./lib/budgets"
 import { recipeTables } from "./lib/recipeState"
 import { secretFields, connectionFields } from "./lib/secretDomain"
 
@@ -86,7 +87,11 @@ export default defineSchema({
     size: v.number(),
     createdBy: artifactCreatorValidator,
   }).index("by_workspaceId", ["workspaceId"]),
-  workspaces: defineTable({ name: v.string() }),
+  workspaces: defineTable({
+    name: v.string(),
+    /** Budgets the owner changed; see convex/lib/budgets.ts. */
+    budgets: v.optional(budgetOverridesValidator),
+  }),
   workspaceMembers: defineTable({
     workspaceId: v.id("workspaces"),
     userId: v.string(),
