@@ -11,6 +11,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import type { QueryCtx } from "./_generated/server"
 import { mutation, query } from "./_generated/server"
 import { requireMembership, requireUserId } from "./lib/auth"
+import { workspaceBudgets } from "./lib/budgets"
 import {
   addField as addFieldToDefinition,
   checkCollection,
@@ -115,7 +116,12 @@ export const createCollection = mutation({
     const workspaceId = ctx.db.normalizeId("workspaces", rawId)
     if (!workspaceId) throw new Error("Workspace access denied")
     await requireMembership(ctx, workspaceId)
-    const checked = checkCollection(name, fields)
+    const budgets = await workspaceBudgets(ctx, workspaceId)
+    const checked = checkCollection(
+      name,
+      fields,
+      budgets.indexedFieldsPerCollection
+    )
     if (!checked.ok) throw new Error(checked.message)
     return createVersionedCollection(ctx, {
       workspaceId,
@@ -286,7 +292,12 @@ export const addField = mutation({
   },
   handler: async (ctx, { collectionId, field }) => {
     const collection = await collectionForRecords(ctx, collectionId)
-    const definition = addFieldToDefinition(collection.definition, field)
+    const budgets = await workspaceBudgets(ctx, collection.workspaceId)
+    const definition = addFieldToDefinition(
+      collection.definition,
+      field,
+      budgets.indexedFieldsPerCollection
+    )
     if (!definition.ok) throw new Error(definition.message)
     await publishCompatibleSchema(ctx, collection, definition.value)
     return null
