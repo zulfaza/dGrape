@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
+import { WavingSloth } from "@/components/landing/waving-sloth"
 import { LayoutDashboard, FolderOpen, Plus } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Mascot, type MascotPose } from "@/components/mascot"
 import { cn } from "@/lib/utils"
 
 /**
@@ -290,11 +290,11 @@ const STEPS: ReadonlyArray<{
 
 /** A mock with the sloth standing beside it. */
 function MockWithSloth({
-  pose,
+  active,
   side,
   children,
 }: {
-  pose: MascotPose
+  active: boolean
   side: "left" | "right"
   children: ReactNode
 }) {
@@ -308,9 +308,8 @@ function MockWithSloth({
       )}
     >
       {children}
-      <Mascot
-        pose={pose}
-        size={192}
+      <WavingSloth
+        active={active}
         className={cn(
           "absolute top-0 right-2 h-auto w-28 sm:top-auto sm:bottom-0 sm:w-44",
           side === "left" ? "sm:right-auto sm:-left-4" : "sm:-right-4"
@@ -355,7 +354,7 @@ export function WorkspacesShowcase() {
   const current = useSequence(WORKSPACES.length, inView)
   return (
     <div ref={ref} className="w-full sm:w-[30rem]">
-      <MockWithSloth pose="wave" side="right">
+      <MockWithSloth active={inView} side="right">
         <WorkspacesMock step={current} />
       </MockWithSloth>
     </div>

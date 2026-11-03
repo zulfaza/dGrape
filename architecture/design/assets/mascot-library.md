@@ -155,6 +155,19 @@ Output: `public/brand/mascot/lying-frames/sprite.webp`, six 768×384 frames in o
 The animated hero sloth did not look smooth: drawn frames crossfade with a slight body wobble, and several motions overlapped. The user kept the hero with a simple animation and moved the other landing sections to a PostHog-like direction (product first, few still mascots). The hero now shows `lying.png` as one still drawing that settles once and breathes slowly. The sprite (`public/brand/mascot/lying-frames/`) and `scripts/build-sloth-sprite.py` were removed; restore them from git history if needed.
 
 
+### Closing sloth wave — 2026-11-03
+
+Output: `public/brand/mascot/wave-layers.png` (1774×887, transparent PNG).
+Tool: built-in imagegen. Reference: `public/brand/mascot/wave.png`.
+
+The two square cells hold the body and raised arm. CSS turns the arm from −12° to 18° over 4.8 seconds, with a rest between waves. It pauses outside the viewport. Reduced motion uses the original drawing.
+
+Exact prompt:
+
+```text
+Use case: identity-preserve. Asset type: transparent two-cell sprite atlas for a smooth waving animation. Edit target: attached DFE standing sloth. Produce one wide 2:1 image with TWO equal SQUARE cells side by side, no border. Each cell has the exact same 512x512 coordinate canvas as the reference. LEFT CELL: keep the complete standing sloth exactly like the reference, face, hair, body, belly, feet, right lowered arm, colors and outline unchanged; remove ONLY the raised left arm and hand at x60..195 y160..285. Leave a natural short rounded shoulder root at x175 y255 for the separate arm to overlap. RIGHT CELL: ONLY that removed raised left arm and hand with its cream claws, at its ORIGINAL coordinate position x60..195 y160..285 inside this square cell. Keep its exact scale, bend and angle; add a slightly longer rounded brown root at x175 y255 for overlap. No sloth body or face in the right cell. Keep the rest of each cell fully transparent. Preserve the reference's gentle smile, large head, warm brown shapes, pale cream face and belly, dark brown eye patches and outlines. Match its drawing exactly. No labels, text, grid, checkerboard, scenery, shadows, motion lines, or extra limbs. Do not center or enlarge the detached arm inside its cell.
+```
+
 ### Lying limb sprites — 2026-11-03
 
 Output: `public/brand/mascot/lying-layers.png` (1774×887, transparent PNG).
