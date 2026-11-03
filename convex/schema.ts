@@ -106,6 +106,13 @@ export default defineSchema({
     name: v.string(),
     definition: collectionDefinitionValidator,
   }).index("by_workspace", ["workspaceId"]),
+  collectionSchemaVersions: defineTable({
+    collectionId: v.id("collections"),
+    definition: collectionDefinitionValidator,
+  }).index("by_collectionId_and_version", [
+    "collectionId",
+    "definition.version",
+  ]),
   collectionRecords: defineTable({
     collectionId: v.id("collections"),
     /** The collection's definition version when this record was last written. */

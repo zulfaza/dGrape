@@ -1,3 +1,7 @@
+import {
+  createVersionedCollection,
+  publishCompatibleSchema,
+} from "./lib/collectionSchemas"
 import { v, type Infer } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { internalMutation, type MutationCtx } from "./_generated/server"
@@ -80,7 +84,7 @@ export const createCollection = internalMutation({
     if (workspace.status !== "ok") return workspace
     const checked = checkCollection(name, fields)
     if (!checked.ok) return reject(checked.message)
-    const id = await ctx.db.insert("collections", {
+    const id = await createVersionedCollection(ctx, {
       workspaceId: workspace.workspaceId,
       name: checked.value.name,
       definition: { version: 1, fields: checked.value.fields },
@@ -112,7 +116,7 @@ export const addField = internalMutation({
     const { collection } = found
     const definition = addFieldToDefinition(collection.definition, field)
     if (!definition.ok) return reject(definition.message)
-    await ctx.db.patch(collection._id, { definition: definition.value })
+    await publishCompatibleSchema(ctx, collection, definition.value)
     return { status: "added", version: definition.value.version }
   },
 })
