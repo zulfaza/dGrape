@@ -1,10 +1,10 @@
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Match } from "effect"
-import { staticSnapshot } from "../lib/static-snapshot"
+import { HtmlSnapshotFrame, useArtifactPreview } from "./html-snapshot"
 import { previewKind } from "../../convex/lib/artifactPreview"
-import { useAction, useMutation } from "convex/react"
-import { useEffect, useState } from "react"
+import { useMutation } from "convex/react"
+import { useState } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import {
@@ -13,16 +13,6 @@ import {
   DialogDescription,
   DialogTitle,
 } from "./ui/dialog"
-
-type Preview =
-  | { status: "loading" }
-  | { status: "unavailable"; message: string }
-  | {
-      status: "ready"
-      text: string
-      capturedAt: number
-      kind: "text" | "json" | "html" | "raster"
-    }
 
 export function ArtifactPreview({
   artifactId,
@@ -41,28 +31,7 @@ export function ArtifactPreview({
   const [timestamp, setTimestamp] = useState("")
   const [timestampStatus, setTimestampStatus] = useState("")
   const [reload, setReload] = useState(0)
-  const getPreview = useAction(api.artifacts.getPreview)
-  const [preview, setPreview] = useState<Preview>({ status: "loading" })
-  useEffect(() => {
-    let active = true
-    setPreview({ status: "loading" })
-    void getPreview({ artifactId }).then(
-      (result) => {
-        if (active) setPreview(result)
-      },
-      () => {
-        if (active)
-          setPreview({
-            status: "unavailable",
-            message:
-              "You cannot preview this file. Check workspace access and try again.",
-          })
-      }
-    )
-    return () => {
-      active = false
-    }
-  }, [artifactId, getPreview, reload])
+  const preview = useArtifactPreview(artifactId, reload)
   return (
     <Dialog
       open
@@ -154,11 +123,9 @@ export function ArtifactPreview({
               </p>
               {Match.value(preview.kind).pipe(
                 Match.when("html", () => (
-                  <iframe
+                  <HtmlSnapshotFrame
+                    html={preview.text}
                     title={`${name} static snapshot`}
-                    sandbox=""
-                    referrerPolicy="no-referrer"
-                    srcDoc={staticSnapshot(preview.text)}
                     className="h-[60vh] w-full border"
                   />
                 )),

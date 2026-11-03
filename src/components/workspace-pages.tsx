@@ -1,5 +1,7 @@
 import { ArtifactPicker } from "./artifact-picker"
 import { ArtifactLink } from "./artifact-link"
+import { HtmlReportBlock } from "./html-snapshot"
+import { previewKind } from "../../convex/lib/artifactPreview"
 import { useConvex, useMutation, usePaginatedQuery } from "convex/react"
 import { useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
@@ -242,7 +244,7 @@ function WorkspacePagesEditor({
                 </Button>
               ))}
               <label>
-                File block title
+                File or HTML report block title
                 <Input
                   maxLength={100}
                   value={artifactTitle}
@@ -260,6 +262,25 @@ function WorkspacePagesEditor({
                       ...draft.definition.blocks,
                       {
                         kind: "artifact",
+                        title: artifactTitle.trim() || name.slice(0, 100),
+                        artifactId,
+                      },
+                    ],
+                  })
+                }
+              />
+              <ArtifactPicker
+                workspaceId={workspaceId}
+                label="Choose HTML report"
+                accepts={(contentType) => previewKind(contentType) === "html"}
+                disabled={pending || draft.definition.blocks.length >= 20}
+                choose={(artifactId, name) =>
+                  change({
+                    ...draft.definition,
+                    blocks: [
+                      ...draft.definition.blocks,
+                      {
+                        kind: "htmlReport",
                         title: artifactTitle.trim() || name.slice(0, 100),
                         artifactId,
                       },
@@ -318,6 +339,11 @@ function WorkspacePagesEditor({
                           {block.title}.
                         </p>
                       )
+                    ) : block.kind === "htmlReport" ? (
+                      <HtmlReportBlock
+                        artifactId={block.artifactId}
+                        title={block.title}
+                      />
                     ) : (
                       <section>
                         <h4>{block.title}</h4>

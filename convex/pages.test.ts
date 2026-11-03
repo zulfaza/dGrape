@@ -149,6 +149,38 @@ test("page boundaries refuse other workspaces, including artifact and query refe
       },
     })
   ).rejects.toThrow("Artifact is unavailable")
+  const htmlReport = (id: typeof artifactId) =>
+    owner.mutation(api.pages.save, {
+      workspaceId,
+      definition: {
+        title: "Report",
+        blocks: [{ kind: "htmlReport", title: "Report", artifactId: id }],
+      },
+    })
+  await expect(htmlReport(artifactId)).rejects.toThrow(
+    "Artifact is unavailable"
+  )
+  const file = (contentType: string) =>
+    t.run((ctx) =>
+      ctx.db.insert("artifacts", {
+        workspaceId,
+        key: contentType,
+        name: "report",
+        size: 5,
+        contentType,
+        createdBy: { kind: "user", userId: "owner" },
+      })
+    )
+  await expect(htmlReport(await file("text/plain"))).rejects.toThrow(
+    "require an HTML file"
+  )
+  const html = await file("text/html; charset=utf-8")
+  await expect(htmlReport(html)).rejects.toThrow("data timestamp")
+  await owner.mutation(api.artifacts.setDataTimestamp, {
+    artifactId: html,
+    dataTimestamp: 1000,
+  })
+  expect((await htmlReport(html)).revision).toBe(1)
 })
 
 test("page bindings pin query revisions, validate result fields and expose schema invalidation", async () => {
@@ -596,4 +628,30 @@ test("agent credentials draft, publish, get and list pages with clear binding er
   expect(
     await call("get", { pageId: scatterDraft.body.pageId, revision: 1 }, reader)
   ).toMatchObject({ status: 200, body: { version: { definition: scatter } } })
+
+  const reportId = await t.run((ctx) =>
+    ctx.db.insert("artifacts", {
+      workspaceId,
+      key: "report",
+      name: "report.html",
+      size: 5,
+      contentType: "text/html",
+      dataTimestamp: 1000,
+      createdBy: { kind: "user", userId: "owner" },
+    })
+  )
+  const report = {
+    title: "Report",
+    blocks: [
+      { kind: "htmlReport" as const, title: "Q3", artifactId: reportId },
+    ],
+  }
+  const reportPage = await call("saveDraft", { definition: report })
+  expect(reportPage).toMatchObject({ status: 200 })
+  expect(
+    await call("get", { pageId: reportPage.body.pageId, revision: 1 }, reader)
+  ).toMatchObject({
+    status: 200,
+    body: { version: { definition: report } },
+  })
 }, 30_000)
