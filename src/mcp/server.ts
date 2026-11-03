@@ -177,7 +177,7 @@ const DeleteRecord = Tool.make("records_delete", {
 const ListTemplates = Tool.make("collections_templates", {
   description:
     "List reusable job and transaction schemas. Pass a template name and fields to collections_create. Dates use YYYY-MM-DD. Money uses signed minor units; keep currencies separate.",
-  parameters: Schema.Struct({}),
+  parameters: Tool.EmptyParams,
   success: Schema.Array(
     Schema.Struct({
       id: Schema.String,
