@@ -2,6 +2,7 @@ import type { PaginationOptions, PaginationResult } from "convex/server"
 import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
 import { requireMembership } from "./auth"
+import { workspaceBudgets, type Budgets } from "./budgets"
 import { checkQuery, queryRecords, type RecordQuery } from "./recordQuery"
 
 type SaveQueryArgs = {
@@ -91,6 +92,16 @@ type RunSavedQueryArgs = {
   paginationOpts: PaginationOptions
 }
 
+/** The first page of a saved query, read with the workspace's full budget. */
+export function firstPageWithinBudget(budgets: Budgets): PaginationOptions {
+  return {
+    cursor: null,
+    numItems: 50,
+    maximumRowsRead: budgets.queryRowsRead,
+    maximumBytesRead: budgets.queryBytesRead,
+  }
+}
+
 /** Membership is checked here so pages and the dashboard share one boundary. */
 export async function runSavedQuery(
   ctx: QueryCtx,
@@ -126,6 +137,7 @@ export async function runSavedQueryInWorkspace(
     throw new Error("Collection access denied")
   if (version.schemaVersion !== collection.definition.version)
     throw new Error("Query schema mismatch; save a new revision")
+  const budgets = await workspaceBudgets(ctx, saved.workspaceId)
   const opts = args.paginationOpts
   if (
     !Number.isSafeInteger(opts.numItems) ||
@@ -134,14 +146,14 @@ export async function runSavedQueryInWorkspace(
     opts.maximumRowsRead === undefined ||
     !Number.isSafeInteger(opts.maximumRowsRead) ||
     opts.maximumRowsRead < 1 ||
-    opts.maximumRowsRead > 100 ||
+    opts.maximumRowsRead > budgets.queryRowsRead ||
     opts.maximumBytesRead === undefined ||
     !Number.isSafeInteger(opts.maximumBytesRead) ||
     opts.maximumBytesRead < 1 ||
-    opts.maximumBytesRead > 1_000_000
+    opts.maximumBytesRead > budgets.queryBytesRead
   )
     throw new Error(
-      "Query budget required: 1–50 results, at most 100 rows and 1000000 index bytes"
+      `Query budget required: 1–50 results, at most ${budgets.queryRowsRead} rows and ${budgets.queryBytesRead} index bytes`
     )
   const result = await queryRecords(ctx, collection, version.query, opts)
   if (!result.ok) throw new Error(result.message)

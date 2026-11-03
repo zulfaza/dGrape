@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 import { internalMutation, internalQuery } from "./_generated/server"
 import { withGrant } from "./lib/agentGrant"
+import { workspaceBudgets } from "./lib/budgets"
 import {
   collectionDefinitionValidator,
   collectionFieldValidator,
@@ -18,9 +19,6 @@ import {
  * after it decodes the request with convex/lib/agentQueryTransport.ts. The
  * credential check and the operation share one transaction (withGrant).
  */
-
-const MAX_ROWS_READ = 100
-const MAX_BYTES_READ = 1_000_000
 
 export const save = internalMutation({
   args: {
@@ -121,14 +119,15 @@ export const run = internalQuery({
     withGrant(ctx, args.digest, args.now, "read", async (grant) => {
       const queryId = ctx.db.normalizeId("queryDefinitions", args.queryId)
       if (!queryId) throw new Error("Query access denied")
+      const budgets = await workspaceBudgets(ctx, grant.workspaceId)
       const result = await runSavedQueryInWorkspace(ctx, grant.workspaceId, {
         queryId,
         expectedRevision: args.revision,
         paginationOpts: {
           numItems: args.numItems,
           cursor: args.cursor,
-          maximumRowsRead: MAX_ROWS_READ,
-          maximumBytesRead: MAX_BYTES_READ,
+          maximumRowsRead: budgets.queryRowsRead,
+          maximumBytesRead: budgets.queryBytesRead,
         },
       })
       return {

@@ -4,7 +4,8 @@ import { internal } from "./_generated/api"
 import { queryRecords } from "./lib/recordQuery"
 import { internalMutation, mutation, query } from "./_generated/server"
 import { requireMembership } from "./lib/auth"
-import { runSavedQuery } from "./lib/savedQueries"
+import { workspaceBudgets } from "./lib/budgets"
+import { firstPageWithinBudget, runSavedQuery } from "./lib/savedQueries"
 
 const args = { queryId: v.id("queryDefinitions"), expectedRevision: v.number() }
 
@@ -23,12 +24,9 @@ export const rebuild = mutation({
     try {
       const page = await runSavedQuery(ctx, {
         ...args,
-        paginationOpts: {
-          cursor: null,
-          numItems: 50,
-          maximumRowsRead: 100,
-          maximumBytesRead: 1_000_000,
-        },
+        paginationOpts: firstPageWithinBudget(
+          await workspaceBudgets(ctx, saved.workspaceId)
+        ),
       })
       result =
         page.completeness === "complete"
@@ -233,15 +231,19 @@ export const step = internalMutation({
       )
       .unique()
     if (!version) return fail("Query revision no longer exists")
+    const budgets = await workspaceBudgets(ctx, saved.workspaceId)
     const result = await queryRecords(ctx, collection, version.query, {
       cursor: building.cursor,
       numItems: 50,
-      maximumRowsRead: 100,
-      maximumBytesRead: 1_000_000,
+      maximumRowsRead: budgets.queryRowsRead,
+      maximumBytesRead: budgets.queryBytesRead,
     })
     if (!result.ok) return fail(result.message)
     const batch = result.value
-    if (new TextEncoder().encode(JSON.stringify(batch.page)).length > 1_000_000)
+    if (
+      new TextEncoder().encode(JSON.stringify(batch.page)).length >
+      budgets.queryBytesRead
+    )
       return fail("Report exceeds the result byte budget")
     const count = building.count + batch.page.length
     if (batch.isDone && batch.pageStatus !== "SplitRequired") {
