@@ -18,7 +18,6 @@ import { recordAuditEvent } from "./lib/auditEvents"
 import {
   addField as addFieldToDefinition,
   checkCollection,
-  checkRecordValues,
   collectionDefinitionValidator,
   collectionFieldValidator,
   newCollectionFieldValidator,
@@ -26,6 +25,7 @@ import {
   recordValuesValidator,
   type RecordValues,
 } from "./lib/collectionDomain"
+import { checkRecord, resolveFields, resolveNewField } from "./lib/references"
 import {
   deleteRecord as removeRecord,
   insertRecord,
@@ -130,10 +130,12 @@ export const createCollection = mutation({
     const workspaceId = ctx.db.normalizeId("workspaces", rawId)
     if (!workspaceId) throw new Error("Workspace access denied")
     const member = await requireMembership(ctx, workspaceId)
+    const resolved = await resolveFields(ctx, workspaceId, fields)
+    if (!resolved.ok) throw new Error(resolved.message)
     const budgets = await workspaceBudgets(ctx, workspaceId)
     const checked = checkCollection(
       name,
-      fields,
+      resolved.value,
       budgets.indexedFieldsPerCollection
     )
     if (!checked.ok) throw new Error(checked.message)
@@ -172,11 +174,12 @@ async function collectionForRecords(
   return collection
 }
 
-function validateRecord(
-  fields: Doc<"collections">["definition"]["fields"],
+async function validateRecord(
+  ctx: QueryCtx,
+  collection: Doc<"collections">,
   values: RecordValues
 ) {
-  const checked = checkRecordValues(fields, values)
+  const checked = await checkRecord(ctx, collection, values)
   if (!checked.ok) throw new Error(checked.message)
 }
 
@@ -250,7 +253,7 @@ export const createRecord = mutation({
   args: { collectionId: v.id("collections"), values: recordValuesValidator },
   handler: async (ctx, { collectionId, values }) => {
     const collection = await collectionForRecords(ctx, collectionId)
-    validateRecord(collection.definition.fields, values)
+    await validateRecord(ctx, collection, values)
     const recordId = await insertRecord(ctx, collection, values)
     await recordAuditEvent(
       ctx,
@@ -281,7 +284,7 @@ export const updateRecord = mutation({
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
       throw new Error("Invalid revision")
     if (record.revision !== expectedRevision) return "conflict"
-    validateRecord(collection.definition.fields, values)
+    await validateRecord(ctx, collection, values)
     const revision = await replaceRecordValues(ctx, collection, record, values)
     await recordAuditEvent(
       ctx,
@@ -295,10 +298,15 @@ export const updateRecord = mutation({
 
 /**
  * Deletes a record when its revision is still `expectedRevision`. Returns
- * "conflict" when someone changed it after the caller read it.
+ * "conflict" when someone changed it after the caller read it, and
+ * "referenced" when another record references it.
  */
 export const deleteRecord = mutation({
-  returns: v.union(v.literal("conflict"), v.literal("deleted")),
+  returns: v.union(
+    v.literal("conflict"),
+    v.literal("referenced"),
+    v.literal("deleted")
+  ),
   args: {
     collectionId: v.id("collections"),
     recordId: v.id("collectionRecords"),
@@ -310,7 +318,7 @@ export const deleteRecord = mutation({
     if (!record || record.collectionId !== collectionId)
       throw new Error("Record not found")
     if (record.revision !== expectedRevision) return "conflict"
-    await removeRecord(ctx, recordId)
+    if (await removeRecord(ctx, recordId)) return "referenced"
     await recordAuditEvent(
       ctx,
       collection.workspaceId,
@@ -333,10 +341,12 @@ export const addField = mutation({
   },
   handler: async (ctx, { collectionId, field }) => {
     const collection = await collectionForRecords(ctx, collectionId)
+    const resolved = await resolveNewField(ctx, collection.workspaceId, field)
+    if (!resolved.ok) throw new Error(resolved.message)
     const budgets = await workspaceBudgets(ctx, collection.workspaceId)
     const definition = addFieldToDefinition(
       collection.definition,
-      field,
+      resolved.value,
       budgets.indexedFieldsPerCollection
     )
     if (!definition.ok) throw new Error(definition.message)

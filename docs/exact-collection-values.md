@@ -63,3 +63,18 @@ An indexed multi-select field keeps one index entry for each chosen option. A
 query on it must use `{ eq: option }`, and returns the records that chose that
 option. A schema change may add options, but cannot remove them. CSV export
 writes a multi-select value as a JSON array.
+
+## References
+
+- `recordReference`: the field has `collectionId`, a collection in the same
+  workspace. A value is the ID of a record in that collection.
+- `artifactReference`: a value is the ID of an artifact in the same workspace.
+
+Every write checks that the target exists in the correct collection or
+workspace. The `recordReferences` and `artifactReferences` tables keep one row
+for each reference value. A record or artifact that another record references
+cannot be deleted: the human API returns `"referenced"`, and the agent API
+returns HTTP 409 with the referencing record ID. A record that references only
+itself can be deleted. Snapshot rows are checked when they are staged, but they
+do not keep their targets from deletion. Both kinds can be indexed, so an
+equal query finds the records that reference one target.

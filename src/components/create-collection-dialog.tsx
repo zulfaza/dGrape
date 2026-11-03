@@ -1,5 +1,10 @@
 import { collectionTemplates } from "../../convex/lib/collectionTemplates"
-import { isChoiceField, isFieldType } from "../../convex/lib/collectionDomain"
+import {
+  isChoiceField,
+  isFieldType,
+  type CollectionField,
+} from "../../convex/lib/collectionDomain"
+import type { Id } from "../../convex/_generated/dataModel"
 import { useMutation } from "convex/react"
 import { Plus, Trash2 } from "lucide-react"
 import { useState, type FormEvent } from "react"
@@ -27,6 +32,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "@/components/ui/toast"
 import { FieldOptionsInput } from "@/components/field-options-input"
+import { CollectionTargetInput } from "@/components/reference-field-input"
 import {
   buildField,
   FIELD_TYPE_LABELS,
@@ -34,14 +40,15 @@ import {
   parseOptionLines,
 } from "@/lib/field-types"
 
-type FieldType =
-  import("../../convex/lib/collectionDomain").CollectionField["type"]
+type FieldType = CollectionField["type"]
 type Field = {
   id: string
   label: string
   type: FieldType
   /** Select options, one on each line. Other types ignore it. */
   options: string
+  /** The collection a record reference field points to. */
+  target: Id<"collections"> | null
   indexed: boolean
   optional?: true
 }
@@ -53,6 +60,7 @@ const emptyField = (): Field => ({
   label: "",
   type: "text",
   options: "",
+  target: null,
   indexed: false,
 })
 
@@ -93,22 +101,25 @@ export function CreateCollectionDialog({
       toast.error(`Index at most ${MAX_INDEXED_FIELDS} fields`)
       return
     }
+    const built: CollectionField[] = []
+    for (const field of fields) {
+      const next = buildField(
+        field.id,
+        field.label,
+        field.type,
+        parseOptionLines(field.options),
+        field.target,
+        field.indexed
+      )
+      if (!next) {
+        toast.error(`Choose the collection that "${field.label}" references`)
+        return
+      }
+      built.push(field.optional ? { ...next, optional: field.optional } : next)
+    }
     setSaving(true)
     try {
-      await create({
-        workspaceId,
-        name,
-        fields: fields.map((field) => {
-          const built = buildField(
-            field.id,
-            field.label,
-            field.type,
-            parseOptionLines(field.options),
-            field.indexed
-          )
-          return field.optional ? { ...built, optional: field.optional } : built
-        }),
-      })
+      await create({ workspaceId, name, fields: built })
       setName("")
       setFields([emptyField()])
       setOpen(false)
@@ -161,6 +172,10 @@ export function CreateCollectionDialog({
                       options: isChoiceField(field)
                         ? field.options.join("\n")
                         : "",
+                      target:
+                        field.type === "recordReference"
+                          ? field.collectionId
+                          : null,
                       indexed: field.indexed === true,
                       optional: field.optional,
                     }))
@@ -267,6 +282,18 @@ export function CreateCollectionDialog({
                 >
                   <Trash2 aria-hidden />
                 </Button>
+                {field.type === "recordReference" && (
+                  <div className="grid gap-2 sm:col-span-5">
+                    <Label htmlFor={`target-${index}`}>Collection</Label>
+                    <CollectionTargetInput
+                      id={`target-${index}`}
+                      workspaceId={workspaceId}
+                      value={field.target}
+                      disabled={saving}
+                      onChange={(target) => updateField(index, { target })}
+                    />
+                  </div>
+                )}
                 {(field.type === "select" || field.type === "multiSelect") && (
                   <div className="sm:col-span-5">
                     <FieldOptionsInput

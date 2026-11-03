@@ -13,9 +13,16 @@ import {
 /** Select value for "no option" in an optional select field. */
 const NO_OPTION = "__none"
 
+/** One choice of a select input: the stored value and the text people see. */
+export type SelectItemOption = {
+  readonly value: string
+  readonly label: string
+}
+
 /**
- * The record form input of a select field: a list with one choice. An
- * optional field also offers "No value", which `onChange` reports as "".
+ * The record form input of a select field or a reference field: a list with
+ * one choice. An optional field also offers "No value", which `onChange`
+ * reports as "".
  */
 export function SelectFieldInput({
   id,
@@ -26,7 +33,7 @@ export function SelectFieldInput({
   onChange,
 }: {
   id: string
-  options: ReadonlyArray<string>
+  options: ReadonlyArray<SelectItemOption>
   optional: boolean
   value: string
   disabled: boolean
@@ -46,8 +53,8 @@ export function SelectFieldInput({
         <SelectGroup>
           {optional && <SelectItem value={NO_OPTION}>No value</SelectItem>}
           {options.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
             </SelectItem>
           ))}
         </SelectGroup>

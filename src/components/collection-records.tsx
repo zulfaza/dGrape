@@ -9,11 +9,16 @@ import { api } from "../../convex/_generated/api"
 import type { Doc, Id } from "../../convex/_generated/dataModel"
 import type { RecordQuery } from "../../convex/lib/recordQuery"
 import { ChevronLeft, Plus, Trash2 } from "lucide-react"
+import { Match } from "effect"
 import { AddFieldDialog } from "@/components/add-field-dialog"
 import {
   MultiSelectFieldInput,
   SelectFieldInput,
 } from "@/components/choice-field-input"
+import {
+  ArtifactReferenceInput,
+  RecordReferenceInput,
+} from "@/components/reference-field-input"
 import { ExportRecordsButton } from "@/components/export-records-button"
 import { Mascot } from "@/components/mascot"
 import { RecordQueryBar } from "@/components/record-query-bar"
@@ -217,6 +222,13 @@ export function CollectionRecords({
         setConflict(true)
         return
       }
+      if (result === "referenced") {
+        setConfirmingDelete(false)
+        toast.error(
+          "Another record references this record. Change or delete that record first."
+        )
+        return
+      }
       setDraft(null)
       toast.success("Record deleted")
     } catch {
@@ -232,6 +244,14 @@ export function CollectionRecords({
       </p>
     )
   const { fields } = collection.definition
+  const setDraftValue = (fieldId: string, value: Draft["values"][string]) =>
+    setDraft(
+      (current) =>
+        current && {
+          ...current,
+          values: { ...current.values, [fieldId]: value },
+        }
+    )
   const openDraft = (next: Draft) => {
     setConflict(false)
     setConfirmingDelete(false)
@@ -275,6 +295,7 @@ export function CollectionRecords({
                 />
               )}
               <AddFieldDialog
+                workspaceId={collection.workspaceId}
                 collectionId={collectionId}
                 fields={fields}
                 disabled={saving}
@@ -488,41 +509,65 @@ export function CollectionRecords({
                       <Label htmlFor={`record-${field.id}`}>
                         {fieldLabel(field)}
                       </Label>
-                      {field.type === "select" ? (
-                        <SelectFieldInput
-                          id={`record-${field.id}`}
-                          options={field.options}
-                          optional={field.optional === true}
-                          value={String(draft.values[field.id] ?? "")}
-                          disabled={saving}
-                          onChange={(option) =>
-                            setDraft({
-                              ...draft,
-                              values: { ...draft.values, [field.id]: option },
-                            })
-                          }
-                        />
-                      ) : (
-                        <Input
-                          disabled={saving}
-                          id={`record-${field.id}`}
-                          type={inputType(field.type)}
-                          step={inputStep(field.type)}
-                          maxLength={field.type === "text" ? 10000 : undefined}
-                          required={
-                            !field.optional && inputType(field.type) !== "text"
-                          }
-                          value={String(draft.values[field.id] ?? "")}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              values: {
-                                ...draft.values,
-                                [field.id]: e.target.value,
-                              },
-                            })
-                          }
-                        />
+                      {Match.value(field).pipe(
+                        Match.when({ type: "select" }, (choice) => (
+                          <SelectFieldInput
+                            id={`record-${field.id}`}
+                            options={choice.options.map((option) => ({
+                              value: option,
+                              label: option,
+                            }))}
+                            optional={field.optional === true}
+                            value={String(draft.values[field.id] ?? "")}
+                            disabled={saving}
+                            onChange={(value) => setDraftValue(field.id, value)}
+                          />
+                        )),
+                        Match.when({ type: "recordReference" }, (reference) => (
+                          <RecordReferenceInput
+                            id={`record-${field.id}`}
+                            collectionId={reference.collectionId}
+                            optional={field.optional === true}
+                            value={String(draft.values[field.id] ?? "")}
+                            disabled={saving}
+                            onChange={(value) => setDraftValue(field.id, value)}
+                          />
+                        )),
+                        Match.when({ type: "artifactReference" }, () => (
+                          <ArtifactReferenceInput
+                            id={`record-${field.id}`}
+                            workspaceId={collection.workspaceId}
+                            optional={field.optional === true}
+                            value={String(draft.values[field.id] ?? "")}
+                            disabled={saving}
+                            onChange={(value) => setDraftValue(field.id, value)}
+                          />
+                        )),
+                        Match.orElse(() => (
+                          <Input
+                            disabled={saving}
+                            id={`record-${field.id}`}
+                            type={inputType(field.type)}
+                            step={inputStep(field.type)}
+                            maxLength={
+                              field.type === "text" ? 10000 : undefined
+                            }
+                            required={
+                              !field.optional &&
+                              inputType(field.type) !== "text"
+                            }
+                            value={String(draft.values[field.id] ?? "")}
+                            onChange={(e) =>
+                              setDraft({
+                                ...draft,
+                                values: {
+                                  ...draft.values,
+                                  [field.id]: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                        ))
                       )}
                     </>
                   )}

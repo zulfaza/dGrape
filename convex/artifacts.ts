@@ -4,6 +4,7 @@ import {
   previewKind,
   readPreview,
 } from "./lib/artifactPreview"
+import { referencingArtifact } from "./lib/references"
 import {
   paginationOptsValidator,
   paginationResultValidator,
@@ -308,17 +309,20 @@ export const getDownloadUrl = action({
   },
 })
 
+/** Deletes an artifact, unless a record references it ("referenced"). */
 export const remove = mutation({
   args: { artifactId: v.id("artifacts") },
-  returns: v.null(),
+  returns: v.union(v.literal("deleted"), v.literal("referenced")),
   handler: async (ctx, { artifactId }) => {
     const artifact = await ctx.db.get(artifactId)
     if (!artifact) throw new Error("Artifact not found")
     await requireMembership(ctx, artifact.workspaceId)
+    // A referenced artifact stays, so that no reference points to nothing.
+    if (await referencingArtifact(ctx, artifactId)) return "referenced"
     await r2.deleteObject(ctx, artifact.key)
     await changeArtifactUsage(ctx, artifact, -1)
     await ctx.db.delete(artifactId)
-    return null
+    return "deleted"
   },
 })
 

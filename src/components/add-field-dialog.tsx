@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "@/components/ui/toast"
 import { FieldOptionsInput } from "@/components/field-options-input"
+import { CollectionTargetInput } from "@/components/reference-field-input"
 import {
   buildField,
   FIELD_TYPE_LABELS,
@@ -45,10 +46,12 @@ const MAX_INDEXED_FIELDS = 5
  * exist have no value for the new field until someone edits them.
  */
 export function AddFieldDialog({
+  workspaceId,
   collectionId,
   fields,
   disabled,
 }: {
+  workspaceId: Id<"workspaces">
   collectionId: Id<"collections">
   fields: ReadonlyArray<Field>
   disabled: boolean
@@ -59,6 +62,7 @@ export function AddFieldDialog({
   const [id, setId] = useState("")
   const [type, setType] = useState<FieldType>("text")
   const [options, setOptions] = useState("")
+  const [target, setTarget] = useState<Id<"collections"> | null>(null)
   const [indexed, setIndexed] = useState(false)
   const hasOptions = type === "select" || type === "multiSelect"
   const canIndex =
@@ -72,16 +76,26 @@ export function AddFieldDialog({
       toast.error("This field ID is already used")
       return
     }
+    const field = buildField(
+      id,
+      label,
+      type,
+      parseOptionLines(options),
+      target,
+      indexed
+    )
+    if (!field) {
+      toast.error("Choose the collection to reference")
+      return
+    }
     setSaving(true)
     try {
-      await addField({
-        collectionId,
-        field: buildField(id, label, type, parseOptionLines(options), indexed),
-      })
+      await addField({ collectionId, field })
       setLabel("")
       setId("")
       setType("text")
       setOptions("")
+      setTarget(null)
       setIndexed(false)
       setOpen(false)
       toast.success("Field added")
@@ -162,6 +176,18 @@ export function AddFieldDialog({
                 </SelectContent>
               </Select>
             </div>
+            {type === "recordReference" && (
+              <div className="grid gap-2">
+                <Label htmlFor="new-field-target">Collection</Label>
+                <CollectionTargetInput
+                  id="new-field-target"
+                  workspaceId={workspaceId}
+                  value={target}
+                  disabled={saving}
+                  onChange={setTarget}
+                />
+              </div>
+            )}
             {hasOptions && (
               <FieldOptionsInput
                 id="new-field-options"
