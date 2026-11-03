@@ -15,6 +15,28 @@ export function registerAgentRecipeRoutes(
   )
   agentRoute(
     router,
+    "/agent/recipes/validate",
+    Transport.ValidateInput,
+    (ctx, digest, input) =>
+      ctx.runQuery(internal.agentRecipes.validate, {
+        ...input,
+        digest,
+        now: Date.now(),
+      })
+  )
+  agentRoute(
+    router,
+    "/agent/recipes/preview",
+    Transport.PreviewInput,
+    (ctx, digest, input) =>
+      ctx.runQuery(internal.agentRecipes.preview, {
+        ...input,
+        digest,
+        now: Date.now(),
+      })
+  )
+  agentRoute(
+    router,
     "/agent/recipes/versions",
     Transport.PageInput,
     (ctx, digest, input) =>

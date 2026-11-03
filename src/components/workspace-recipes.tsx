@@ -1,9 +1,15 @@
-import { useMutation, usePaginatedQuery, useQuery } from "convex/react"
+import {
+  useConvex,
+  useMutation,
+  usePaginatedQuery,
+  useQuery,
+} from "convex/react"
+import type { FunctionReturnType } from "convex/server"
 import { Component, useRef, useState, type ReactNode } from "react"
 import { Schema } from "effect"
 import { api } from "../../convex/_generated/api"
 import type { Doc, Id } from "../../convex/_generated/dataModel"
-import { Recipe } from "../../convex/lib/agentRecipeTransport"
+import { PreviewInput, Recipe } from "../../convex/lib/agentRecipeTransport"
 import { validateRecipe } from "../../convex/lib/recipeDomain"
 import {
   validateTiming,
@@ -30,6 +36,16 @@ const sample: typeof Recipe.Type = {
   steps: [{ kind: "artifact", name: "report.json", format: "json" }],
   limits: { rows: 100, bytes: 10000, durationMs: 60000, attempts: 2 },
 }
+type Draft = {
+  name: string
+  json: string
+  sample: string
+  preview: FunctionReturnType<typeof api.recipes.preview> | null
+}
+const decodeRecipe = Schema.decodeUnknownSync(Schema.fromJsonString(Recipe))
+const decodeSample = Schema.decodeUnknownSync(
+  Schema.fromJsonString(PreviewInput.fields.sample)
+)
 type Intent = { key: string; runId: Id<"recipeRuns"> | null }
 type Perform = (action: () => Promise<void>) => Promise<void>
 
@@ -150,9 +166,8 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
   )
   const [versionId, setVersionId] = useState<Id<"recipeVersions"> | null>(null)
   const [runId, setRunId] = useState<Id<"recipeRuns"> | null>(null)
-  const [draft, setDraft] = useState<{ name: string; json: string } | null>(
-    null
-  )
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const convex = useConvex()
   const intents = useRef(new Map<Id<"recipeVersions">, Intent>())
   const operation = useOperation()
   const publish = useMutation(api.recipes.publish)
@@ -168,7 +183,12 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
         <Button
           disabled={operation.busy || draft !== null}
           onClick={() =>
-            setDraft({ name: "", json: JSON.stringify(sample, null, 2) })
+            setDraft({
+              name: "",
+              json: JSON.stringify(sample, null, 2),
+              sample: "[]",
+              preview: null,
+            })
           }
         >
           New recipe
@@ -184,9 +204,7 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
           onSubmit={(event) => {
             event.preventDefault()
             void operation.perform(async () => {
-              const recipe = Schema.decodeUnknownSync(
-                Schema.fromJsonString(Recipe)
-              )(draft.json)
+              const recipe = decodeRecipe(draft.json)
               validateRecipe(recipe)
               const id = await publish({
                 workspaceId,
@@ -220,7 +238,9 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
                 maxLength={250000}
                 disabled={operation.busy}
                 value={draft.json}
-                onChange={(e) => setDraft({ ...draft, json: e.target.value })}
+                onChange={(e) =>
+                  setDraft({ ...draft, json: e.target.value, preview: null })
+                }
               />
               <FieldDescription>
                 Trusted steps: fetch, map, filter, join, aggregate, upsert,
@@ -228,7 +248,62 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
                 creator's access.
               </FieldDescription>
             </Field>
+            <Field>
+              <FieldLabel htmlFor="recipe-sample">
+                Sample rows (JSON)
+              </FieldLabel>
+              <textarea
+                className="min-h-24 w-full rounded-md border bg-background p-3 font-mono text-sm"
+                id="recipe-sample"
+                rows={4}
+                maxLength={250000}
+                disabled={operation.busy}
+                value={draft.sample}
+                onChange={(e) =>
+                  setDraft({ ...draft, sample: e.target.value, preview: null })
+                }
+              />
+              <FieldDescription>
+                Preview uses these rows in place of the fetch step. It fetches
+                nothing and saves nothing.
+              </FieldDescription>
+            </Field>
+            {draft.preview && <PreviewResult preview={draft.preview} />}
             <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={operation.busy}
+                onClick={() => {
+                  const current = draft
+                  void (async () => {
+                    let preview: Draft["preview"]
+                    try {
+                      preview = await convex.query(api.recipes.preview, {
+                        workspaceId,
+                        recipe: decodeRecipe(current.json),
+                        sample: decodeSample(current.sample),
+                      })
+                    } catch (error) {
+                      preview = {
+                        ok: false,
+                        error: Schema.is(Schema.instanceOf(Error))(error)
+                          ? error.message
+                          : "Preview failed. Check the JSON and try again.",
+                      }
+                    }
+                    setDraft((latest) =>
+                      latest &&
+                      latest.json === current.json &&
+                      latest.sample === current.sample
+                        ? { ...latest, preview }
+                        : latest
+                    )
+                  })()
+                }}
+              >
+                Preview
+              </Button>
               <Button type="submit" disabled={operation.busy}>
                 Publish new version
               </Button>
@@ -278,6 +353,8 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
             setDraft({
               name: version.name,
               json: JSON.stringify(version.recipe, null, 2),
+              sample: "[]",
+              preview: null,
             })
           }}
           copying={draft !== null}
@@ -314,6 +391,35 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
         <RunHistory key={selectedRun._id} runId={selectedRun._id} />
       )}
     </section>
+  )
+}
+
+function PreviewResult({
+  preview,
+}: {
+  preview: NonNullable<Draft["preview"]>
+}) {
+  if (!preview.ok)
+    return (
+      <Alert>
+        <AlertDescription>Preview failed: {preview.error}</AlertDescription>
+      </Alert>
+    )
+  return (
+    <div className="flex flex-col gap-2" aria-label="Preview result">
+      <ol className="flex flex-wrap gap-2">
+        {preview.steps.map((step, index) => (
+          <li key={index}>
+            <Badge variant="outline">
+              {index + 1}. {step.kind}: {step.rows} rows
+            </Badge>
+          </li>
+        ))}
+      </ol>
+      <pre className="max-h-64 overflow-auto rounded-md border p-3 text-xs">
+        {JSON.stringify(preview.rows, null, 2)}
+      </pre>
+    </div>
   )
 }
 

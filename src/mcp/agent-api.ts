@@ -237,6 +237,12 @@ export class AgentApi extends Context.Service<
     readonly recipePublish: (
       input: typeof Recipes.PublishInput.Type
     ) => Call<typeof Schema.String.Type>
+    readonly recipeValidate: (
+      input: typeof Recipes.ValidateInput.Type
+    ) => Call<typeof Recipes.ValidateResult.Type>
+    readonly recipePreview: (
+      input: typeof Recipes.PreviewInput.Type
+    ) => Call<typeof Recipes.PreviewResult.Type>
     readonly recipeVersions: (
       input: typeof Recipes.PageInput.Type
     ) => Call<typeof Recipes.VersionPage.Type>
@@ -379,6 +385,16 @@ export const layer = (baseUrl: string) =>
           send(
             json(HttpClientRequest.post(url("/agent/recipes/publish")), input),
             Schema.String
+          ),
+        recipeValidate: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/recipes/validate")), input),
+            Recipes.ValidateResult
+          ),
+        recipePreview: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/recipes/preview")), input),
+            Recipes.PreviewResult
           ),
         recipeVersions: (input) =>
           send(

@@ -1,8 +1,12 @@
-import { Result, Schema } from "effect"
 import { v, type Infer } from "convex/values"
 import { internalMutation, internalQuery } from "./_generated/server"
 import { recordValuesValidator } from "./lib/collectionDomain"
-import { recipeValidator, checkBudget } from "./lib/recipeDomain"
+import {
+  recipeValidator,
+  checkBudget,
+  checkOutput,
+  sourceKey,
+} from "./lib/recipeDomain"
 import { runningRun, recipeOutputToken } from "./recipes"
 import {
   readSourceCursor,
@@ -11,8 +15,6 @@ import {
   stageSnapshotChunk,
   publishSnapshot,
 } from "./lib/recordPublication"
-
-const SourceIdentity = Schema.Union([Schema.String, Schema.Number])
 
 export const executionArgs = {
   runId: v.id("recipeRuns"),
@@ -101,18 +103,10 @@ export const commit = internalMutation({
           (await recipeOutputToken(ctx, run.workspaceId, step.collectionId))
       )
         throw new Error("Recipe output changed during execution")
+      checkOutput(step, args.rows)
       if (step.kind === "upsert") {
-        if (args.rows.length > 100)
-          throw new Error("Upsert output permits at most 100 rows")
         for (const row of args.rows) {
-          const identityKey = Schema.decodeUnknownResult(SourceIdentity)(
-            Object.hasOwn(row, step.identityField)
-              ? row[step.identityField]
-              : undefined
-          )
-          if (Result.isFailure(identityKey))
-            throw new Error("Source identity must be a string or number")
-          const key = String(identityKey.success)
+          const key = sourceKey(row, step.identityField)
           const identity = await ctx.db
             .query("recordIdentities")
             .withIndex("by_collectionId_and_source_and_key", (q) =>
@@ -140,8 +134,6 @@ export const commit = internalMutation({
             cursor: "",
           })
       } else {
-        if (args.rows.length > 100)
-          throw new Error("Snapshot output permits at most 100 rows")
         const generation = String(run._id)
         const chunks: string[] = []
         for (let i = 0; i < Math.max(args.rows.length, 1); i += 10) {
