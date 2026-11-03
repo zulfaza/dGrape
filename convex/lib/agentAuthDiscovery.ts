@@ -200,8 +200,8 @@ There is no refresh token.
 Send \`Authorization: Bearer <access_token>\` to the MCP server
 (${app}/mcp) or the HTTP API. The token works only in the workspace the user
 chose, with the scopes the user chose. No scope includes another. A request
-that needs a scope the token does not have gets \`403\` with the name of
-that scope.
+that needs a scope the token does not have gets \`403\`. Write, artifact,
+and recipe requests also name the missing scope.
 
 ${scopes}
 
