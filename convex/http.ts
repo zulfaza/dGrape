@@ -300,7 +300,7 @@ http.route({
     if (!body)
       return replyJson(400, {
         error:
-          'Send JSON: { name, fields: [{ id, label, type }] }. type is "text", "number", or "boolean".',
+          'Send JSON: { name, fields: [{ id, label, type }] }. type is "text", "number", "boolean", "integer", or "currency".',
       })
     try {
       const result = await ctx.runMutation(
@@ -329,7 +329,7 @@ http.route({
     if (!body)
       return replyJson(400, {
         error:
-          'Send JSON: { collectionId, field: { id, label, type } }. type is "text", "number", or "boolean".',
+          'Send JSON: { collectionId, field: { id, label, type } }. type is "text", "number", "boolean", "integer", or "currency".',
       })
     try {
       const result = await ctx.runMutation(internal.agentWrites.addField, {

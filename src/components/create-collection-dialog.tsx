@@ -1,3 +1,4 @@
+import { isFieldType } from "../../convex/lib/collectionDomain"
 import { useMutation } from "convex/react"
 import { Plus, Trash2 } from "lucide-react"
 import { useState, type FormEvent } from "react"
@@ -25,7 +26,8 @@ import {
 } from "@/components/ui/select"
 import { toast } from "@/components/ui/toast"
 
-type FieldType = "text" | "number" | "boolean"
+type FieldType =
+  import("../../convex/lib/collectionDomain").CollectionField["type"]
 type Field = { id: string; label: string; type: FieldType; indexed: boolean }
 
 const MAX_FIELDS = 50
@@ -36,10 +38,6 @@ const emptyField = (): Field => ({
   type: "text",
   indexed: false,
 })
-
-function isFieldType(value: string): value is FieldType {
-  return value === "text" || value === "number" || value === "boolean"
-}
 
 /** Opens a form that creates a collection with typed fields. */
 export function CreateCollectionDialog({
@@ -184,6 +182,10 @@ export function CreateCollectionDialog({
                       <SelectGroup>
                         <SelectItem value="text">Text</SelectItem>
                         <SelectItem value="number">Number</SelectItem>
+                        <SelectItem value="integer">
+                          Integer / minor units
+                        </SelectItem>
+                        <SelectItem value="currency">Currency code</SelectItem>
                         <SelectItem value="boolean">Yes / no</SelectItem>
                       </SelectGroup>
                     </SelectContent>

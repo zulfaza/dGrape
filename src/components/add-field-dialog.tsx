@@ -1,3 +1,4 @@
+import { isFieldType } from "../../convex/lib/collectionDomain"
 import { useMutation } from "convex/react"
 import { Plus } from "lucide-react"
 import { useState, type FormEvent } from "react"
@@ -31,10 +32,6 @@ type FieldType = Field["type"]
 
 const MAX_FIELDS = 50
 const MAX_INDEXED_FIELDS = 5
-
-function isFieldType(value: string): value is FieldType {
-  return value === "text" || value === "number" || value === "boolean"
-}
 
 /**
  * Opens a form that adds an optional field to a collection. Records that
@@ -148,6 +145,10 @@ export function AddFieldDialog({
                   <SelectGroup>
                     <SelectItem value="text">Text</SelectItem>
                     <SelectItem value="number">Number</SelectItem>
+                    <SelectItem value="integer">
+                      Integer / minor units
+                    </SelectItem>
+                    <SelectItem value="currency">Currency code</SelectItem>
                     <SelectItem value="boolean">Yes / no</SelectItem>
                   </SelectGroup>
                 </SelectContent>

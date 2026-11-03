@@ -36,6 +36,8 @@ export const Route = createFileRoute("/dashboard/workspaces_/$workspaceId")({
 const FIELD_TYPE_LABELS = {
   text: "Text",
   number: "Number",
+  integer: "Integer / minor units",
+  currency: "Currency code",
   boolean: "Yes / no",
 }
 

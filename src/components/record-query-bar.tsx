@@ -1,3 +1,7 @@
+import {
+  isNumericField,
+  checkRecordValues,
+} from "../../convex/lib/collectionDomain"
 import { useState, type FormEvent } from "react"
 import type { Doc } from "../../convex/_generated/dataModel"
 import type { RecordQuery } from "../../convex/lib/recordQuery"
@@ -57,14 +61,26 @@ export function RecordQueryBar({
       onChange({ fieldId: query.fieldId, order: query.order })
       return
     }
-    if (field.type === "number") {
+    if (isNumericField(field.type)) {
       const value = Number(filterText)
       if (filterText.trim() === "" || !Number.isFinite(value)) {
         toast.error("Enter a valid number")
         return
       }
+      const checked = checkRecordValues([field], { [field.id]: value })
+      if (!checked.ok) {
+        toast.error(checked.message)
+        return
+      }
       onChange({ ...query, where: { eq: value } })
-    } else onChange({ ...query, where: { eq: filterText } })
+    } else {
+      const checked = checkRecordValues([field], { [field.id]: filterText })
+      if (!checked.ok) {
+        toast.error(checked.message)
+        return
+      }
+      onChange({ ...query, where: { eq: filterText } })
+    }
   }
 
   return (
@@ -144,8 +160,14 @@ export function RecordQueryBar({
                 <Input
                   id="query-equals"
                   className="w-44"
-                  type={field.type === "number" ? "number" : "text"}
-                  step={field.type === "number" ? "any" : undefined}
+                  type={isNumericField(field.type) ? "number" : "text"}
+                  step={
+                    field.type === "integer"
+                      ? 1
+                      : field.type === "number"
+                        ? "any"
+                        : undefined
+                  }
                   maxLength={200}
                   placeholder="Any value"
                   value={filterText}
