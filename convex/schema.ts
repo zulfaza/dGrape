@@ -78,7 +78,18 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_workspace_user", ["workspaceId", "userId"]),
+  reportCounts: defineTable({
+    queryId: v.id("queryDefinitions"),
+    revision: v.number(),
+    sourceRevision: v.number(),
+    builtAt: v.number(),
+    result: v.union(
+      v.object({ kind: v.literal("complete"), count: v.number() }),
+      v.object({ kind: v.literal("failed"), message: v.string() })
+    ),
+  }).index("by_queryId_and_revision", ["queryId", "revision"]),
   collections: defineTable({
+    dataRevision: v.optional(v.number()),
     workspaceId: v.id("workspaces"),
     name: v.string(),
     definition: collectionDefinitionValidator,

@@ -47,6 +47,7 @@ export async function insertRecord(
     values,
     idempotencyKey,
   })
+  await advanceDataRevision(ctx, collection._id)
   await replaceIndexEntries(ctx, collection, recordId, values)
   return recordId
 }
@@ -58,6 +59,7 @@ export async function replaceRecordValues(
   record: Doc<"collectionRecords">,
   values: RecordValues
 ) {
+  await advanceDataRevision(ctx, collection._id)
   const revision = record.revision + 1
   await ctx.db.patch(record._id, {
     values,
@@ -72,10 +74,21 @@ export async function deleteRecord(
   ctx: MutationCtx,
   recordId: Id<"collectionRecords">
 ) {
+  const record = await ctx.db.get(recordId)
+  if (!record) throw new Error("Record missing")
+  const collection = await ctx.db.get(record.collectionId)
+  if (!collection) throw new Error("Collection missing")
+  await advanceDataRevision(ctx, collection._id)
   await removeIndexEntries(ctx, recordId)
   for await (const identity of ctx.db
     .query("recordIdentities")
     .withIndex("by_recordId", (q) => q.eq("recordId", recordId)))
     await ctx.db.delete(identity._id)
   await ctx.db.delete(recordId)
+}
+
+async function advanceDataRevision(ctx: MutationCtx, id: Id<"collections">) {
+  const collection = await ctx.db.get(id)
+  if (!collection) throw new Error("Collection missing")
+  await ctx.db.patch(id, { dataRevision: (collection.dataRevision ?? 0) + 1 })
 }
