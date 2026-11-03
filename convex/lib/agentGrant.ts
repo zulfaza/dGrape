@@ -22,5 +22,9 @@ export async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
     )
     .unique()
   if (!member || member.role !== "owner") return null
-  return { workspaceId: grant.workspaceId, scope: grant.scope }
+  return {
+    grantId: grant._id,
+    workspaceId: grant.workspaceId,
+    scope: grant.scope,
+  }
 }

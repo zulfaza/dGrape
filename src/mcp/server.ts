@@ -56,6 +56,46 @@ const QueryRecords = Tool.make("records_query", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Readonly, true)
 
+const ListArtifacts = Tool.make("artifacts_list", {
+  description: `List the workspace's files (artifacts), newest first: name, content type, size in bytes. Returns up to \`limit\` (1 to ${MAX_PAGE_SIZE}). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\`.`,
+  parameters: Schema.Struct({
+    limit: Schema.optionalKey(
+      Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_PAGE_SIZE }))
+    ),
+    cursor: Schema.optionalKey(Schema.String),
+  }),
+  success: AgentApi.ArtifactPage,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const DownloadArtifact = Tool.make("artifacts_download_url", {
+  description:
+    "Get a signed URL to download one artifact. The URL works for 5 minutes and needs no credential: GET it with any HTTP client.",
+  parameters: Schema.Struct({ artifactId: Schema.String }),
+  success: AgentApi.ArtifactDownload,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const CreateArtifactUpload = Tool.make("artifacts_create_upload", {
+  description:
+    "Start a file upload (at most 25 MB). Returns `uploadUrl` and `uploadId`. Then PUT the file bytes to `uploadUrl` with a Content-Type header (for example with curl --upload-file), and call artifacts_complete_upload with the `uploadId` within 15 minutes. Needs a read-and-write credential.",
+  parameters: Schema.Struct({ name: Schema.String }),
+  success: AgentApi.ArtifactUpload,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const CompleteArtifactUpload = Tool.make("artifacts_complete_upload", {
+  description:
+    "Finish an upload after you PUT the file to its `uploadUrl`. Returns the artifact `id`. Needs a read-and-write credential.",
+  parameters: Schema.Struct({ uploadId: Schema.String }),
+  success: AgentApi.CreatedArtifact,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
 const FieldsDescription =
   'Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", or "boolean". Set `optional` to true when a record may leave the field out. Set `indexed` to true for fields you will filter or sort by (at most 5; indexed text is at most 200 characters).'
 
@@ -131,6 +171,10 @@ const DfeToolkit = Toolkit.make(
   DescribeWorkspace,
   ListRecords,
   QueryRecords,
+  ListArtifacts,
+  DownloadArtifact,
+  CreateArtifactUpload,
+  CompleteArtifactUpload,
   CreateCollection,
   AddField,
   CreateRecord,
@@ -145,6 +189,10 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       workspace_describe: () => api.describeWorkspace,
       records_list: (input) => api.listRecords(input),
       records_query: (input) => api.queryRecords(input),
+      artifacts_list: (input) => api.listArtifacts(input),
+      artifacts_download_url: (input) => api.artifactDownload(input),
+      artifacts_create_upload: (input) => api.createArtifactUpload(input),
+      artifacts_complete_upload: (input) => api.completeArtifactUpload(input),
       collections_create: (input) => api.createCollection(input),
       collections_add_field: (input) => api.addField(input),
       records_create: (input) => api.createRecord(input),
@@ -181,7 +229,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, records_list to read records, and records_query to filter and sort them by an indexed field. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data.",
+      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)
     ),
