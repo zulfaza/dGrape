@@ -1,5 +1,6 @@
+import { ArtifactPreview } from "./artifact-preview"
 import { useAction, useMutation, usePaginatedQuery } from "convex/react"
-import { Download, Trash2, Upload } from "lucide-react"
+import { Download, Eye, Trash2, Upload } from "lucide-react"
 import { useRef, useState, type ChangeEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -33,7 +34,12 @@ export function WorkspaceArtifacts({
   const getDownloadUrl = useAction(api.artifacts.getDownloadUrl)
   const remove = useMutation(api.artifacts.remove)
   const input = useRef<HTMLInputElement>(null)
+  const previewTrigger = useRef<HTMLButtonElement | null>(null)
   const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState<{
+    id: Id<"artifacts">
+    name: string
+  } | null>(null)
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -86,6 +92,15 @@ export function WorkspaceArtifacts({
 
   return (
     <section aria-labelledby="files-heading" className="flex flex-col gap-3">
+      {preview && (
+        <ArtifactPreview
+          key={preview.id}
+          artifactId={preview.id}
+          name={preview.name}
+          onClose={() => setPreview(null)}
+          onReturnFocus={() => previewTrigger.current?.focus()}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="files-heading" className="text-base font-semibold">
@@ -138,6 +153,17 @@ export function WorkspaceArtifacts({
                 </span>
               </div>
               <div className="flex shrink-0 gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Preview ${artifact.name}`}
+                  onClick={(event) => {
+                    previewTrigger.current = event.currentTarget
+                    setPreview({ id: artifact._id, name: artifact.name })
+                  }}
+                >
+                  <Eye aria-hidden />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
