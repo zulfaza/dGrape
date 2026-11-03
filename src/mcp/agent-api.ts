@@ -1,6 +1,6 @@
-import * as Pages from "../../convex/lib/agentPageTransport"
-import * as Queries from "../../convex/lib/agentQueryTransport"
-import * as Recipes from "../../convex/lib/agentRecipeTransport"
+import * as Pages from "../../convex/lib/agentPageTransport.ts"
+import * as Queries from "../../convex/lib/agentQueryTransport.ts"
+import * as Recipes from "../../convex/lib/agentRecipeTransport.ts"
 import { Context, Effect, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 
