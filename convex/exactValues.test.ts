@@ -284,14 +284,25 @@ test("audit events name the actor and objects but never record values", async ()
     collectionId,
     values: { amount_minor: 0.5, currency: "EUR" },
   })
+  const saved = await t.mutation(internal.agentQueries.save, {
+    digest: "digest-x9",
+    collectionId,
+    name: "Big spends",
+    query: { fieldId: "amount_minor", order: "desc" },
+  })
   const events = await owner.query(api.auditEvents.list, {
     workspaceId,
     paginationOpts: { numItems: 10, cursor: null },
   })
   const user = { kind: "user", userId: "owner" }
+  const agent = { kind: "agent", grantId, registrationId: null, owner: "owner" }
   expect(events.page.map(({ actor, event }) => ({ actor, event }))).toEqual([
     {
-      actor: { kind: "agent", grantId, registrationId: null, owner: "owner" },
+      actor: agent,
+      event: { operation: "query.save", queryId: saved.queryId, revision: 1 },
+    },
+    {
+      actor: agent,
       event: { operation: "record.create", collectionId, recordId: created.id },
     },
     {
@@ -302,7 +313,14 @@ test("audit events name the actor and objects but never record values", async ()
     { actor: user, event: { operation: "workspace.create" } },
   ])
   const stored = JSON.stringify(events.page)
-  for (const secret of ["4242", "EUR", "USD", "digest-x9", "Transactions"])
+  for (const secret of [
+    "4242",
+    "EUR",
+    "USD",
+    "digest-x9",
+    "Transactions",
+    "Big spends",
+  ])
     expect(stored).not.toContain(secret)
   await expect(
     t
