@@ -220,3 +220,79 @@ export function transform(
   checkBudget(result, limits)
   return result
 }
+
+type OutputStep = Extract<RecipeStep, { kind: "upsert" | "snapshot" }>
+/** The source identity of an upsert row: a string or number of 1 to 200 characters. */
+export function sourceKey(row: RecipeRow, identityField: string): string {
+  const value = own(row, identityField)
+  if (typeof value !== "string" && typeof value !== "number")
+    throw new Error("Source identity must be a string or number")
+  const key = String(value)
+  if (!key.trim() || key.length > 200)
+    throw new Error("Identity must be 1 to 200 characters")
+  return key
+}
+/** Collection outputs permit at most 100 rows. Upsert rows need a source identity. */
+export function checkOutput(step: OutputStep, rows: RecipeRow[]): void {
+  if (rows.length > 100)
+    throw new Error(
+      `${step.kind === "upsert" ? "Upsert" : "Snapshot"} output permits at most 100 rows`
+    )
+  if (step.kind === "upsert")
+    for (const row of rows) sourceKey(row, step.identityField)
+}
+
+export const recipeStepKindValidator = v.union(
+  v.literal("fetch"),
+  v.literal("map"),
+  v.literal("filter"),
+  v.literal("join"),
+  v.literal("aggregate"),
+  v.literal("upsert"),
+  v.literal("snapshot"),
+  v.literal("artifact")
+)
+export const recipePreviewValidator = v.object({
+  steps: v.array(v.object({ kind: recipeStepKindValidator, rows: v.number() })),
+  rows: v.array(recordValuesValidator),
+})
+export type RecipePreview = Infer<typeof recipePreviewValidator>
+/**
+ * Dry run of a valid recipe. `sample` replaces the rows that the fetch step
+ * would read, so there is no network access. Output steps save nothing: the
+ * result has the row count after each step and the rows the output gets.
+ * Budgets and output rules are the same as in a run.
+ */
+export function previewRecipe(
+  recipe: Recipe,
+  sample: RecipeRow[]
+): RecipePreview {
+  validateRecipe(recipe)
+  if (sample.length > 0 && !recipe.steps.some((s) => s.kind === "fetch"))
+    throw new Error("Sample rows replace fetch output, but there is no fetch")
+  let rows: RecipeRow[] = []
+  const steps: RecipePreview["steps"] = []
+  for (const [index, step] of recipe.steps.entries()) {
+    try {
+      switch (step.kind) {
+        case "fetch":
+          rows.push(...sample)
+          break
+        case "upsert":
+        case "snapshot":
+          checkOutput(step, rows)
+          break
+        case "artifact":
+          break
+        default:
+          rows = transform(rows, step, recipe.limits)
+      }
+      checkBudget(rows, recipe.limits)
+    } catch (error) {
+      if (!(error instanceof Error)) throw error
+      throw new Error(`Step ${index + 1} (${step.kind}): ${error.message}`)
+    }
+    steps.push({ kind: step.kind, rows: rows.length })
+  }
+  return { steps, rows }
+}

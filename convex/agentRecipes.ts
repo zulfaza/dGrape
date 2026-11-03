@@ -1,6 +1,5 @@
-import { validateRecipe } from "./lib/recipeDomain"
 import { ConvexError, v } from "convex/values"
-import { internalMutation } from "./_generated/server"
+import { internalMutation, internalQuery } from "./_generated/server"
 import { withGrant } from "./lib/agentGrant"
 import * as recipes from "./recipes"
 
@@ -21,21 +20,7 @@ export const publish = internalMutation({
   returns: recipes.publishResult,
   handler: (ctx, args) =>
     withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
-      validateRecipe(args.recipe)
-      for (const step of args.recipe.steps) {
-        if (step.kind === "fetch") {
-          const id = ctx.db.normalizeId("connections", step.connectionId)
-          const connection = id ? await ctx.db.get(id) : null
-          if (!connection || connection.workspaceId !== grant.workspaceId)
-            throw new Error("Connection access denied")
-        }
-        if (step.kind === "upsert" || step.kind === "snapshot") {
-          const id = ctx.db.normalizeId("collections", step.collectionId)
-          const collection = id ? await ctx.db.get(id) : null
-          if (!collection || collection.workspaceId !== grant.workspaceId)
-            throw new Error("Output collection access denied")
-        }
-      }
+      await recipes.checkRecipe(ctx, grant.workspaceId, args.recipe)
       const { digest, ...input } = args
       void digest
       return recipes.publishForPrincipal(
@@ -44,6 +29,42 @@ export const publish = internalMutation({
         grant.owner
       )
     }),
+})
+export const validate = internalQuery({
+  args: {
+    digest: v.string(),
+    now: v.number(),
+    ...recipes.validateArgs.omit("workspaceId").fields,
+  },
+  returns: recipes.validateResult,
+  handler: (ctx, args) =>
+    withGrant(ctx, args.digest, args.now, "read", async (grant) =>
+      recipes.validateForPrincipal(
+        ctx,
+        { recipe: args.recipe, workspaceId: grant.workspaceId },
+        grant.owner
+      )
+    ),
+})
+export const preview = internalQuery({
+  args: {
+    digest: v.string(),
+    now: v.number(),
+    ...recipes.previewArgs.omit("workspaceId").fields,
+  },
+  returns: recipes.previewResult,
+  handler: (ctx, args) =>
+    withGrant(ctx, args.digest, args.now, "read", async (grant) =>
+      recipes.previewForPrincipal(
+        ctx,
+        {
+          recipe: args.recipe,
+          sample: args.sample,
+          workspaceId: grant.workspaceId,
+        },
+        grant.owner
+      )
+    ),
 })
 export const versions = internalMutation({
   args: {

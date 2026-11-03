@@ -138,6 +138,37 @@ export const PublishInput = Schema.Struct({
   name: Schema.String,
   recipe: Recipe,
 })
+export const ValidateInput = Schema.Struct({ recipe: Recipe })
+export const PreviewInput = Schema.Struct({
+  recipe: Recipe,
+  sample: Schema.mutable(Schema.Array(Values)).check(Schema.isMaxLength(1000)),
+})
+const StepKind = Schema.Literals([
+  "fetch",
+  "map",
+  "filter",
+  "join",
+  "aggregate",
+  "upsert",
+  "snapshot",
+  "artifact",
+])
+const FailedCheck = Schema.Struct({
+  ok: Schema.Literal(false),
+  error: Schema.String,
+})
+export const ValidateResult = Schema.Union([
+  Schema.Struct({ ok: Schema.Literal(true) }),
+  FailedCheck,
+])
+export const PreviewResult = Schema.Union([
+  Schema.Struct({
+    ok: Schema.Literal(true),
+    steps: Schema.Array(Schema.Struct({ kind: StepKind, rows: Schema.Number })),
+    rows: Schema.Array(Values),
+  }),
+  FailedCheck,
+])
 export const HistoryInput = Schema.Struct({
   ...PageInput.fields,
   runId: Schema.String,

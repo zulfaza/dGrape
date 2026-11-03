@@ -530,4 +530,173 @@ describe("recipe credentials", () => {
       ).status
     ).toBe(403)
   })
+
+  it("validates and previews recipes without writing records", async () => {
+    const { t, owner, workspaceId } = await setup()
+    const { collectionId, connectionId } = await t.run(async (ctx) => {
+      const secretRef = await ctx.db.insert("secretRefs", {
+        workspaceId,
+        createdBy: "test|owner",
+        owner: { kind: "workspace" },
+        label: "Key",
+        revision: 1,
+        state: {
+          kind: "pending",
+          writeUntil: 0,
+          name: "key",
+          previousName: null,
+        },
+      })
+      return {
+        connectionId: await ctx.db.insert("connections", {
+          workspaceId,
+          createdBy: "test|owner",
+          label: "Source",
+          secretRef,
+          origin: "https://api.example.com",
+          routes: [],
+        }),
+        collectionId: await ctx.db.insert("collections", {
+          workspaceId,
+          name: "Totals",
+          definition: {
+            version: 1,
+            fields: [
+              { id: "team", label: "Team", type: "text" },
+              { id: "total", label: "Total", type: "integer" },
+            ],
+          },
+        }),
+      }
+    })
+    const totals: Recipe = {
+      steps: [
+        { kind: "fetch", connectionId, route: "/people", maxPages: 1 },
+        {
+          kind: "aggregate",
+          groupBy: "team",
+          operation: "count",
+          output: "total",
+        },
+        {
+          kind: "upsert",
+          collectionId,
+          source: "teams",
+          identityField: "team",
+        },
+      ],
+      limits: recipe.limits,
+    }
+    expect(
+      await owner.query(api.recipes.validate, { workspaceId, recipe: totals })
+    ).toEqual({ ok: true })
+    expect(
+      await owner.query(api.recipes.validate, {
+        workspaceId,
+        recipe: { ...totals, steps: totals.steps.slice(0, 2) },
+      })
+    ).toEqual({ ok: false, error: "A recipe must end with an output" })
+    expect(
+      await owner.query(api.recipes.preview, {
+        workspaceId,
+        recipe: totals,
+        sample: [{ team: "a" }, { team: "b" }, { team: "a" }],
+      })
+    ).toEqual({
+      ok: true,
+      steps: [
+        { kind: "fetch", rows: 3 },
+        { kind: "aggregate", rows: 2 },
+        { kind: "upsert", rows: 2 },
+      ],
+      rows: [
+        { team: "a", total: 2 },
+        { team: "b", total: 1 },
+      ],
+    })
+    expect(
+      await owner.query(api.recipes.preview, {
+        workspaceId,
+        recipe: totals,
+        sample: [{ team: 1 }],
+      })
+    ).toEqual({
+      ok: false,
+      error:
+        'Output row 1: Field "team" must be text of at most 10000 characters',
+    })
+    expect(
+      await owner.query(api.recipes.preview, {
+        workspaceId,
+        recipe: totals,
+        sample: [{ name: "a" }],
+      })
+    ).toEqual({ ok: false, error: "Step 2 (aggregate): Missing group field" })
+    await expect(
+      t
+        .withIdentity({ tokenIdentifier: "test|other" })
+        .query(api.recipes.preview, { workspaceId, recipe: totals, sample: [] })
+    ).rejects.toThrow("access denied")
+    const foreign = await t.run(async (ctx) =>
+      ctx.db.insert("collections", {
+        workspaceId: await ctx.db.insert("workspaces", { name: "Other" }),
+        name: "Foreign",
+        definition: {
+          version: 1,
+          fields: [{ id: "team", label: "Team", type: "text" }],
+        },
+      })
+    )
+    await t.run(async (ctx) => {
+      await ctx.db.insert("agentGrants", {
+        workspaceId,
+        owner: "test|owner",
+        digest: "reader",
+        scope: "readonly",
+        state: "active",
+        expiresAt: Date.now() + 60000,
+      })
+    })
+    expect(
+      await t.query(internal.agentRecipes.validate, {
+        now: Date.now(),
+        digest: "reader",
+        recipe: {
+          ...recipe,
+          steps: [{ kind: "snapshot", collectionId: foreign }],
+        },
+      })
+    ).toEqual({ ok: false, error: "Output collection access denied" })
+    expect(
+      await t.query(internal.agentRecipes.preview, {
+        now: Date.now(),
+        digest: "reader",
+        recipe: totals,
+        sample: [{ team: "a" }],
+      })
+    ).toMatchObject({ ok: true, rows: [{ team: "a", total: 1 }] })
+    await expect(
+      t.query(internal.agentRecipes.preview, {
+        now: Date.now(),
+        digest: "missing",
+        recipe: totals,
+        sample: [],
+      })
+    ).rejects.toThrow("denied")
+    await expect(
+      t.query(internal.agentRecipes.validate, {
+        now: Date.now() + 120000,
+        digest: "reader",
+        recipe: totals,
+      })
+    ).rejects.toThrow("denied")
+    expect(
+      await t.run(async (ctx) =>
+        ctx.db
+          .query("collectionRecords")
+          .withIndex("by_collection", (q) => q.eq("collectionId", collectionId))
+          .take(1)
+      )
+    ).toEqual([])
+  })
 })

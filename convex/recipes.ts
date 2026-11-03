@@ -13,7 +13,17 @@ import {
 import type { Doc, Id } from "./_generated/dataModel"
 import { recipeTables } from "./lib/recipeState"
 import { requireMembership } from "./lib/auth"
-import { recipeValidator, validateRecipe } from "./lib/recipeDomain"
+import {
+  checkRecordValues,
+  recordValuesValidator,
+} from "./lib/collectionDomain"
+import {
+  previewRecipe,
+  recipePreviewValidator,
+  recipeValidator,
+  validateRecipe,
+  type Recipe,
+} from "./lib/recipeDomain"
 import {
   latestDue,
   nextOccurrence,
@@ -130,6 +140,101 @@ const LEASE_MS = 120_000
 const ACTIVE_LIMIT = 4
 const terminal = (run: Doc<"recipeRuns">) =>
   run.state !== "pending" && run.state !== "running"
+
+/** Checks the recipe and that its connections and output collection are in the workspace. Returns the output collection. */
+export async function checkRecipe(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  recipe: Recipe
+) {
+  validateRecipe(recipe)
+  let output: Doc<"collections"> | null = null
+  for (const step of recipe.steps) {
+    if (step.kind === "fetch") {
+      const id = ctx.db.normalizeId("connections", step.connectionId)
+      const connection = id ? await ctx.db.get(id) : null
+      if (!connection || connection.workspaceId !== workspaceId)
+        throw new Error("Connection access denied")
+    }
+    if (step.kind === "upsert" || step.kind === "snapshot") {
+      const id = ctx.db.normalizeId("collections", step.collectionId)
+      output = id ? await ctx.db.get(id) : null
+      if (!output || output.workspaceId !== workspaceId)
+        throw new Error("Output collection access denied")
+    }
+  }
+  return output
+}
+/** Recipe errors become a result. Access errors still throw. */
+async function attempt<A extends { ok: true }>(
+  operate: () => Promise<A>
+): Promise<A | { ok: false; error: string }> {
+  try {
+    return await operate()
+  } catch (error) {
+    if (!(error instanceof Error)) throw error
+    return { ok: false, error: error.message }
+  }
+}
+const failedCheck = v.object({ ok: v.literal(false), error: v.string() })
+
+export const validateArgs = v.object({
+  workspaceId: v.id("workspaces"),
+  recipe: recipeValidator,
+})
+export const validateResult = v.union(
+  v.object({ ok: v.literal(true) }),
+  failedCheck
+)
+export async function validateForPrincipal(
+  ctx: QueryCtx,
+  args: Infer<typeof validateArgs>,
+  principal?: string
+) {
+  await recipeMember(ctx, args.workspaceId, principal)
+  return attempt(async () => {
+    await checkRecipe(ctx, args.workspaceId, args.recipe)
+    return { ok: true as const }
+  })
+}
+export const validate = query({
+  args: validateArgs.fields,
+  returns: validateResult,
+  handler: (ctx, args) => validateForPrincipal(ctx, args),
+})
+
+export const previewArgs = v.object({
+  ...validateArgs.fields,
+  sample: v.array(recordValuesValidator),
+})
+export const previewResult = v.union(
+  v.object({ ok: v.literal(true), ...recipePreviewValidator.fields }),
+  failedCheck
+)
+/** A query, so the dry run cannot write records. */
+export async function previewForPrincipal(
+  ctx: QueryCtx,
+  args: Infer<typeof previewArgs>,
+  principal?: string
+) {
+  await recipeMember(ctx, args.workspaceId, principal)
+  return attempt(async () => {
+    const output = await checkRecipe(ctx, args.workspaceId, args.recipe)
+    const preview = previewRecipe(args.recipe, args.sample)
+    if (output)
+      for (const [index, row] of preview.rows.entries()) {
+        const checked = checkRecordValues(output.definition.fields, row)
+        if (!checked.ok)
+          throw new Error(`Output row ${index + 1}: ${checked.message}`)
+      }
+    return { ok: true as const, ...preview }
+  })
+}
+export const preview = query({
+  args: previewArgs.fields,
+  returns: previewResult,
+  handler: (ctx, args) => previewForPrincipal(ctx, args),
+})
 
 export const publishArgs = v.object({
   workspaceId: v.id("workspaces"),

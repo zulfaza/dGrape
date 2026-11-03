@@ -191,12 +191,31 @@ const ListTemplates = Tool.make("collections_templates", {
 }).annotate(Tool.Readonly, true)
 
 const RecipePublish = Tool.make("recipes_publish", {
-  description: "Publish an immutable recipe. Requires write access.",
+  description:
+    "Publish an immutable recipe. Use recipes_validate and recipes_preview first. Requires write access.",
   parameters: Recipes.PublishInput,
   success: Schema.String,
   failure: AgentApi.AgentApiError,
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Destructive, false)
+
+const RecipeValidate = Tool.make("recipes_validate", {
+  description:
+    "Check a recipe before recipes_publish: its steps, limits, connections and output collection. Returns `ok: true`, or `ok: false` with the `error`. Saves nothing.",
+  parameters: Recipes.ValidateInput,
+  success: Recipes.ValidateResult,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const RecipePreview = Tool.make("recipes_preview", {
+  description:
+    "Dry run a recipe on `sample` rows (at most the recipe's row limit). The sample replaces the rows of the fetch step, so nothing is fetched; give an empty sample for a recipe without fetch. The output step saves nothing. Returns the row count after each step and the output rows, checked against the output collection fields, or `ok: false` with the `error`.",
+  parameters: Recipes.PreviewInput,
+  success: Recipes.PreviewResult,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
 
 const RecipeVersions = Tool.make("recipes_versions", {
   description: "List recipe versions. Use continueCursor for the next page.",
@@ -300,6 +319,8 @@ const QueryRun = Tool.make("queries_run", {
 }).annotate(Tool.Readonly, true)
 
 const DfeToolkit = Toolkit.make(
+  RecipeValidate,
+  RecipePreview,
   RecipePublish,
   RecipeVersions,
   RecipeRuns,
@@ -334,6 +355,8 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
   Effect.gen(function* () {
     const api = yield* AgentApi.AgentApi
     return {
+      recipes_validate: (input) => api.recipeValidate(input),
+      recipes_preview: (input) => api.recipePreview(input),
       recipes_publish: (input) => api.recipePublish(input),
       recipes_versions: (input) => api.recipeVersions(input),
       recipes_runs: (input) => api.recipeRuns(input),
