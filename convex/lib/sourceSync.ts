@@ -11,7 +11,6 @@ const syncOutcome = v.object({ runId: v.id("recipeRuns"), at: v.number() })
  * change this row.
  */
 export const sourceSyncFields = {
-  workspaceId: v.id("workspaces"),
   collectionId: v.id("collections"),
   lastSuccess: v.optional(syncOutcome),
   lastFailure: v.optional(syncOutcome),
@@ -126,7 +125,6 @@ export async function recordSyncOutcome(
     .unique()
   if (!sync) {
     await ctx.db.insert("sourceSyncs", {
-      workspaceId: run.workspaceId,
       collectionId: collection._id,
       ...(outcome === "success"
         ? { lastSuccess: value }

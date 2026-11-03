@@ -188,9 +188,9 @@ export default defineSchema({
     ])
     .index("by_recordId", ["recordId"]),
   /** Last recipe run outcome for each source collection. */
-  sourceSyncs: defineTable(sourceSyncFields)
-    .index("by_collectionId", ["collectionId"])
-    .index("by_workspaceId", ["workspaceId"]),
+  sourceSyncs: defineTable(sourceSyncFields).index("by_collectionId", [
+    "collectionId",
+  ]),
   sourceCursors: defineTable({
     collectionId: v.id("collections"),
     source: v.string(),

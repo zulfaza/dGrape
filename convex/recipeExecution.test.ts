@@ -118,7 +118,9 @@ describe("durable recipe checkpoints", () => {
       if (!collection) throw new Error("Collection missing")
       return collection.workspaceId
     })
-    expect(await owner.query(api.sourceSyncs.list, { workspaceId })).toEqual([])
+    expect(await owner.query(api.sourceSyncs.list, { workspaceId })).toEqual([
+      { collectionId, name: "Data", freshness: { kind: "never_synced" } },
+    ])
     await t.action(internal.recipeRunner.execute, { ...args, step: 0 })
     await t.action(internal.recipeRunner.execute, { ...args, step: 1 })
     const [synced] = await owner.query(api.sourceSyncs.list, { workspaceId })
