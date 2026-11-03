@@ -4,6 +4,7 @@ import {
   Database,
   FileText,
   Files,
+  History,
   PanelsTopLeft,
   Plug,
 } from "lucide-react"
@@ -52,6 +53,11 @@ const WORKSPACE_SECTIONS = [
     label: "Artifacts",
     icon: Files,
     to: "/dashboard/workspaces/$workspaceId/artifacts",
+  },
+  {
+    label: "Activity",
+    icon: History,
+    to: "/dashboard/workspaces/$workspaceId/activity",
   },
 ] as const
 
