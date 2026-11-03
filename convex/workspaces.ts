@@ -1,4 +1,8 @@
 import {
+  createVersionedCollection,
+  publishCompatibleSchema,
+} from "./lib/collectionSchemas"
+import {
   paginationOptsValidator,
   paginationResultValidator,
 } from "convex/server"
@@ -113,7 +117,7 @@ export const createCollection = mutation({
     await requireMembership(ctx, workspaceId)
     const checked = checkCollection(name, fields)
     if (!checked.ok) throw new Error(checked.message)
-    return ctx.db.insert("collections", {
+    return createVersionedCollection(ctx, {
       workspaceId,
       name: checked.value.name,
       definition: { version: 1, fields: checked.value.fields },
@@ -283,7 +287,7 @@ export const addField = mutation({
     const collection = await collectionForRecords(ctx, collectionId)
     const definition = addFieldToDefinition(collection.definition, field)
     if (!definition.ok) throw new Error(definition.message)
-    await ctx.db.patch(collectionId, { definition: definition.value })
+    await publishCompatibleSchema(ctx, collection, definition.value)
     return null
   },
 })
