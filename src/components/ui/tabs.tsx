@@ -23,7 +23,11 @@ function TabsList({
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.List>) {
   const listRef = React.useRef<HTMLDivElement>(null)
-  React.useImperativeHandle(ref, () => listRef.current!, [])
+  React.useImperativeHandle(ref, () => {
+    const list = listRef.current
+    if (list === null) throw new Error("Tabs list is not mounted")
+    return list
+  }, [])
 
   React.useEffect(() => {
     const list = listRef.current

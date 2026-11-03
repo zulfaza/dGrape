@@ -1333,35 +1333,37 @@ function Patterns({ onCreate }: { onCreate: () => void }) {
       <section className="surface foundation-section">
         <h2>Five features, one concrete story</h2>
         <div className="feature-list">
-          {[
+          {(
             [
-              Database01Icon,
-              "Flexible data",
-              "Create the fields your workflow needs.",
-            ],
-            [
-              Link01Icon,
-              "Connected sources",
-              "Reuse approved API access without exposing its secret.",
-            ],
-            [
-              Clock01Icon,
-              "Background recipes",
-              "Run the same bounded steps on a schedule.",
-            ],
-            [
-              Folder01Icon,
-              "Artifacts with context",
-              "Keep files and reports beside the records they explain.",
-            ],
-            [
-              DashboardSquare01Icon,
-              "Pages made useful",
-              "Combine live tables, charts, and custom HTML snapshots.",
-            ],
-          ].map(([icon, title, description]) => (
+              [
+                Database01Icon,
+                "Flexible data",
+                "Create the fields your workflow needs.",
+              ],
+              [
+                Link01Icon,
+                "Connected sources",
+                "Reuse approved API access without exposing its secret.",
+              ],
+              [
+                Clock01Icon,
+                "Background recipes",
+                "Run the same bounded steps on a schedule.",
+              ],
+              [
+                Folder01Icon,
+                "Artifacts with context",
+                "Keep files and reports beside the records they explain.",
+              ],
+              [
+                DashboardSquare01Icon,
+                "Pages made useful",
+                "Combine live tables, charts, and custom HTML snapshots.",
+              ],
+            ] satisfies ReadonlyArray<readonly [Icon, string, string]>
+          ).map(([icon, title, description]) => (
             <div key={String(title)}>
-              <IconView icon={icon as Icon} />
+              <IconView icon={icon} />
               <span>
                 <strong>{String(title)}</strong>
                 <p>{String(description)}</p>

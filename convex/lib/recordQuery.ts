@@ -57,10 +57,7 @@ export function checkQuery(
   if (!field.indexed)
     return invalid(
       `Field "${field.id}" is not indexed. Indexed fields: ${
-        fields
-          .filter((f) => f.indexed)
-          .map((f) => f.id)
-          .join(", ") || "none"
+        fields.flatMap((f) => (f.indexed ? [f.id] : [])).join(", ") || "none"
       }`
     )
   const { where } = query

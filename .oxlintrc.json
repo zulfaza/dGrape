@@ -12,12 +12,391 @@
   "rules": {
     "import/no-cycle": "off",
     "typescript/array-type": "off",
-    "typescript/require-await": "off"
+    "typescript/require-await": "off",
+    "anti-slop/no-runtime-typeof": "error",
+    "anti-slop/no-unknown-type-aliases": "error",
+    "anti-slop/no-conditional-empty-object-spread": "error",
+    "anti-slop/no-reflect-apply": "error",
+    "anti-slop/no-chained-type-assertions": "error",
+    "anti-slop/no-shape-in-symbol-names": "error",
+    "anti-slop/no-widen-then-assert": "error",
+    "anti-slop/no-unknown-parameters": "error",
+    "anti-slop/require-readable-spacing": "off",
+    "anti-slop/no-module-mocking": "error",
+    "anti-slop/no-array-filter-map": "error",
+    "anti-slop/no-reduce-accumulator-copy": "error",
+    "anti-slop/no-unsafe-dictionary-type": "error",
+    "anti-slop/no-reflect-get": "error",
+    "anti-slop/require-safety-comment-for-type-assertion": "error",
+    "anti-slop/no-object-parameters": "error",
+    "anti-slop/no-known-value-widening": "error",
+    "anti-slop/no-unknown-returns": "error",
+    "anti-slop-effect/no-manual-tagged-construction": "error",
+    "anti-slop-effect/no-manual-effect-error-tag": "error",
+    "anti-slop-effect/prefer-effect-match": "error",
+    "anti-slop-effect/no-service-constructor-imports": "error",
+    "anti-slop-effect/no-manual-tag-comparison": "error",
+    "oxc/no-accumulating-spread": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/consistent-type-assertions": [
+      "error",
+      {
+        "assertionStyle": "never"
+      }
+    ],
+    "shadcn/no-restyle": [
+      "error",
+      {
+        "allow": ["layout"],
+        "contracts": [
+          {
+            "pattern": "^CardTitle$",
+            "allow": ["layout", "typography"]
+          },
+          {
+            "pattern": "^(Card|CardContent|CardHeader|CardFooter|DialogContent|DialogHeader|DialogFooter|SheetContent|SheetHeader|SheetFooter|SidebarGroup|SidebarContent|SidebarHeader|SidebarFooter)$",
+            "allow": ["layout", "spacing"]
+          },
+          {
+            "pattern": "^Avatar$",
+            "allow": ["layout", "size-*"]
+          },
+          {
+            "pattern": "^Input$",
+            "allow": ["layout", "font-mono", "tracking-widest"]
+          },
+          {
+            "pattern": "^Button$",
+            "allow": [
+              "layout",
+              "text-muted-foreground",
+              "text-destructive",
+              "full-width"
+            ]
+          },
+          {
+            "pattern": "^Table(Head|Cell)$",
+            "allow": [
+              "layout",
+              "spacing",
+              "tabular-nums",
+              "truncate",
+              "tabular"
+            ]
+          },
+          {
+            "pattern": "^Empty$",
+            "allow": ["layout", "rounded-xl", "border", "bg-card"]
+          },
+          {
+            "pattern": "^Badge$",
+            "allow": ["layout", "ds-status"]
+          },
+          {
+            "pattern": "^TooltipContent$",
+            "allow": ["layout", "chart-tooltip"]
+          },
+          {
+            "pattern": "^FieldGroup$",
+            "allow": ["layout", "input-column", "preference-field"]
+          },
+          {
+            "pattern": "^DialogFooter$",
+            "allow": ["layout", "spacing", "collection-dialog-footer"]
+          },
+          {
+            "pattern": "^SidebarMenuButton$",
+            "allow": [
+              "layout",
+              "data-[state=open]:bg-sidebar-accent",
+              "data-[state=open]:text-sidebar-accent-foreground"
+            ]
+          },
+          {
+            "pattern": "^(Avatar|AvatarFallback)$",
+            "allow": ["layout", "size-*", "rounded-lg"]
+          },
+          {
+            "pattern": "^DropdownMenuContent$",
+            "allow": ["layout", "rounded-lg"]
+          },
+          {
+            "pattern": "^DropdownMenuLabel$",
+            "allow": ["layout", "p-0", "font-normal"]
+          }
+        ]
+      }
+    ],
+    "shadcn/no-raw-colors": "error",
+    "shadcn/no-arbitrary-values": [
+      "error",
+      {
+        "allow": ["layout"]
+      }
+    ],
+    "shadcn/no-inline-styles": "error",
+    "shadcn/require-static-classes": "error",
+    "react/purity": "off",
+    "react/refs": "off",
+    "react/set-state-in-effect": "off"
   },
   "ignorePatterns": [
     ".oxlintrc.json",
     ".oxfmtrc.json",
     "vite.config.ts",
-    "src/routeTree.gen.ts"
+    "src/routeTree.gen.ts",
+    "convex/_generated/**",
+    "tools/oxlint/anti-slop/**",
+    ".agents/**",
+    ".claude/**",
+    ".codex/**"
+  ],
+  "jsPlugins": [
+    {
+      "name": "anti-slop",
+      "specifier": "./tools/oxlint/anti-slop/index.ts"
+    },
+    {
+      "name": "anti-slop-effect",
+      "specifier": "./tools/oxlint/anti-slop/effect/index.ts"
+    },
+    "@shadcn/lint"
+  ],
+  "overrides": [
+    {
+      "files": ["src/components/ui/**"],
+      "rules": {
+        "shadcn/no-restyle": "off",
+        "shadcn/no-arbitrary-values": [
+          "error",
+          {
+            "allow": [
+              "layout",
+              "focus-visible:ring-[3px]",
+              "group-data-[focused=true]/day:ring-[3px]",
+              "has-focus:ring-[3px]",
+              "hover:shadow-[0_0_0_1px_var(--sidebar-accent)]",
+              "px-[--cell-size]",
+              "rounded-[2px]",
+              "rounded-[4px]",
+              "shadow-[0_0_0_1px_var(--sidebar-border)]",
+              "text-[0.8rem]",
+              "transition-[color,box-shadow]",
+              "transition-[left,right,width]",
+              "transition-[margin,opacity]",
+              "transition-[width,height,padding]",
+              "transition-[width]"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/components/collection-records.tsx"],
+      "rules": {
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["convex/lib/agentRegistration.ts"],
+      "rules": {
+        "anti-slop/no-unknown-parameters": "off",
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["convex/lib/identityAssertion.ts"],
+      "rules": {
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["convex/lib/collectionDomain.ts"],
+      "rules": {
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["convex/lib/recordQuery.ts"],
+      "rules": {
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["src/lib/record-export.ts"],
+      "rules": {
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["src/components/ui/sidebar.tsx"],
+      "rules": {
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["src/mcp/agent-api.ts"],
+      "rules": {
+        "anti-slop/no-unknown-parameters": "off"
+      }
+    },
+    {
+      "files": ["convex/http.ts"],
+      "rules": {
+        "anti-slop/no-unknown-parameters": "off",
+        "anti-slop/no-unknown-returns": "off",
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["src/routes/claim.tsx"],
+      "rules": {
+        "anti-slop/no-unsafe-dictionary-type": "off",
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["convex/lib/recipeDomain.ts"],
+      "rules": {
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["convex/agentIdentityHttp.ts"],
+      "rules": {
+        "anti-slop/no-unknown-returns": "off",
+        "anti-slop/no-unsafe-dictionary-type": "off",
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["convex/lib/agentRequests.ts"],
+      "rules": {
+        "anti-slop/no-unsafe-dictionary-type": "off",
+        "anti-slop/no-runtime-typeof": "off",
+        "anti-slop/no-unknown-parameters": "off"
+      }
+    },
+    {
+      "files": ["convex/agentRegistrations.ts"],
+      "rules": {
+        "anti-slop/no-runtime-typeof": "off"
+      }
+    },
+    {
+      "files": ["src/components/landing/hero-dashboard.tsx"],
+      "rules": {
+        "shadcn/no-arbitrary-values": [
+          "error",
+          {
+            "allow": [
+              "layout",
+              "rounded-[1.2%/1.9%]",
+              "shadow-[0_40px_80px_-40px_rgb(36_51_43/0.55)]",
+              "bg-[#e5867a]",
+              "bg-[#e6bd5b]",
+              "bg-[#8cc9a7]"
+            ]
+          }
+        ],
+        "shadcn/no-inline-styles": [
+          "error",
+          {
+            "allow": [
+              "aspectRatio",
+              "width",
+              "height",
+              "transform",
+              "animationDelay"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/components/landing/step-mocks.tsx"],
+      "rules": {
+        "shadcn/no-arbitrary-values": [
+          "error",
+          {
+            "allow": [
+              "layout",
+              "shadow-[0_24px_60px_-30px_rgb(36_51_43/0.5)]",
+              "border-[#2f3a33]",
+              "bg-[#1f2622]",
+              "text-[#e9eaec]",
+              "bg-[#e5867a]",
+              "bg-[#e6bd5b]",
+              "bg-[#8cc9a7]",
+              "text-[#b5b8be]",
+              "text-[13px]",
+              "text-[#8cc9a7]",
+              "bg-[#e9eaec]",
+              "text-[11px]"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/design-system/main.tsx"],
+      "rules": {
+        "shadcn/no-inline-styles": [
+          "error",
+          {
+            "allow": ["background", "color", "width", "borderRadius"]
+          }
+        ],
+        "shadcn/require-static-classes": "off"
+      }
+    },
+    {
+      "files": ["src/routes/index.tsx"],
+      "rules": {
+        "shadcn/no-arbitrary-values": [
+          "error",
+          {
+            "allow": ["layout", "pt-[17.5%]", "pt-[7.8%]", "leading-[1.05]"]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "convex/lib/agentAuthDiscovery.ts",
+        "src/routes/dashboard/route.tsx"
+      ],
+      "rules": {
+        "anti-slop/no-known-value-widening": "off"
+      }
+    },
+    {
+      "files": [
+        "convex/lib/agentRequests.ts",
+        "src/lib/record-export.ts",
+        "src/mcp/agent-api.ts"
+      ],
+      "rules": {
+        "anti-slop/no-conditional-empty-object-spread": "off"
+      }
+    },
+    {
+      "files": ["src/components/ui/calendar.tsx"],
+      "rules": {
+        "shadcn/require-static-classes": "off"
+      }
+    },
+    {
+      "files": ["src/components/landing/waving-sloth.tsx"],
+      "rules": {
+        "shadcn/no-inline-styles": [
+          "error",
+          {
+            "allow": ["animationPlayState"]
+          }
+        ]
+      }
+    }
   ]
 }

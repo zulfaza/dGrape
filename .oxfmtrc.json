@@ -5,7 +5,11 @@
   "semi": false,
   "singleQuote": false,
   "trailingComma": "es5",
-  "ignorePatterns": ["src/routeTree.gen.ts"],
+  "ignorePatterns": [
+    "src/routeTree.gen.ts",
+    "tools/oxlint/anti-slop/**",
+    ".agents/**"
+  ],
   "sortTailwindcss": {
     "stylesheet": "./src/app.css",
     "functions": ["cn", "cva"]

@@ -12,6 +12,14 @@ import { cn } from "#/lib/utils.ts"
 
 // shadcn/ui Sonner recipe, using our explicit theme and shared geometry tokens.
 function Toaster({ className, style, ...props }: ToasterProps) {
+  const toastStyle = {
+    "--normal-bg": "var(--popover)",
+    "--normal-text": "var(--popover-foreground)",
+    "--normal-border": "var(--border)",
+    "--border-radius": "var(--dfe-radius-panel)",
+    ...style,
+  } satisfies CSSProperties & Record<`--${string}`, string>
+
   return (
     <Sonner
       className={cn("toaster group", className)}
@@ -32,15 +40,7 @@ function Toaster({ className, style, ...props }: ToasterProps) {
           />
         ),
       }}
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--dfe-radius-panel)",
-          ...style,
-        } as CSSProperties
-      }
+      style={toastStyle}
       {...props}
     />
   )

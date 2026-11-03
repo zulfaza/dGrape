@@ -32,8 +32,9 @@ function privateJwk(): PrivateJwk {
   const parsed: unknown = JSON.parse(signingKeyJwk())
   if (typeof parsed !== "object" || parsed === null)
     throw new Error("AGENT_AUTH_SIGNING_KEY must be a JWK object")
+  const fields = new Map(Object.entries(parsed))
   const field = (name: string) => {
-    const value = name in parsed ? Reflect.get(parsed, name) : undefined
+    const value = fields.get(name)
     if (typeof value !== "string" || !value)
       throw new Error(`AGENT_AUTH_SIGNING_KEY needs a "${name}" string`)
     return value
@@ -51,9 +52,11 @@ function privateJwk(): PrivateJwk {
 }
 
 /** The public signing key, for /.well-known/jwks.json. */
-export function publicJwks(): { keys: JWK[] } {
+export function publicJwks() {
   const { kty, crv, x, y, kid } = privateJwk()
-  return { keys: [{ kty, crv, x, y, kid, alg: ALGORITHM, use: "sig" }] }
+  return {
+    keys: [{ kty, crv, x, y, kid, alg: ALGORITHM, use: "sig" }],
+  } satisfies { keys: JWK[] }
 }
 
 /** Signs an assertion for a claimed registration. */
