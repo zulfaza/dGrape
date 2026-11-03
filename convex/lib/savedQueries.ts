@@ -4,20 +4,37 @@ import type { MutationCtx, QueryCtx } from "../_generated/server"
 import { requireMembership } from "./auth"
 import { checkQuery, queryRecords, type RecordQuery } from "./recordQuery"
 
+type SaveQueryArgs = {
+  collectionId: Id<"collections">
+  name: string
+  query: RecordQuery
+  queryId?: Id<"queryDefinitions">
+  expectedRevision?: number
+}
+
 /** Public contract: an immutable revision pins the source and result schema. */
 export async function saveQuery(
   ctx: MutationCtx,
-  args: {
-    collectionId: Id<"collections">
-    name: string
-    query: RecordQuery
-    queryId?: Id<"queryDefinitions">
-    expectedRevision?: number
-  }
+  args: SaveQueryArgs
 ): Promise<{ queryId: Id<"queryDefinitions">; revision: number }> {
   const collection = await ctx.db.get(args.collectionId)
   if (!collection) throw new Error("Collection access denied")
   await requireMembership(ctx, collection.workspaceId)
+  return saveQueryInWorkspace(ctx, collection.workspaceId, args)
+}
+
+/**
+ * Saves a query of a collection in `workspaceId`. The caller has already
+ * proved access to the workspace (membership or an agent credential).
+ */
+export async function saveQueryInWorkspace(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">,
+  args: SaveQueryArgs
+): Promise<{ queryId: Id<"queryDefinitions">; revision: number }> {
+  const collection = await ctx.db.get(args.collectionId)
+  if (!collection || collection.workspaceId !== workspaceId)
+    throw new Error("Collection access denied")
   const checked = checkQuery(collection.definition.fields, args.query)
   if (!checked.ok) throw new Error(checked.message)
   const name = args.name.trim()
@@ -68,18 +85,35 @@ export type SavedQueryPage = PaginationResult<Doc<"collectionRecords">> & {
   readAt: number
 }
 
+type RunSavedQueryArgs = {
+  queryId: Id<"queryDefinitions">
+  expectedRevision: number
+  paginationOpts: PaginationOptions
+}
+
 /** Membership is checked here so pages and the dashboard share one boundary. */
 export async function runSavedQuery(
   ctx: QueryCtx,
-  args: {
-    queryId: Id<"queryDefinitions">
-    expectedRevision: number
-    paginationOpts: PaginationOptions
-  }
+  args: RunSavedQueryArgs
 ): Promise<SavedQueryPage> {
   const saved = await ctx.db.get(args.queryId)
   if (!saved) throw new Error("Query access denied")
   await requireMembership(ctx, saved.workspaceId)
+  return runSavedQueryInWorkspace(ctx, saved.workspaceId, args)
+}
+
+/**
+ * Runs a saved query revision of `workspaceId` within the page budget. The
+ * caller has already proved access to the workspace.
+ */
+export async function runSavedQueryInWorkspace(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  args: RunSavedQueryArgs
+): Promise<SavedQueryPage> {
+  const saved = await ctx.db.get(args.queryId)
+  if (!saved || saved.workspaceId !== workspaceId)
+    throw new Error("Query access denied")
   const version = await ctx.db
     .query("queryDefinitionVersions")
     .withIndex("by_queryId_and_revision", (q) =>
@@ -128,4 +162,50 @@ export async function runSavedQuery(
     freshness: "live",
     readAt: Date.now(),
   }
+}
+
+/** One saved query with its current revision, as agents list them. */
+export type SavedQuerySummary = {
+  queryId: Id<"queryDefinitions">
+  collectionId: Id<"collections">
+  name: string
+  revision: number
+  /** "stale" when the collection schema changed after this revision. */
+  status: "current" | "stale"
+  fields: Doc<"collections">["definition"]["fields"]
+}
+
+/** Lists the saved queries of `workspaceId`, one bounded page at a time. */
+export async function listSavedQueries(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  paginationOpts: PaginationOptions
+): Promise<PaginationResult<SavedQuerySummary>> {
+  const result = await ctx.db
+    .query("queryDefinitions")
+    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+    .paginate(paginationOpts)
+  const page: SavedQuerySummary[] = []
+  for (const saved of result.page) {
+    const version = await ctx.db
+      .query("queryDefinitionVersions")
+      .withIndex("by_queryId_and_revision", (q) =>
+        q.eq("queryId", saved._id).eq("revision", saved.revision)
+      )
+      .unique()
+    if (!version) continue
+    const collection = await ctx.db.get(saved.collectionId)
+    page.push({
+      queryId: saved._id,
+      collectionId: saved.collectionId,
+      name: saved.name,
+      revision: saved.revision,
+      status:
+        collection?.definition.version === version.schemaVersion
+          ? "current"
+          : "stale",
+      fields: version.resultSchema.fields,
+    })
+  }
+  return { ...result, page }
 }
