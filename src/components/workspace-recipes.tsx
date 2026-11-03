@@ -683,6 +683,7 @@ function ScheduleRow({
   const [edit, setEdit] = useState<{
     versionId: Id<"recipeVersions">
     timing: string
+    expectedRevision: number
   } | null>(null)
   const canManage = permissions?.canManage === true
   return (
@@ -712,6 +713,7 @@ function ScheduleRow({
           disabled={busy || !canManage || edit !== null}
           onClick={() =>
             setEdit({
+              expectedRevision: item.revision ?? 0,
               versionId: item.versionId,
               timing:
                 item.timing.kind === "cron"
@@ -741,7 +743,7 @@ function ScheduleRow({
               validateTiming(timing)
               await updateSchedule({
                 scheduleId: item._id,
-                expectedRevision: item.revision ?? 0,
+                expectedRevision: edit.expectedRevision,
                 versionId: edit.versionId,
                 timing,
               })
