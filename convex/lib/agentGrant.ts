@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values"
 import type { QueryCtx } from "../_generated/server"
 
 /**
@@ -27,5 +28,39 @@ export async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
     owner: grant.owner,
     workspaceId: grant.workspaceId,
     scope: grant.scope,
+  }
+}
+
+export type Grant = NonNullable<Awaited<ReturnType<typeof resolveGrant>>>
+
+/** Status that convex/lib/agentRoute.ts sends for a refused operation. */
+export type AgentFailureStatus = 400 | 403 | 409
+
+/**
+ * Runs `operate` for a valid credential, in the caller's transaction. It needs
+ * a "readwrite" credential when `access` is "write". A plain Error from the
+ * operation becomes a ConvexError that agentRoute maps to a status: 403 when
+ * the message says "denied", 409 when it says "conflict", otherwise 400.
+ */
+export async function withGrant<A>(
+  ctx: QueryCtx,
+  digest: string,
+  now: number,
+  access: "read" | "write",
+  operate: (grant: Grant) => Promise<A>
+): Promise<A> {
+  const grant = await resolveGrant(ctx, digest, now)
+  if (!grant || (access === "write" && grant.scope !== "readwrite"))
+    throw new ConvexError({ status: 403, message: "Credential access denied" })
+  try {
+    return await operate(grant)
+  } catch (error) {
+    if (error instanceof ConvexError || !(error instanceof Error)) throw error
+    const status: AgentFailureStatus = error.message.includes("denied")
+      ? 403
+      : error.message.includes("conflict")
+        ? 409
+        : 400
+    throw new ConvexError({ status, message: error.message })
   }
 }

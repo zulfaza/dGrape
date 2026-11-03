@@ -1,31 +1,8 @@
 import { validateRecipe } from "./lib/recipeDomain"
 import { ConvexError, v } from "convex/values"
-import { internalMutation, type MutationCtx } from "./_generated/server"
-import { resolveGrant } from "./lib/agentGrant"
+import { internalMutation } from "./_generated/server"
+import { withGrant } from "./lib/agentGrant"
 import * as recipes from "./recipes"
-
-// Credential checks and the operation share one transaction.
-async function withGrant<A>(
-  ctx: MutationCtx,
-  digest: string,
-  access: "read" | "write",
-  operate: (
-    grant: NonNullable<Awaited<ReturnType<typeof resolveGrant>>>
-  ) => Promise<A>
-): Promise<A> {
-  const grant = await resolveGrant(ctx, digest, Date.now())
-  if (!grant || (access === "write" && grant.scope !== "readwrite"))
-    throw new ConvexError({ status: 403, message: "Credential access denied" })
-  try {
-    return await operate(grant)
-  } catch (error) {
-    if (error instanceof ConvexError || !(error instanceof Error)) throw error
-    throw new ConvexError({
-      status: error.message.includes("denied") ? 403 : 400,
-      message: error.message,
-    })
-  }
-}
 
 function checkPage(input: { numItems: number; cursor: string | null }) {
   if (
@@ -43,7 +20,7 @@ export const publish = internalMutation({
   },
   returns: recipes.publishResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
       validateRecipe(args.recipe)
       for (const step of args.recipe.steps) {
         if (step.kind === "fetch") {
@@ -75,7 +52,7 @@ export const versions = internalMutation({
   },
   returns: recipes.versionsResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "read", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "read", async (grant) => {
       const { digest, ...input } = args
       void digest
       checkPage(input.paginationOpts)
@@ -90,7 +67,7 @@ export const runs = internalMutation({
   args: { digest: v.string(), ...recipes.runsArgs.omit("workspaceId").fields },
   returns: recipes.runsResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "read", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "read", async (grant) => {
       const { digest, ...input } = args
       void digest
       checkPage(input.paginationOpts)
@@ -109,7 +86,7 @@ export const history = internalMutation({
   },
   returns: recipes.historyResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "read", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "read", async (grant) => {
       const { digest, ...input } = args
       void digest
       checkPage(input.paginationOpts)
@@ -131,7 +108,7 @@ export const trigger = internalMutation({
   },
   returns: recipes.triggerResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
       const { digest, ...input } = args
       void digest
       const versionId = ctx.db.normalizeId("recipeVersions", input.versionId)
@@ -156,7 +133,7 @@ export const schedule = internalMutation({
   },
   returns: recipes.scheduleResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
       const { digest, ...input } = args
       void digest
       const versionId = ctx.db.normalizeId("recipeVersions", input.versionId)
@@ -180,7 +157,7 @@ export const schedules = internalMutation({
   },
   returns: recipes.schedulesResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "read", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "read", async (grant) => {
       const { digest, ...input } = args
       void digest
       checkPage(input.paginationOpts)
@@ -199,7 +176,7 @@ export const setEnabled = internalMutation({
   },
   returns: recipes.setEnabledResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
       const { digest, ...input } = args
       void digest
       const scheduleId = ctx.db.normalizeId("recipeSchedules", input.scheduleId)
@@ -224,7 +201,7 @@ export const cancel = internalMutation({
   args: { digest: v.string(), ...recipes.cancelArgs.fields, runId: v.string() },
   returns: recipes.cancelResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
       const { digest, ...input } = args
       void digest
       const runId = ctx.db.normalizeId("recipeRuns", input.runId)
@@ -245,7 +222,7 @@ export const setRunAccess = internalMutation({
   },
   returns: recipes.setRunAccessResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
       const { digest, ...input } = args
       void digest
       const versionId = ctx.db.normalizeId("recipeVersions", input.versionId)
