@@ -127,8 +127,10 @@ test("select values are options and multi-select values list different options",
   expect(
     parseCreateCollection({ name: "Jobs", fields: chosen })?.fields
   ).toEqual(chosen)
-  for (const field of chosen)
+  for (const field of chosen) {
     expect(Schema.decodeUnknownSync(Field)(field)).toEqual(field)
+    expect(Schema.decodeUnknownSync(Queries.Field)(field)).toEqual(field)
+  }
   expect(
     parseCreateCollection({
       name: "Bad",

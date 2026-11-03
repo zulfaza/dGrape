@@ -15,22 +15,39 @@ const Bound = Schema.Struct({
   value: Value,
   inclusive: Schema.optionalKey(Schema.Boolean),
 })
-/** A field of a saved query result; collectionDomain.ts has its rules. */
-export const Field = Schema.Struct({
+/** A record value: a scalar, or the chosen options of a multi-select field. */
+const RecordValue = Schema.Union([
+  Schema.String,
+  Schema.Number,
+  Schema.Boolean,
+  Schema.Array(Schema.String),
+])
+const fieldIdentity = {
   id: Schema.String,
   label: Schema.String,
-  type: Schema.Literals([
-    "text",
-    "number",
-    "boolean",
-    "integer",
-    "currency",
-    "timestamp",
-    "date",
-  ]),
   optional: Schema.optionalKey(Schema.Literal(true)),
   indexed: Schema.optionalKey(Schema.Literal(true)),
-})
+}
+/** A field of a saved query result; collectionDomain.ts has its rules. */
+export const Field = Schema.Union([
+  Schema.Struct({
+    ...fieldIdentity,
+    type: Schema.Literals([
+      "text",
+      "number",
+      "boolean",
+      "integer",
+      "currency",
+      "timestamp",
+      "date",
+    ]),
+  }),
+  Schema.Struct({
+    ...fieldIdentity,
+    type: Schema.Literals(["select", "multiSelect"]),
+    options: Schema.Array(Schema.String),
+  }),
+])
 const Limit = Schema.Int.check(
   Schema.isBetween({ minimum: 1, maximum: MAX_PAGE_SIZE })
 )
@@ -147,7 +164,7 @@ export const RunPage = Schema.Struct({
       _id: Schema.String,
       _creationTime: Schema.Number,
       revision: Schema.Number,
-      values: Schema.Record(Schema.String, Value),
+      values: Schema.Record(Schema.String, RecordValue),
     })
   ),
   isDone: Schema.Boolean,
