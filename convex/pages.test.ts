@@ -3,6 +3,7 @@ import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
 import schema from "./schema"
 import { api } from "./_generated/api"
+import * as Pages from "./lib/agentPageTransport"
 const modules = import.meta.glob("./**/*.ts")
 
 async function fixture() {
@@ -347,3 +348,175 @@ test("live blocks authorize stored addresses, bound results and report stale sou
   ).toContain("schema is stale")
   expect(await owner.query(api.pages.sources, { workspaceId })).toEqual([])
 })
+
+test("agent credentials draft, publish, get and list pages with clear binding errors", async () => {
+  const { t, workspaceId, otherWorkspaceId } = await fixture()
+  const { digestToken } = await import("./agentAccess")
+  const writer = "a".repeat(64)
+  const reader = "b".repeat(64)
+  const { queryId, foreignPageId } = await t.run(async (ctx) => {
+    for (const [token, scope] of [
+      [writer, "readwrite"],
+      [reader, "readonly"],
+    ] as const)
+      await ctx.db.insert("agentGrants", {
+        workspaceId,
+        owner: "owner",
+        digest: await digestToken(token),
+        scope,
+        state: "active",
+        expiresAt: Date.now() + 60000,
+      })
+    const collection = {
+      version: 1,
+      fields: [
+        {
+          id: "amount",
+          label: "Amount",
+          type: "number" as const,
+          indexed: true as const,
+        },
+      ],
+    }
+    const collectionId = await ctx.db.insert("collections", {
+      workspaceId,
+      name: "Numbers",
+      definition: collection,
+    })
+    const queryId = await ctx.db.insert("queryDefinitions", {
+      workspaceId,
+      collectionId,
+      name: "Amounts",
+      revision: 1,
+    })
+    await ctx.db.insert("queryDefinitionVersions", {
+      queryId,
+      revision: 1,
+      schemaVersion: 1,
+      resultSchema: collection,
+      query: { fieldId: "amount", order: "asc" },
+    })
+    const foreignPageId = await ctx.db.insert("pages", {
+      workspaceId: otherWorkspaceId,
+      title: "Theirs",
+      revision: 1,
+    })
+    return { queryId, foreignPageId }
+  })
+  type Body =
+    | typeof Pages.SaveDraftInput.Type
+    | typeof Pages.PublishInput.Type
+    | typeof Pages.GetInput.Type
+    | typeof Pages.ListInput.Type
+  const call = async (operation: string, body: Body, token = writer) => {
+    const response = await t.fetch(`/agent/pages/${operation}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    })
+    return { status: response.status, body: await response.json() }
+  }
+  const metric = {
+    kind: "metric" as const,
+    title: "Total",
+    binding: { queryId, revision: 1 },
+    field: "amount",
+    unit: "USD",
+    operation: "sum" as const,
+  }
+  const definition = { title: "Numbers", blocks: [metric] }
+
+  expect(await call("saveDraft", { definition }, reader)).toMatchObject({
+    status: 403,
+  })
+  expect(
+    await call("saveDraft", {
+      definition: {
+        title: "Bad",
+        blocks: [
+          { kind: "markdown", text: "Intro" },
+          { ...metric, binding: { queryId: "nope", revision: 1 } },
+        ],
+      },
+    })
+  ).toEqual({
+    status: 400,
+    body: {
+      error:
+        'Block 2 (metric): "nope" is not a saved query ID. Use queries_list to find one.',
+    },
+  })
+  expect(
+    await call("saveDraft", {
+      definition: { title: "Bad", blocks: [{ ...metric, field: "missing" }] },
+    })
+  ).toEqual({
+    status: 400,
+    body: {
+      error:
+        'Block 1 (metric): Metric requires a numeric result field; "missing" is not one. Result fields: amount (number)',
+    },
+  })
+  expect(
+    await call("saveDraft", {
+      definition: {
+        ...definition,
+        blocks: [{ ...metric, binding: { queryId, revision: 2 } }],
+      },
+    })
+  ).toMatchObject({
+    status: 400,
+    body: {
+      error:
+        "Block 1 (metric): Query revision 2 is unavailable; the latest is 1",
+    },
+  })
+
+  const draft = await call("saveDraft", { definition })
+  expect(draft).toMatchObject({ status: 200, body: { revision: 1 } })
+  const { pageId } = draft.body
+  expect(
+    await call("saveDraft", { pageId, expectedRevision: 2, definition })
+  ).toMatchObject({ status: 409 })
+  expect(await call("get", { pageId }, reader)).toMatchObject({
+    status: 200,
+    body: {
+      page: { pageId, revision: 1, publishedRevision: null },
+      version: null,
+      bindings: [],
+    },
+  })
+  expect(
+    await call("publish", {
+      pageId,
+      revision: 1,
+      expectedRevision: 1,
+      expectedPublishedRevision: null,
+    })
+  ).toEqual({
+    status: 200,
+    body: { pageId, title: "Numbers", revision: 1, publishedRevision: 1 },
+  })
+  expect(
+    await call("publish", {
+      pageId,
+      revision: 1,
+      expectedRevision: 1,
+      expectedPublishedRevision: null,
+    })
+  ).toMatchObject({ status: 409 })
+  expect(await call("get", { pageId }, reader)).toMatchObject({
+    status: 200,
+    body: { version: { revision: 1, definition }, bindings: [null] },
+  })
+  expect(await call("list", {}, reader)).toMatchObject({
+    status: 200,
+    body: { isDone: true, page: [{ pageId, publishedRevision: 1 }] },
+  })
+  expect(await call("get", { pageId: foreignPageId })).toMatchObject({
+    status: 403,
+  })
+}, 30_000)
