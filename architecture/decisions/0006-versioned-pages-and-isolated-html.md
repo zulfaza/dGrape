@@ -31,3 +31,28 @@ Live blocks and custom reports have different freshness and execution models. Sn
 ## Validation and revisit
 
 Verify cross-workspace access, rollback, invalid bindings, inaccessible/stale data, keyboard access, and sandbox restrictions. Test attempted credential access, navigation, and external requests in generated HTML. Validate chart compatibility before selecting an exact package version.
+
+### Implementation evidence: static snapshots (2026-11-03)
+
+The initial HTML preview is a script-free static snapshot, not a live HTML
+runtime or bridge. Existing membership-authorized artifact reads fetch private
+R2 bytes server-side with redirects disabled and a streaming 512 KB limit.
+A separately stored, member-validated report data timestamp is required;
+upload time is never presented as the report data time.
+
+Before insertion into iframe srcdoc, DOMPurify applies an explicit allowlist
+of static formatting, tables, inline CSS and basic SVG shapes/text. No authored
+URL attributes, scripts, handlers, forms, links, embedded documents, SVG
+animation, or external stylesheets survive. The iframe has an empty sandbox,
+giving each document an opaque origin, and no messaging/API bridge.
+Its first document policy denies all default resources, scripts, connections,
+objects, frames, forms and base URLs; only inline styles are allowed.
+CSS URL loads are denied by CSP. Navigation elements/attributes are removed
+rather than depending on sandbox restrictions on own-frame navigation.
+No source HTML is inserted into the authenticated document.
+
+PNG/JPEG/WebP/GIF previews validate declared MIME against byte signatures and
+stream at most 1 MB; SVG files remain unsupported. Raster bytes return as a
+generated data URL. This is a signature gate, not a full image decoder or
+decompression-bomb defense. HTML snapshots intentionally omit embedded images
+and authored interactivity. No ADR status is changed by this evidence.

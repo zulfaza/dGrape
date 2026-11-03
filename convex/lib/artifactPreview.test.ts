@@ -4,13 +4,10 @@ import { MAX_PREVIEW_BYTES, previewKind, readPreview } from "./artifactPreview"
 describe("private file previews", () => {
   it("only accepts inert text formats, including MIME parameters", () => {
     expect(previewKind("application/json; charset=utf-8")).toBe("json")
+    expect(previewKind("text/html")).toBe("html")
+    expect(previewKind("image/png")).toBe("raster")
     expect(previewKind("text/csv")).toBe("text")
-    for (const type of [
-      "text/html",
-      "image/svg+xml",
-      "application/pdf",
-      "text/javascript",
-    ])
+    for (const type of ["image/svg+xml", "application/pdf", "text/javascript"])
       expect(previewKind(type)).toBe("unsupported")
   })
   it("validates JSON without expanding nested input", async () => {
@@ -36,4 +33,30 @@ describe("private file previews", () => {
       readPreview(new Response(new Uint8Array([0xff])))
     ).rejects.toThrow(/encoded data/)
   })
+})
+
+it("validates all declared raster signatures and bounds raster streams", async () => {
+  const samples = [
+    { mime: "image/png", bytes: [137, 80, 78, 71, 13, 10, 26, 10] },
+    { mime: "image/jpeg", bytes: [255, 216, 255, 224] },
+    {
+      mime: "image/gif",
+      bytes: Array.from(new TextEncoder().encode("GIF89a")),
+    },
+    {
+      mime: "image/webp",
+      bytes: Array.from(new TextEncoder().encode("RIFF0000WEBP")),
+    },
+  ]
+  for (const sample of samples) {
+    expect(
+      await readPreview(new Response(new Uint8Array(sample.bytes)), sample.mime)
+    ).toMatch(/^data:image\//)
+    await expect(
+      readPreview(new Response("<html>"), sample.mime)
+    ).rejects.toThrow("signature")
+  }
+  await expect(
+    readPreview(new Response(new Uint8Array(1024 * 1024 + 1)), "image/png")
+  ).rejects.toThrow("too large")
 })

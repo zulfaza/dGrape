@@ -39,6 +39,7 @@ export function WorkspaceArtifacts({
   const [preview, setPreview] = useState<{
     id: Id<"artifacts">
     name: string
+    contentType: string
   } | null>(null)
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
@@ -97,6 +98,7 @@ export function WorkspaceArtifacts({
           key={preview.id}
           artifactId={preview.id}
           name={preview.name}
+          contentType={preview.contentType}
           onClose={() => setPreview(null)}
           onReturnFocus={() => previewTrigger.current?.focus()}
         />
@@ -159,7 +161,11 @@ export function WorkspaceArtifacts({
                   aria-label={`Preview ${artifact.name}`}
                   onClick={(event) => {
                     previewTrigger.current = event.currentTarget
-                    setPreview({ id: artifact._id, name: artifact.name })
+                    setPreview({
+                      id: artifact._id,
+                      name: artifact.name,
+                      contentType: artifact.contentType,
+                    })
                   }}
                 >
                   <Eye aria-hidden />

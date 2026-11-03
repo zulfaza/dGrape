@@ -20,6 +20,7 @@ export function supportsRelation(
       mime ?? ""
     )
   return [
+    "text/html",
     "application/pdf",
     "application/json",
     "text/plain",
