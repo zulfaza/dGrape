@@ -94,7 +94,7 @@ export function registerAgentRecipeRoutes(
         digest,
       })
   )
-  route(
+  agentRoute(
     router,
     "/agent/recipes/cancel",
     Transport.CancelInput,

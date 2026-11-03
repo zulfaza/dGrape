@@ -227,7 +227,7 @@ export const updateSchedule = internalMutation({
   },
   returns: recipes.updateScheduleResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
       const { digest, ...input } = args
       void digest
       const scheduleId = ctx.db.normalizeId("recipeSchedules", input.scheduleId)
