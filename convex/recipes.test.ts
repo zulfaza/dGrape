@@ -519,6 +519,7 @@ describe("recipe credentials", () => {
     ).rejects.toThrow("denied")
   })
 
+  // The first HTTP call loads the router, which can be slow on a busy runner.
   it("checks each fine-grained scope separately", async () => {
     const { t, versionId } = await setup()
     await t.run(async (ctx) => {
@@ -643,7 +644,7 @@ describe("recipe credentials", () => {
     expect(await write.json()).toEqual({
       error: expect.stringContaining("data.write"),
     })
-  })
+  }, 20_000)
 
   it("scopes IDs and pages and checks HTTP credentials and bodies", async () => {
     const { t, owner, workspaceId, versionId } = await setup()

@@ -269,6 +269,7 @@ test("agent discovery reports capabilities by scope and describes one collection
   expect(capabilities.scopes).toEqual([
     "data.read",
     "artifacts.read",
+    "pages.read",
     "jobs.read",
   ])
   // A legacy read-only credential keeps exactly its read capabilities.
