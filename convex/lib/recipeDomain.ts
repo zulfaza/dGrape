@@ -65,12 +65,15 @@ function field(value: string) {
   if (!/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(value))
     throw new Error("Invalid recipe field")
 }
+export const MAX_RECIPE_STEPS = 32
+export const MAX_RECIPE_DURATION_MS = 900_000
+
 /** Validate before storing an immutable version. There is no uploaded code. */
 export function validateRecipe(recipe: Recipe): void {
-  integer(recipe.steps.length, 1, 32, "steps")
+  integer(recipe.steps.length, 1, MAX_RECIPE_STEPS, "steps")
   integer(recipe.limits.rows, 1, 1000, "rows")
   integer(recipe.limits.bytes, 1, 500_000, "bytes")
-  integer(recipe.limits.durationMs, 1000, 900_000, "durationMs")
+  integer(recipe.limits.durationMs, 1000, MAX_RECIPE_DURATION_MS, "durationMs")
   integer(recipe.limits.attempts, 1, 5, "attempts")
   let output = false
   let fetched = false
