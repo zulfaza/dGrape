@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useMutation, useQuery } from "convex/react"
+import { useMutation, usePaginatedQuery } from "convex/react"
 import { useAccessToken } from "@workos/authkit-tanstack-react-start/client"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -14,8 +14,16 @@ export function WorkspaceConnections({
 }: {
   workspaceId: Id<"workspaces">
 }) {
-  const secrets = useQuery(api.secrets.list, { workspaceId })
-  const connections = useQuery(api.connectors.list, { workspaceId })
+  const secrets = usePaginatedQuery(
+    api.secrets.list,
+    { workspaceId },
+    { initialNumItems: 20 }
+  )
+  const connections = usePaginatedQuery(
+    api.connectors.list,
+    { workspaceId },
+    { initialNumItems: 20 }
+  )
   const prepare = useMutation(api.secrets.prepare)
   const rotate = useMutation(api.secrets.rotate)
   const beginDelete = useMutation(api.secrets.beginDelete)
@@ -115,8 +123,10 @@ export function WorkspaceConnections({
           </Button>
         </FieldGroup>
       </form>
-      {secrets === undefined && <p role="status">Loading credentials…</p>}
-      {secrets?.map((secret) => (
+      {secrets.status === "LoadingFirstPage" && (
+        <p role="status">Loading credentials…</p>
+      )}
+      {secrets.results.map((secret) => (
         <div key={secret.id} className="flex flex-col gap-2 border-t pt-3">
           <div className="flex items-center gap-2">
             <span>{secret.label}</span>
@@ -220,6 +230,19 @@ export function WorkspaceConnections({
           )}
         </div>
       ))}
+      {(secrets.status === "CanLoadMore" ||
+        secrets.status === "LoadingMore") && (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={secrets.status === "LoadingMore"}
+          onClick={() => secrets.loadMore(20)}
+        >
+          {secrets.status === "LoadingMore"
+            ? "Loading credentials…"
+            : "Load more credentials"}
+        </Button>
+      )}
       {selected && (
         <form
           className="border-t pt-3"
@@ -305,7 +328,7 @@ export function WorkspaceConnections({
           </FieldGroup>
         </form>
       )}
-      {connections?.map((connection) => (
+      {connections.results.map((connection) => (
         <div className="flex flex-col gap-2 border-t pt-3" key={connection.id}>
           <strong>{connection.label}</strong>
           <code className="text-xs break-all">{connection.id}</code>
@@ -326,6 +349,22 @@ export function WorkspaceConnections({
           </Button>
         </div>
       ))}
+      {connections.status === "LoadingFirstPage" && (
+        <p role="status">Loading connections…</p>
+      )}
+      {(connections.status === "CanLoadMore" ||
+        connections.status === "LoadingMore") && (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={connections.status === "LoadingMore"}
+          onClick={() => connections.loadMore(20)}
+        >
+          {connections.status === "LoadingMore"
+            ? "Loading connections…"
+            : "Load more connections"}
+        </Button>
+      )}
       {message && <p role="status">{message}</p>}
     </section>
   )

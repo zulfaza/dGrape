@@ -18,6 +18,7 @@ import {
 } from "./lib/connectorFetch"
 
 const modules = import.meta.glob("./**/*.ts")
+const paginationOpts = { numItems: 100, cursor: null }
 const token = "fixture-private-token"
 function memoryStore() {
   const values = new Map<string, string>()
@@ -86,8 +87,11 @@ async function fixture() {
 describe("secret reference authorization and lifecycle", () => {
   it("returns references only and rejects other workspaces and users", async () => {
     const { owner, other, workspaceId, secretRef } = await fixture()
-    const rows = await owner.query(api.secrets.list, { workspaceId })
-    expect(rows).toEqual([
+    const rows = await owner.query(api.secrets.list, {
+      workspaceId,
+      paginationOpts,
+    })
+    expect(rows.page).toEqual([
       {
         id: secretRef,
         label: "API",
@@ -98,7 +102,7 @@ describe("secret reference authorization and lifecycle", () => {
       },
     ])
     await expect(
-      other.query(api.secrets.list, { workspaceId })
+      other.query(api.secrets.list, { workspaceId, paginationOpts })
     ).rejects.toThrow("access denied")
     await expect(
       other.mutation(api.secrets.rotate, { secretRef, revision: 1 })
@@ -148,7 +152,8 @@ describe("secret reference authorization and lifecycle", () => {
       revision: 2,
     })
     expect(
-      (await owner.query(api.secrets.list, { workspaceId }))[0]?.status
+      (await owner.query(api.secrets.list, { workspaceId, paginationOpts }))
+        .page[0]?.status
     ).toBe("deleted")
   })
   it("checks membership and separate connection and private-secret grants", async () => {
@@ -190,7 +195,10 @@ describe("secret reference authorization and lifecycle", () => {
     await expect(
       t.query(internal.connectors.authorizeUse, args)
     ).resolves.toBeNull()
-    expect(await other.query(api.secrets.list, { workspaceId })).toEqual([])
+    expect(
+      (await other.query(api.secrets.list, { workspaceId, paginationOpts }))
+        .page
+    ).toEqual([])
     await expect(
       other.mutation(api.connectors.grantUse, {
         connectionId,
@@ -210,6 +218,138 @@ describe("secret reference authorization and lifecycle", () => {
     ).rejects.toThrow("access denied")
   })
 })
+describe("settings list pagination", () => {
+  it("continues past private and deleted credentials without exposing private rows", async () => {
+    const { t, owner, other, workspaceId, secretRef } = await fixture()
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        workspaceId,
+        userId: "other",
+        role: "owner",
+      })
+      for (let i = 0; i < 100; i++) {
+        await ctx.db.insert("secretRefs", {
+          workspaceId,
+          createdBy: "owner",
+          owner: { kind: "user", userId: "owner" },
+          label: "Private deleted",
+          revision: 1,
+          state: { kind: "deleted" },
+        })
+      }
+    })
+    const shared = await owner.mutation(api.secrets.prepare, {
+      workspaceId,
+      label: "Shared",
+      private: false,
+    })
+    const own = await other.mutation(api.secrets.prepare, {
+      workspaceId,
+      label: "Own",
+      private: true,
+    })
+    const first = await other.query(api.secrets.list, {
+      workspaceId,
+      paginationOpts,
+    })
+    expect(first.page).toEqual([])
+    expect(first.isDone).toBe(false)
+    const second = await other.query(api.secrets.list, {
+      workspaceId,
+      paginationOpts: { ...paginationOpts, cursor: first.continueCursor },
+    })
+    expect(second.page.map((row) => row.id)).toEqual([shared, own])
+    expect(second.isDone).toBe(true)
+    const ownerFirst = await owner.query(api.secrets.list, {
+      workspaceId,
+      paginationOpts,
+    })
+    expect(ownerFirst.page).toHaveLength(100)
+    expect(ownerFirst.page[0]?.id).toBe(secretRef)
+    const ownerNext = await owner.query(api.secrets.list, {
+      workspaceId,
+      paginationOpts: { ...paginationOpts, cursor: ownerFirst.continueCursor },
+    })
+    expect(ownerNext.page.map((row) => row.status)).toEqual([
+      "deleted",
+      "pending",
+    ])
+  })
+  it("continues past inaccessible connections to owned and granted connections", async () => {
+    const { t, owner, other, workspaceId, secretRef } = await fixture()
+    const visible = await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        workspaceId,
+        userId: "other",
+        role: "owner",
+      })
+      const fields = {
+        workspaceId,
+        secretRef,
+        label: "Connection",
+        origin: config.origin,
+        routes: config.routes,
+      }
+      for (let i = 0; i < 100; i++) {
+        await ctx.db.insert("connections", { ...fields, createdBy: "owner" })
+      }
+      const own = await ctx.db.insert("connections", {
+        ...fields,
+        createdBy: "other",
+      })
+      const granted = await ctx.db.insert("connections", {
+        ...fields,
+        createdBy: "owner",
+      })
+      await ctx.db.insert("connectionUseGrants", {
+        connectionId: granted,
+        userId: "other",
+        secretUse: false,
+      })
+      const elsewhere = await ctx.db.insert("workspaces", { name: "Elsewhere" })
+      await ctx.db.insert("connections", {
+        ...fields,
+        workspaceId: elsewhere,
+        createdBy: "other",
+      })
+      return [own, granted]
+    })
+    const first = await other.query(api.connectors.list, {
+      workspaceId,
+      paginationOpts,
+    })
+    expect(first.page).toEqual([])
+    expect(first.isDone).toBe(false)
+    const second = await other.query(api.connectors.list, {
+      workspaceId,
+      paginationOpts: { ...paginationOpts, cursor: first.continueCursor },
+    })
+    expect(second.page.map((row) => row.id)).toEqual(visible)
+    expect(second.isDone).toBe(true)
+    const outsider = t.withIdentity({ tokenIdentifier: "outsider" })
+    await expect(
+      outsider.query(api.connectors.list, { workspaceId, paginationOpts })
+    ).rejects.toThrow("access denied")
+    expect(
+      (await owner.query(api.connectors.list, { workspaceId, paginationOpts }))
+        .page
+    ).toHaveLength(100)
+  })
+  it.each([0, -1, 101, 1.5])(
+    "rejects unbounded page size %s",
+    async (numItems) => {
+      const { owner, workspaceId } = await fixture()
+      const args = { workspaceId, paginationOpts: { numItems, cursor: null } }
+      await expect(owner.query(api.secrets.list, args)).rejects.toThrow(
+        "Page size"
+      )
+      await expect(owner.query(api.connectors.list, args)).rejects.toThrow(
+        "Page size"
+      )
+    }
+  )
+})
+
 describe("provider-independent connector boundary", () => {
   async function run(body: unknown, request: PageRequest = input) {
     const memory = memoryStore()
@@ -306,7 +446,9 @@ describe("authenticated HTTP settings recovery", () => {
     const pending = await owner.query(internal.secrets.metadata, { secretRef })
     expect(pending.state.kind).toBe("pending")
     expect(
-      JSON.stringify(await owner.query(api.secrets.list, { workspaceId }))
+      JSON.stringify(
+        await owner.query(api.secrets.list, { workspaceId, paginationOpts })
+      )
     ).not.toContain(token)
     // Expire only the local test clock; no real wait or deployment is used.
     const now = Date.now()
@@ -348,7 +490,8 @@ describe("authenticated HTTP settings recovery", () => {
     })
     expect(result.status).toBe(200)
     expect(
-      (await owner.query(api.secrets.list, { workspaceId }))[0]?.status
+      (await owner.query(api.secrets.list, { workspaceId, paginationOpts }))
+        .page[0]?.status
     ).toBe("deleted")
     vi.restoreAllMocks()
   })

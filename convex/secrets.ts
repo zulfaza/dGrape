@@ -1,3 +1,7 @@
+import {
+  paginationOptsValidator,
+  paginationResultValidator,
+} from "convex/server"
 import { v } from "convex/values"
 import {
   internalMutation,
@@ -19,8 +23,11 @@ export async function requireSecretOwner(
     throw new Error("Secret access denied")
 }
 export const list = query({
-  args: { workspaceId: v.id("workspaces") },
-  returns: v.array(
+  args: {
+    workspaceId: v.id("workspaces"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(
     v.object({
       id: v.id("secretRefs"),
       label: v.string(),
@@ -35,24 +42,34 @@ export const list = query({
       canManage: v.boolean(),
     })
   ),
-  handler: async (ctx, { workspaceId }) => {
+  handler: async (ctx, { workspaceId, paginationOpts }) => {
     const member = await requireMembership(ctx, workspaceId)
+    if (
+      !Number.isInteger(paginationOpts.numItems) ||
+      paginationOpts.numItems < 1 ||
+      paginationOpts.numItems > 100
+    )
+      throw new Error("Page size must be between 1 and 100")
     const secrets = await ctx.db
       .query("secretRefs")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
-      .take(100)
-    return secrets
-      .filter(
-        (s) => s.owner.kind === "workspace" || s.owner.userId === member.userId
-      )
-      .map((s) => ({
-        id: s._id,
-        label: s.label,
-        owner: s.owner,
-        revision: s.revision,
-        status: s.state.kind,
-        canManage: s.createdBy === member.userId,
-      }))
+      .paginate(paginationOpts)
+    return {
+      ...secrets,
+      page: secrets.page
+        .filter(
+          (s) =>
+            s.owner.kind === "workspace" || s.owner.userId === member.userId
+        )
+        .map((s) => ({
+          id: s._id,
+          label: s.label,
+          owner: s.owner,
+          revision: s.revision,
+          status: s.state.kind,
+          canManage: s.createdBy === member.userId,
+        })),
+    }
   },
 })
 /** Reserve metadata first. Plaintext is never a mutation argument. */

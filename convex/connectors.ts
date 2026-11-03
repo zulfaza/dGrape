@@ -1,3 +1,7 @@
+import {
+  paginationOptsValidator,
+  paginationResultValidator,
+} from "convex/server"
 import { Effect } from "effect"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
@@ -141,8 +145,11 @@ export const fetchPage = internalAction({
   },
 })
 export const list = query({
-  args: { workspaceId: v.id("workspaces") },
-  returns: v.array(
+  args: {
+    workspaceId: v.id("workspaces"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(
     v.object({
       id: v.id("connections"),
       label: v.string(),
@@ -151,12 +158,18 @@ export const list = query({
       routes: v.array(routeValidator),
     })
   ),
-  handler: async (ctx, { workspaceId }) => {
+  handler: async (ctx, { workspaceId, paginationOpts }) => {
     const member = await requireMembership(ctx, workspaceId)
+    if (
+      !Number.isInteger(paginationOpts.numItems) ||
+      paginationOpts.numItems < 1 ||
+      paginationOpts.numItems > 100
+    )
+      throw new Error("Page size must be between 1 and 100")
     const connections = await ctx.db
       .query("connections")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
-      .take(100)
+      .paginate(paginationOpts)
     const visible: {
       id: Id<"connections">
       label: string
@@ -164,7 +177,7 @@ export const list = query({
       origin: string
       routes: Doc<"connections">["routes"]
     }[] = []
-    for (const c of connections) {
+    for (const c of connections.page) {
       const grant = await ctx.db
         .query("connectionUseGrants")
         .withIndex("by_connectionId_and_userId", (q) =>
@@ -180,7 +193,7 @@ export const list = query({
           routes: c.routes,
         })
     }
-    return visible
+    return { ...connections, page: visible }
   },
 })
 export const create = mutation({
