@@ -23,6 +23,7 @@ import { Route as DashboardWorkspacesRouteImport } from './routes/dashboard/work
 import { Route as DotwellKnownOauthProtectedResourceMcpRouteImport } from './routes/[.]well-known/oauth-protected-resource/mcp'
 import { Route as DashboardWorkspacesWorkspaceIdRouteRouteImport } from './routes/dashboard/workspaces_.$workspaceId/route'
 import { Route as DashboardWorkspacesWorkspaceIdIndexRouteImport } from './routes/dashboard/workspaces_.$workspaceId/index'
+import { Route as DashboardWorkspacesWorkspaceIdActivityRouteImport } from './routes/dashboard/workspaces_.$workspaceId/activity'
 import { Route as DashboardWorkspacesWorkspaceIdArtifactsRouteImport } from './routes/dashboard/workspaces_.$workspaceId/artifacts'
 import { Route as DashboardWorkspacesWorkspaceIdConnectionsRouteImport } from './routes/dashboard/workspaces_.$workspaceId/connections'
 import { Route as DashboardWorkspacesWorkspaceIdDataRouteImport } from './routes/dashboard/workspaces_.$workspaceId/data'
@@ -103,6 +104,12 @@ const DashboardWorkspacesWorkspaceIdIndexRoute =
     path: '/',
     getParentRoute: () => DashboardWorkspacesWorkspaceIdRouteRoute,
   } as any)
+const DashboardWorkspacesWorkspaceIdActivityRoute =
+  DashboardWorkspacesWorkspaceIdActivityRouteImport.update({
+    id: '/activity',
+    path: '/activity',
+    getParentRoute: () => DashboardWorkspacesWorkspaceIdRouteRoute,
+  } as any)
 const DashboardWorkspacesWorkspaceIdArtifactsRoute =
   DashboardWorkspacesWorkspaceIdArtifactsRouteImport.update({
     id: '/artifacts',
@@ -148,6 +155,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/workspaces/$workspaceId': typeof DashboardWorkspacesWorkspaceIdRouteRouteWithChildren
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
+  '/dashboard/workspaces/$workspaceId/activity': typeof DashboardWorkspacesWorkspaceIdActivityRoute
   '/dashboard/workspaces/$workspaceId/artifacts': typeof DashboardWorkspacesWorkspaceIdArtifactsRoute
   '/dashboard/workspaces/$workspaceId/connections': typeof DashboardWorkspacesWorkspaceIdConnectionsRoute
   '/dashboard/workspaces/$workspaceId/data': typeof DashboardWorkspacesWorkspaceIdDataRoute
@@ -167,6 +175,7 @@ export interface FileRoutesByTo {
   '/dashboard/workspaces': typeof DashboardWorkspacesRoute
   '/dashboard': typeof DashboardIndexRoute
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
+  '/dashboard/workspaces/$workspaceId/activity': typeof DashboardWorkspacesWorkspaceIdActivityRoute
   '/dashboard/workspaces/$workspaceId/artifacts': typeof DashboardWorkspacesWorkspaceIdArtifactsRoute
   '/dashboard/workspaces/$workspaceId/connections': typeof DashboardWorkspacesWorkspaceIdConnectionsRoute
   '/dashboard/workspaces/$workspaceId/data': typeof DashboardWorkspacesWorkspaceIdDataRoute
@@ -189,6 +198,7 @@ export interface FileRoutesById {
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/workspaces_/$workspaceId': typeof DashboardWorkspacesWorkspaceIdRouteRouteWithChildren
   '/.well-known/oauth-protected-resource/mcp': typeof DotwellKnownOauthProtectedResourceMcpRoute
+  '/dashboard/workspaces_/$workspaceId/activity': typeof DashboardWorkspacesWorkspaceIdActivityRoute
   '/dashboard/workspaces_/$workspaceId/artifacts': typeof DashboardWorkspacesWorkspaceIdArtifactsRoute
   '/dashboard/workspaces_/$workspaceId/connections': typeof DashboardWorkspacesWorkspaceIdConnectionsRoute
   '/dashboard/workspaces_/$workspaceId/data': typeof DashboardWorkspacesWorkspaceIdDataRoute
@@ -212,6 +222,7 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/dashboard/workspaces/$workspaceId'
     | '/.well-known/oauth-protected-resource/mcp'
+    | '/dashboard/workspaces/$workspaceId/activity'
     | '/dashboard/workspaces/$workspaceId/artifacts'
     | '/dashboard/workspaces/$workspaceId/connections'
     | '/dashboard/workspaces/$workspaceId/data'
@@ -231,6 +242,7 @@ export interface FileRouteTypes {
     | '/dashboard/workspaces'
     | '/dashboard'
     | '/.well-known/oauth-protected-resource/mcp'
+    | '/dashboard/workspaces/$workspaceId/activity'
     | '/dashboard/workspaces/$workspaceId/artifacts'
     | '/dashboard/workspaces/$workspaceId/connections'
     | '/dashboard/workspaces/$workspaceId/data'
@@ -252,6 +264,7 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/dashboard/workspaces_/$workspaceId'
     | '/.well-known/oauth-protected-resource/mcp'
+    | '/dashboard/workspaces_/$workspaceId/activity'
     | '/dashboard/workspaces_/$workspaceId/artifacts'
     | '/dashboard/workspaces_/$workspaceId/connections'
     | '/dashboard/workspaces_/$workspaceId/data'
@@ -372,6 +385,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardWorkspacesWorkspaceIdIndexRouteImport
       parentRoute: typeof DashboardWorkspacesWorkspaceIdRouteRoute
     }
+    '/dashboard/workspaces_/$workspaceId/activity': {
+      id: '/dashboard/workspaces_/$workspaceId/activity'
+      path: '/activity'
+      fullPath: '/dashboard/workspaces/$workspaceId/activity'
+      preLoaderRoute: typeof DashboardWorkspacesWorkspaceIdActivityRouteImport
+      parentRoute: typeof DashboardWorkspacesWorkspaceIdRouteRoute
+    }
     '/dashboard/workspaces_/$workspaceId/artifacts': {
       id: '/dashboard/workspaces_/$workspaceId/artifacts'
       path: '/artifacts'
@@ -411,6 +431,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface DashboardWorkspacesWorkspaceIdRouteRouteChildren {
+  DashboardWorkspacesWorkspaceIdActivityRoute: typeof DashboardWorkspacesWorkspaceIdActivityRoute
   DashboardWorkspacesWorkspaceIdArtifactsRoute: typeof DashboardWorkspacesWorkspaceIdArtifactsRoute
   DashboardWorkspacesWorkspaceIdConnectionsRoute: typeof DashboardWorkspacesWorkspaceIdConnectionsRoute
   DashboardWorkspacesWorkspaceIdDataRoute: typeof DashboardWorkspacesWorkspaceIdDataRoute
@@ -421,6 +442,8 @@ interface DashboardWorkspacesWorkspaceIdRouteRouteChildren {
 
 const DashboardWorkspacesWorkspaceIdRouteRouteChildren: DashboardWorkspacesWorkspaceIdRouteRouteChildren =
   {
+    DashboardWorkspacesWorkspaceIdActivityRoute:
+      DashboardWorkspacesWorkspaceIdActivityRoute,
     DashboardWorkspacesWorkspaceIdArtifactsRoute:
       DashboardWorkspacesWorkspaceIdArtifactsRoute,
     DashboardWorkspacesWorkspaceIdConnectionsRoute:
