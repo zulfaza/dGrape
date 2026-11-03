@@ -13,7 +13,10 @@ import {
   recordValueValidator,
 } from "./lib/collectionDomain"
 
+import { recipeTables } from "./lib/recipeState"
+
 export default defineSchema({
+  ...recipeTables,
   agentGrants: defineTable({
     workspaceId: v.id("workspaces"),
     owner: v.string(),
