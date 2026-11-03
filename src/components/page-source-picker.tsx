@@ -3,6 +3,13 @@ import { useState } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import type { PageBlock } from "../../convex/lib/pageDomain"
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+  FieldLegend,
+} from "./ui/field"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import {
@@ -28,6 +35,9 @@ export function PageSourcePicker({
   const [fields, setFields] = useState<string[]>([])
   const [title, setTitle] = useState("Live data")
   const [unit, setUnit] = useState("")
+  const [chartType, setChartType] = useState<"bar" | "line">("bar")
+  const [labelField, setLabelField] = useState("")
+  const [valueField, setValueField] = useState("")
   const source = sources?.find((item) => item.queryId === queryId)
   const numeric = source?.fields.find(
     (field) => fields.includes(field.id) && field.type === "number"
@@ -49,6 +59,8 @@ export function PageSourcePicker({
           const selected = sources?.find((item) => item.queryId === value)
           setQueryId(selected?.queryId ?? null)
           setFields([])
+          setLabelField("")
+          setValueField("")
         }}
       >
         <SelectTrigger aria-label="Saved query" disabled={disabled}>
@@ -86,13 +98,103 @@ export function PageSourcePicker({
         </label>
       ))}
       <label>
-        Metric unit
+        Metric / chart unit
         <Input
           value={unit}
           maxLength={100}
           onChange={(event) => setUnit(event.target.value)}
         />
       </label>
+      <FieldSet disabled={disabled}>
+        <FieldLegend>Chart</FieldLegend>
+        <FieldGroup>
+          <Field>
+            <FieldLabel>Chart type</FieldLabel>
+            <Select
+              value={chartType}
+              onValueChange={(value) => {
+                if (value === "bar" || value === "line") setChartType(value)
+              }}
+            >
+              <SelectTrigger aria-label="Chart type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="bar">Bar</SelectItem>
+                  <SelectItem value="line">Line</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel>Label field</FieldLabel>
+            <Select
+              value={labelField}
+              onValueChange={(value) => setLabelField(value ?? "")}
+            >
+              <SelectTrigger aria-label="Label field">
+                <SelectValue placeholder="Select label field" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {source?.fields.map((field) => (
+                    <SelectItem key={field.id} value={field.id}>
+                      {field.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel>Value field</FieldLabel>
+            <Select
+              value={valueField}
+              onValueChange={(value) => setValueField(value ?? "")}
+            >
+              <SelectTrigger aria-label="Value field">
+                <SelectValue placeholder="Select numeric field" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {source?.fields
+                    .filter((field) => field.type === "number")
+                    .map((field) => (
+                      <SelectItem key={field.id} value={field.id}>
+                        {field.label}
+                      </SelectItem>
+                    ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Button
+            disabled={
+              disabled ||
+              !title.trim() ||
+              !source?.fields.some((field) => field.id === labelField) ||
+              !source?.fields.some(
+                (field) => field.id === valueField && field.type === "number"
+              )
+            }
+            onClick={() => {
+              if (source)
+                add({
+                  kind: "chart",
+                  title,
+                  binding: {
+                    queryId: source.queryId,
+                    revision: source.revision,
+                  },
+                  chart: { type: chartType, labelField, valueField, unit },
+                })
+            }}
+          >
+            Add chart
+          </Button>
+        </FieldGroup>
+      </FieldSet>
       <div className="flex flex-wrap gap-2">
         <Button
           disabled={

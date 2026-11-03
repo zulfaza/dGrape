@@ -1,3 +1,4 @@
+import { PageChart } from "./page-chart"
 import { useQuery } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -12,7 +13,7 @@ export function PageLiveBlock({
   pageId: Id<"pages">
   revision: number
   blockIndex: number
-  block: Extract<PageBlock, { kind: "table" | "metric" }>
+  block: Extract<PageBlock, { kind: "table" | "metric" | "chart" }>
 }) {
   const live = useQuery(api.pages.liveBlock, { pageId, revision, blockIndex })
   if (live === undefined) return <p role="status">Loading live values…</p>
@@ -43,7 +44,14 @@ export function PageLiveBlock({
           : "Complete result"}{" "}
         · Live
       </p>
-      {block.kind === "table" ? (
+      {/* oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- JSX follows the serializable block discriminant. */}
+      {block.kind === "chart" ? (
+        <PageChart
+          block={block}
+          rows={result.page}
+          fields={result.resultSchema.fields}
+        />
+      ) : block.kind === "table" ? (
         <div className="overflow-auto">
           <table className="w-full text-left">
             <caption>

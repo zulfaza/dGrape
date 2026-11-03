@@ -59,6 +59,15 @@ export function validatePage(definition: PageDefinition) {
       throw new Error("Block title must be 1 to 100 characters")
     if (block.kind === "artifact") continue
     if (
+      block.kind === "chart" &&
+      (!block.chart.labelField.trim() ||
+        !block.chart.valueField.trim() ||
+        block.chart.unit.length > 100)
+    )
+      throw new Error(
+        "Charts require label and numeric fields and a unit up to 100 characters"
+      )
+    if (
       !Number.isSafeInteger(block.binding.revision) ||
       block.binding.revision < 1
     )
