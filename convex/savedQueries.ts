@@ -1,15 +1,12 @@
-import {
-  paginationOptsValidator,
-  paginationResultValidator,
-} from "convex/server"
+import { paginationOptsValidator } from "convex/server"
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
-import {
-  collectionDefinitionValidator,
-  collectionRecordValidator,
-} from "./lib/collectionDomain"
 import { recordQueryValidator } from "./lib/recordQuery"
-import { runSavedQuery, saveQuery } from "./lib/savedQueries"
+import {
+  runSavedQuery,
+  savedQueryPageValidator,
+  saveQuery,
+} from "./lib/savedQueries"
 
 export const save = mutation({
   args: {
@@ -32,13 +29,6 @@ export const run = query({
     expectedRevision: v.number(),
     paginationOpts: paginationOptsValidator,
   },
-  returns: paginationResultValidator(collectionRecordValidator).extend({
-    queryId: v.id("queryDefinitions"),
-    revision: v.number(),
-    resultSchema: collectionDefinitionValidator,
-    completeness: v.union(v.literal("complete"), v.literal("partial")),
-    freshness: v.literal("live"),
-    readAt: v.number(),
-  }),
+  returns: savedQueryPageValidator,
   handler: runSavedQuery,
 })

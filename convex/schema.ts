@@ -21,6 +21,7 @@ import { recordCountValidator } from "./lib/recordCounts"
 import { auditEventFields } from "./lib/auditEvents"
 import { recipeTables } from "./lib/recipeState"
 import { secretFields, connectionFields } from "./lib/secretDomain"
+import { sourceSyncFields } from "./lib/sourceSync"
 
 export default defineSchema({
   ...recipeTables,
@@ -186,6 +187,10 @@ export default defineSchema({
       "key",
     ])
     .index("by_recordId", ["recordId"]),
+  /** Last recipe run outcome for each source collection. */
+  sourceSyncs: defineTable(sourceSyncFields).index("by_collectionId", [
+    "collectionId",
+  ]),
   sourceCursors: defineTable({
     collectionId: v.id("collections"),
     source: v.string(),

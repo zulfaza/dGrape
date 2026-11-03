@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
+import { Schema } from "effect"
 import schema from "./schema"
 import { api } from "./_generated/api"
 import * as Queries from "./lib/agentQueryTransport"
@@ -57,6 +58,8 @@ test("saved queries enforce membership, immutable revisions, source schema, and 
   })
   expect(first.page.map((row) => row.values.name)).toEqual(["a", "b"])
   expect(first.completeness).toBe("partial")
+  expect(first.source.freshness).toEqual({ kind: "never_synced" })
+  expect(first.dataAsOf).toBeNull()
   const split = await owner.query(api.savedQueries.run, {
     queryId: saved.queryId,
     expectedRevision: 1,
@@ -248,6 +251,10 @@ test("agent credentials save, list, and run queries in their own workspace", asy
     { name: "b" },
   ])
   expect(run.body.page[0]).not.toHaveProperty("collectionId")
+  expect(Schema.decodeUnknownSync(Queries.RunPage)(run.body)).toMatchObject({
+    dataAsOf: null,
+    source: { collectionId, freshness: { kind: "never_synced" } },
+  })
   expect(
     await call("run", { queryId, revision: 1, cursor: run.body.continueCursor })
   ).toMatchObject({ status: 200, body: { completeness: "complete" } })
