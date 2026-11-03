@@ -17,6 +17,7 @@ import {
   type ConnectorConfig,
   type PageRequest,
 } from "./lib/connectorFetch"
+import { checkRoute, type ResponseMapping } from "./lib/secretDomain"
 
 const modules = import.meta.glob("./**/*.ts")
 const paginationOpts = { numItems: 100, cursor: null }
@@ -415,6 +416,125 @@ describe("provider-independent connector boundary", () => {
         fetchConnectorPage(config, input).pipe(Effect.provide(layer))
       )
     ).rejects.toThrow("Connector request failed")
+  })
+})
+
+describe("connector response mapping and pagination", () => {
+  const route = config.routes[0]
+  if (!route) throw new Error("Invalid fixture")
+  async function fetchWith(
+    response: ResponseMapping,
+    reply: (url: URL) => Response,
+    request: Partial<PageRequest> = {}
+  ) {
+    const memory = memoryStore()
+    await Effect.runPromise(
+      memory.store.put(config.scope, config.name, Redacted.make(token))
+    )
+    const urls: URL[] = []
+    const transport: typeof fetch = async (url) => {
+      const parsed = new URL(String(url))
+      urls.push(parsed)
+      return reply(parsed)
+    }
+    const routes = [{ ...route, queryKeys: ["page", "per_page"], response }]
+    const page = await Effect.runPromise(
+      fetchConnectorPage(
+        { ...config, routes },
+        { ...input, ...request },
+        transport
+      ).pipe(Effect.provide(memory.layer))
+    )
+    return { page, urls }
+  }
+  const none: ResponseMapping["next"] = { kind: "none" }
+  it("maps a plain array and a nested rows path", async () => {
+    const plain = await fetchWith({ rows: [], next: none }, () =>
+      Response.json([{ id: 1, ignored: "x" }])
+    )
+    expect(plain.page).toMatchObject({ rows: [{ id: 1 }], nextCursor: null })
+    const nested = await fetchWith(
+      { rows: ["data", "items"], next: none },
+      () => Response.json({ data: { items: [{ id: 2, total: 4 }] } })
+    )
+    expect(nested.page.rows).toEqual([{ id: 2, total: 4 }])
+    await expect(
+      fetchWith({ rows: ["data"], next: none }, () => Response.json({}))
+    ).rejects.toThrow("Connector request failed")
+    await expect(
+      fetchWith({ rows: [], next: none }, () => Response.json([]), {
+        cursor: "2",
+      })
+    ).rejects.toThrow("Connector request failed")
+  })
+  it("reads a body cursor at a path and sends it as the configured parameter", async () => {
+    const response: ResponseMapping = {
+      rows: ["items"],
+      next: { kind: "body", path: ["meta", "next"], param: "page" },
+    }
+    const { page, urls } = await fetchWith(
+      response,
+      () => Response.json({ items: [], meta: { next: "3" } }),
+      { cursor: "2" }
+    )
+    expect(page.nextCursor).toBe("3")
+    expect(urls[0]?.searchParams.get("page")).toBe("2")
+    await expect(
+      fetchWith(response, () => Response.json({ items: [] }), {
+        query: { page: "9" },
+      })
+    ).rejects.toThrow("Connector request failed")
+  })
+  it("follows a Link next URL only on the same origin and path", async () => {
+    const linked = (next: string) => () =>
+      Response.json([{ id: 1 }], {
+        headers: {
+          Link: `<${next}>; rel="next", <${config.origin}/items?page=9>; rel="last"`,
+        },
+      })
+    const link: ResponseMapping = { rows: [], next: { kind: "link" } }
+    const first = await fetchWith(
+      link,
+      linked(`${config.origin}/items?page=2&per_page=50`),
+      { query: { per_page: "50" } }
+    )
+    expect(first.page.nextCursor).toBe(
+      `${config.origin}/items?page=2&per_page=50`
+    )
+    const second = await fetchWith(link, () => Response.json([]), {
+      cursor: first.page.nextCursor,
+    })
+    expect(second.page.nextCursor).toBeNull()
+    expect(second.urls[0]?.searchParams.get("page")).toBe("2")
+    const relative = await fetchWith(link, linked("?page=3"))
+    expect(relative.page.nextCursor).toBe(`${config.origin}/items?page=3`)
+    for (const next of [
+      "https://evil.example/items?page=2",
+      `${config.origin}/other?page=2`,
+      `${config.origin}/items?page=2&q=${token}`,
+    ])
+      await expect(fetchWith(link, linked(next))).rejects.toThrow(
+        "Connector request failed"
+      )
+    for (const cursor of [
+      "https://evil.example/items?page=2",
+      `${config.origin}/items?redirect=x`,
+    ])
+      await expect(
+        fetchWith(link, () => Response.json([]), { cursor })
+      ).rejects.toThrow("Connector request failed")
+  })
+  it("rejects unsafe mapping paths and unknown cursor parameters", () => {
+    for (const response of [
+      { rows: ["access_token"], next: none },
+      { rows: ["a", "b", "c", "d", "e", "f"], next: none },
+      { rows: [], next: { kind: "body", path: [], param: "page" } },
+      { rows: [], next: { kind: "body", path: ["next"], param: "after" } },
+    ] satisfies ResponseMapping[])
+      expect(() =>
+        checkRoute({ ...route, queryKeys: ["page"], response })
+      ).toThrow(/Invalid route|Unsafe field/)
+    expect(() => checkRoute({ ...route, queryKeys: [] })).not.toThrow()
   })
 })
 
