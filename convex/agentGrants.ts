@@ -10,6 +10,7 @@ import {
   query,
 } from "./_generated/server"
 import { agentScopeValidator } from "./lib/agentScope"
+import { capabilitiesFor, capabilityValidator } from "./lib/agentCapabilities"
 import { resolveGrant } from "./lib/agentGrant"
 import { requireMembership } from "./lib/auth"
 import {
@@ -170,6 +171,58 @@ export const describe = internalQuery({
           fields: definition.fields,
         })),
       collectionsTruncated: collections.length > MAX_DESCRIBED_COLLECTIONS,
+    }
+  },
+})
+
+/** What the credential may do, so an agent can plan before it calls tools. */
+export const capabilities = internalQuery({
+  args: { digest: v.string(), now: v.number() },
+  returns: v.union(
+    v.literal("denied"),
+    v.object({
+      workspace: v.object({ id: v.id("workspaces"), name: v.string() }),
+      scope: agentScopeValidator,
+      capabilities: v.array(capabilityValidator),
+    })
+  ),
+  handler: async (ctx, { digest, now }) => {
+    const grant = await resolveGrant(ctx, digest, now)
+    if (!grant) return "denied"
+    const workspace = await ctx.db.get(grant.workspaceId)
+    if (!workspace) return "denied"
+    return {
+      workspace: { id: workspace._id, name: workspace.name },
+      scope: grant.scope,
+      capabilities: capabilitiesFor(grant.scope),
+    }
+  },
+})
+
+/** One collection of the credential's workspace, with its schema version. */
+export const describeCollection = internalQuery({
+  args: { digest: v.string(), collectionId: v.string(), now: v.number() },
+  returns: v.union(
+    v.literal("denied"),
+    v.object({
+      id: v.id("collections"),
+      name: v.string(),
+      version: v.number(),
+      fields: v.array(collectionFieldValidator),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const grant = await resolveGrant(ctx, args.digest, args.now)
+    if (!grant) return "denied"
+    const id = ctx.db.normalizeId("collections", args.collectionId)
+    const collection = id && (await ctx.db.get(id))
+    if (!collection || collection.workspaceId !== grant.workspaceId)
+      return "denied"
+    return {
+      id: collection._id,
+      name: collection.name,
+      version: collection.definition.version,
+      fields: collection.definition.fields,
     }
   },
 })
