@@ -357,3 +357,22 @@ export const getPreview = action({
     }
   },
 })
+
+/** Metadata lookup scoped to the containing record or page's workspace. */
+export const metadata = query({
+  args: { workspaceId: v.id("workspaces"), artifactId: v.id("artifacts") },
+  returns: v.union(
+    v.null(),
+    v.object({ name: v.string(), contentType: v.string(), size: v.number() })
+  ),
+  handler: async (ctx, { workspaceId, artifactId }) => {
+    await requireMembership(ctx, workspaceId)
+    const artifact = await ctx.db.get(artifactId)
+    if (!artifact || artifact.workspaceId !== workspaceId) return null
+    return {
+      name: artifact.name,
+      contentType: artifact.contentType,
+      size: artifact.size,
+    }
+  },
+})

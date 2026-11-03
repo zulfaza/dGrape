@@ -1,3 +1,5 @@
+import { ArtifactPicker } from "./artifact-picker"
+import { ArtifactLink } from "./artifact-link"
 import { useConvex, useMutation, usePaginatedQuery } from "convex/react"
 import { useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
@@ -46,6 +48,7 @@ function WorkspacePagesEditor({
   const [pending, setPending] = useState(false)
   const running = useRef(false)
   const [message, setMessage] = useState("")
+  const [artifactTitle, setArtifactTitle] = useState("")
   const [dirty, setDirty] = useState(false)
   const history = usePaginatedQuery(
     api.pages.history,
@@ -238,6 +241,32 @@ function WorkspacePagesEditor({
                   Remove block {index + 1} ({block.kind})
                 </Button>
               ))}
+              <label>
+                File block title
+                <Input
+                  maxLength={100}
+                  value={artifactTitle}
+                  disabled={pending}
+                  onChange={(e) => setArtifactTitle(e.target.value)}
+                />
+              </label>
+              <ArtifactPicker
+                workspaceId={workspaceId}
+                disabled={pending || draft.definition.blocks.length >= 20}
+                choose={(artifactId, name) =>
+                  change({
+                    ...draft.definition,
+                    blocks: [
+                      ...draft.definition.blocks,
+                      {
+                        kind: "artifact",
+                        title: artifactTitle.trim() || name.slice(0, 100),
+                        artifactId,
+                      },
+                    ],
+                  })
+                }
+              />
               <PageSourcePicker
                 workspaceId={workspaceId}
                 disabled={pending || draft.definition.blocks.length >= 20}
@@ -290,9 +319,13 @@ function WorkspacePagesEditor({
                         </p>
                       )
                     ) : (
-                      <p>
-                        Preview unavailable for {block.kind}: {block.title}.
-                      </p>
+                      <section>
+                        <h4>{block.title}</h4>
+                        <ArtifactLink
+                          workspaceId={workspaceId}
+                          artifactId={block.artifactId}
+                        />
+                      </section>
                     )}
                   </div>
                 ))}
