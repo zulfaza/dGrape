@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import schema from "./schema"
 import { api, internal } from "./_generated/api"
 import type { Recipe } from "./lib/recipeDomain"
+import type { RecipeTiming } from "./lib/recipeSchedule"
 
 const modules = import.meta.glob("./**/*.ts")
 const recipe: Recipe = {
@@ -148,6 +149,102 @@ describe("recipe lifecycle", () => {
         scheduleId,
         enabled: false,
       })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it("updates schedule timing and version with an expected revision", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.UTC(2026, 10, 3))
+    try {
+      const { t, owner, versionId, workspaceId } = await setup()
+      const scheduleId = await owner.mutation(api.recipes.schedule, {
+        versionId,
+        timing: { kind: "cron", expression: "0 9 * * *" },
+      })
+      const next = await owner.mutation(api.recipes.publish, {
+        workspaceId,
+        name: "Next",
+        recipe,
+      })
+      const timing: RecipeTiming = { kind: "cron", expression: "*/5 * * * *" }
+      const update = {
+        scheduleId,
+        expectedRevision: 0,
+        versionId: next,
+        timing,
+      }
+      expect(await owner.mutation(api.recipes.updateSchedule, update)).toEqual({
+        revision: 1,
+      })
+      await expect(
+        owner.mutation(api.recipes.updateSchedule, update)
+      ).rejects.toThrow("current revision is 1")
+      const updated = await t.run(async (ctx) => ctx.db.get(scheduleId))
+      expect(updated).toMatchObject({
+        versionId: next,
+        timing: { kind: "cron", expression: "*/5 * * * *" },
+        nextAt: Date.UTC(2026, 10, 3, 0, 5),
+        revision: 1,
+      })
+      await owner.mutation(api.recipes.setEnabled, {
+        scheduleId,
+        enabled: false,
+      })
+      await expect(
+        owner.mutation(api.recipes.updateSchedule, {
+          ...update,
+          expectedRevision: 2,
+          timing: { kind: "once", at: Date.now() - 1 },
+        })
+      ).rejects.toThrow("in the future")
+      await t.run(async (ctx) => {
+        await ctx.db.insert("workspaceMembers", {
+          workspaceId,
+          userId: "test|member",
+          role: "owner",
+        })
+      })
+      await expect(
+        t
+          .withIdentity({ tokenIdentifier: "test|member" })
+          .mutation(api.recipes.updateSchedule, {
+            ...update,
+            expectedRevision: 2,
+          })
+      ).rejects.toThrow("permission denied")
+      const foreign = await t.run(async (ctx) =>
+        ctx.db.insert("recipeVersions", {
+          workspaceId: await ctx.db.insert("workspaces", { name: "Other" }),
+          name: "Other",
+          recipe,
+          createdBy: "test|owner",
+        })
+      )
+      await expect(
+        owner.mutation(api.recipes.updateSchedule, {
+          ...update,
+          expectedRevision: 2,
+          versionId: foreign,
+        })
+      ).rejects.toThrow("Recipe not found")
+      await t.run(async (ctx) => {
+        await ctx.db.insert("agentGrants", {
+          workspaceId,
+          owner: "test|owner",
+          digest: "reader",
+          scope: "readonly",
+          state: "active",
+          expiresAt: Date.now() + 60000,
+        })
+      })
+      await expect(
+        t.mutation(internal.agentRecipes.updateSchedule, {
+          ...update,
+          expectedRevision: 2,
+          digest: "reader",
+        })
+      ).rejects.toThrow("denied")
     } finally {
       vi.useRealTimers()
     }

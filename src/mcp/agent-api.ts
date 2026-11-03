@@ -264,6 +264,9 @@ export class AgentApi extends Context.Service<
     readonly recipeSetEnabled: (
       input: typeof Recipes.EnabledInput.Type
     ) => Call<typeof Schema.Null.Type>
+    readonly recipeUpdateSchedule: (
+      input: typeof Recipes.UpdateScheduleInput.Type
+    ) => Call<typeof Recipes.UpdateScheduleResult.Type>
     readonly recipeCancel: (
       input: typeof Recipes.CancelInput.Type
     ) => Call<typeof Schema.Null.Type>
@@ -436,6 +439,14 @@ export const layer = (baseUrl: string) =>
               input
             ),
             Schema.Null
+          ),
+        recipeUpdateSchedule: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/recipes/updateSchedule")),
+              input
+            ),
+            Recipes.UpdateScheduleResult
           ),
         recipeCancel: (input) =>
           send(

@@ -293,7 +293,7 @@ const RecipeTrigger = Tool.make("recipes_trigger", {
 
 const RecipeSchedule = Tool.make("recipes_schedule", {
   description:
-    "Create a UTC schedule. Only the recipe creator can manage it. Requires write access.",
+    "Create a UTC schedule. Only the recipe creator can manage it. Requires write access. Overlap: a due run is skipped while the schedule's prior run is active. Catch-up: after missed occurrences, one run starts for the latest due time only.",
   parameters: Recipes.ScheduleInput,
   success: Schema.String,
   failure: AgentApi.AgentApiError,
@@ -313,6 +313,15 @@ const RecipeSetEnabled = Tool.make("recipes_set_enabled", {
     "Enable or disable a schedule. Requires creator and write access.",
   parameters: Recipes.EnabledInput,
   success: Schema.Null,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, true)
+
+const ScheduleUpdate = Tool.make("schedules_update", {
+  description:
+    "Change the timing and the pinned recipe version of a schedule. Read the schedule with recipes_schedules and pass its `revision` (0 when absent) as `expectedRevision`; if it changed, the call fails with the current revision. The next run time is computed again from now. Returns the new revision. Requires creator and write access. Overlap: a due run is skipped while the schedule's prior run is active. Catch-up: after missed occurrences, one run starts for the latest due time only.",
+  parameters: Recipes.UpdateScheduleInput,
+  success: Recipes.UpdateScheduleResult,
   failure: AgentApi.AgentApiError,
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Destructive, true)
@@ -369,6 +378,7 @@ const DfeToolkit = Toolkit.make(
   RecipeSchedule,
   RecipeSchedules,
   RecipeSetEnabled,
+  ScheduleUpdate,
   RecipeCancel,
   RecipeSetRunAccess,
 
@@ -409,6 +419,7 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       recipes_schedule: (input) => api.recipeSchedule(input),
       recipes_schedules: (input) => api.recipeSchedules(input),
       recipes_set_enabled: (input) => api.recipeSetEnabled(input),
+      schedules_update: (input) => api.recipeUpdateSchedule(input),
       recipes_cancel: (input) => api.recipeCancel(input),
       recipes_set_run_access: (input) => api.recipeSetRunAccess(input),
       queries_save: (input) => api.querySave(input),

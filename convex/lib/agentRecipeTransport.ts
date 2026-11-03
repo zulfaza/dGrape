@@ -103,6 +103,7 @@ const Schedule = Schema.Struct({
   enabled: Schema.Boolean,
   nextAt: Schema.Number,
   activeRunId: Schema.optionalKey(Schema.String),
+  revision: Schema.optionalKey(Schema.Number),
 })
 const Attempt = Schema.Struct({
   ...Document,
@@ -185,6 +186,13 @@ export const EnabledInput = Schema.Struct({
   scheduleId: Schema.String,
   enabled: Schema.Boolean,
 })
+export const UpdateScheduleInput = Schema.Struct({
+  scheduleId: Schema.String,
+  expectedRevision: Schema.Int,
+  versionId: Schema.String,
+  timing: Timing,
+})
+export const UpdateScheduleResult = Schema.Struct({ revision: Schema.Number })
 export const CancelInput = Schema.Struct({ runId: Schema.String })
 export const AccessInput = Schema.Struct({
   versionId: Schema.String,

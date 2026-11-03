@@ -36,6 +36,8 @@ export const recipeTables = {
     enabled: v.boolean(),
     nextAt: v.number(),
     activeRunId: v.optional(v.id("recipeRuns")),
+    /** Counts user changes for `expectedRevision`. A missing value is revision 0 (schedules made before revisions). */
+    revision: v.optional(v.number()),
   })
     .index("by_enabled_and_nextAt", ["enabled", "nextAt"])
     .index("by_workspaceId", ["workspaceId"]),
