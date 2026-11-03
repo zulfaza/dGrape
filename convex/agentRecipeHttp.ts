@@ -86,6 +86,16 @@ export function registerAgentRecipeRoutes(
   )
   agentRoute(
     router,
+    "/agent/recipes/updateSchedule",
+    Transport.UpdateScheduleInput,
+    (ctx, digest, input) =>
+      ctx.runMutation(internal.agentRecipes.updateSchedule, {
+        ...input,
+        digest,
+      })
+  )
+  agentRoute(
+    router,
     "/agent/recipes/cancel",
     Transport.CancelInput,
     (ctx, digest, input) =>

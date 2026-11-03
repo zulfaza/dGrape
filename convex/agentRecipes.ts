@@ -218,6 +218,41 @@ export const setEnabled = internalMutation({
       )
     }),
 })
+export const updateSchedule = internalMutation({
+  args: {
+    digest: v.string(),
+    ...recipes.updateScheduleArgs.fields,
+    scheduleId: v.string(),
+    versionId: v.string(),
+  },
+  returns: recipes.updateScheduleResult,
+  handler: (ctx, args) =>
+    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+      const { digest, ...input } = args
+      void digest
+      const scheduleId = ctx.db.normalizeId("recipeSchedules", input.scheduleId)
+      const versionId = ctx.db.normalizeId("recipeVersions", input.versionId)
+      const schedule = scheduleId ? await ctx.db.get(scheduleId) : null
+      const version = versionId ? await ctx.db.get(versionId) : null
+      if (
+        !scheduleId ||
+        !versionId ||
+        !schedule ||
+        !version ||
+        schedule.workspaceId !== grant.workspaceId ||
+        version.workspaceId !== grant.workspaceId
+      )
+        throw new ConvexError({
+          status: 403,
+          message: "Workspace access denied",
+        })
+      return recipes.updateScheduleForPrincipal(
+        ctx,
+        { ...input, scheduleId, versionId },
+        grant.owner
+      )
+    }),
+})
 export const cancel = internalMutation({
   args: { digest: v.string(), ...recipes.cancelArgs.fields, runId: v.string() },
   returns: recipes.cancelResult,

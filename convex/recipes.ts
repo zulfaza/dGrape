@@ -494,13 +494,65 @@ export async function setEnabledForPrincipal(
     ? nextOccurrence(item.timing, Date.now())
     : item.nextAt
   if (nextAt === null) throw new Error("One-off schedule has ended")
-  await ctx.db.patch(item._id, { enabled: args.enabled, nextAt })
+  await ctx.db.patch(item._id, {
+    enabled: args.enabled,
+    nextAt,
+    revision: (item.revision ?? 0) + 1,
+  })
   return null
 }
 export const setEnabled = mutation({
   args: setEnabledArgs.fields,
   returns: setEnabledResult,
   handler: (ctx, args) => setEnabledForPrincipal(ctx, args),
+})
+export const updateScheduleArgs = v.object({
+  scheduleId: v.id("recipeSchedules"),
+  expectedRevision: v.number(),
+  versionId: v.id("recipeVersions"),
+  timing: recipeTimingValidator,
+})
+export const updateScheduleResult = v.object({ revision: v.number() })
+/**
+ * Changes the timing and the pinned version. The next run time starts again
+ * from now, so a change never runs missed occurrences. A run that is active
+ * stays active, and the overlap rule still skips while it runs.
+ */
+export async function updateScheduleForPrincipal(
+  ctx: MutationCtx,
+  args: Infer<typeof updateScheduleArgs>,
+  principal?: string
+) {
+  const item = await ctx.db.get(args.scheduleId)
+  if (!item) throw new Error("Schedule not found")
+  const current = await ctx.db.get(item.versionId)
+  if (!current) throw new Error("Recipe not found")
+  await requireRecipeAccess(ctx, current, "manage", principal)
+  const revision = item.revision ?? 0
+  if (args.expectedRevision !== revision)
+    throw new Error(
+      `Schedule revision conflict: current revision is ${revision}`
+    )
+  const version =
+    args.versionId === current._id ? current : await ctx.db.get(args.versionId)
+  if (!version || version.workspaceId !== item.workspaceId)
+    throw new Error("Recipe not found")
+  await requireRecipeAccess(ctx, version, "manage", principal)
+  validateTiming(args.timing)
+  const nextAt = nextOccurrence(args.timing, Date.now())
+  if (nextAt === null) throw new Error("Schedule must be in the future")
+  await ctx.db.patch(item._id, {
+    versionId: version._id,
+    timing: args.timing,
+    nextAt,
+    revision: revision + 1,
+  })
+  return { revision: revision + 1 }
+}
+export const updateSchedule = mutation({
+  args: updateScheduleArgs.fields,
+  returns: updateScheduleResult,
+  handler: (ctx, args) => updateScheduleForPrincipal(ctx, args),
 })
 export const cancelArgs = v.object({ runId: v.id("recipeRuns") })
 export const cancelResult = v.null()

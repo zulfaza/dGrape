@@ -362,12 +362,23 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
       )}
       <Separator />
       <h3>Schedules (UTC)</h3>
+      <dl className="grid gap-1 sm:grid-cols-[auto_1fr] sm:gap-x-3">
+        <dt className="font-medium">Overlap</dt>
+        <dd>
+          Skip. A due run is skipped while the schedule's prior run is active.
+        </dd>
+        <dt className="font-medium">Catch-up</dt>
+        <dd>
+          Coalesce. After missed times, one run starts for the latest due time
+          only.
+        </dd>
+      </dl>
       {schedules.status === "Exhausted" && schedules.results.length === 0 && (
         <NoItems label="No schedules. Open a version to add one." />
       )}
       <ul className="flex flex-col gap-3">
         {schedules.results.map((item) => (
-          <ScheduleRow key={item._id} item={item} />
+          <ScheduleRow key={item._id} item={item} versions={versions.results} />
         ))}
       </ul>
       <PageMore {...schedules} label="schedules" />
@@ -656,12 +667,25 @@ function parseUtc(text: string): number {
   return at
 }
 
-function ScheduleRow({ item }: { item: Doc<"recipeSchedules"> }) {
+function ScheduleRow({
+  item,
+  versions,
+}: {
+  item: Doc<"recipeSchedules">
+  versions: Doc<"recipeVersions">[]
+}) {
   const permissions = useQuery(api.recipes.permissions, {
     versionId: item.versionId,
   })
   const setEnabled = useMutation(api.recipes.setEnabled)
+  const updateSchedule = useMutation(api.recipes.updateSchedule)
   const { busy, message, perform } = useOperation()
+  const [edit, setEdit] = useState<{
+    versionId: Id<"recipeVersions">
+    timing: string
+    expectedRevision: number
+  } | null>(null)
+  const canManage = permissions?.canManage === true
   return (
     <li className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -675,7 +699,7 @@ function ScheduleRow({ item }: { item: Doc<"recipeSchedules"> }) {
         </span>
         <Button
           variant="outline"
-          disabled={busy || permissions?.canManage !== true}
+          disabled={busy || !canManage}
           onClick={() =>
             void perform(async () => {
               await setEnabled({ scheduleId: item._id, enabled: !item.enabled })
@@ -684,12 +708,115 @@ function ScheduleRow({ item }: { item: Doc<"recipeSchedules"> }) {
         >
           {item.enabled ? "Disable" : "Enable"}
         </Button>
+        <Button
+          variant="outline"
+          disabled={busy || !canManage || edit !== null}
+          onClick={() =>
+            setEdit({
+              expectedRevision: item.revision ?? 0,
+              versionId: item.versionId,
+              timing:
+                item.timing.kind === "cron"
+                  ? item.timing.expression
+                  : new Date(item.timing.at).toISOString().replace(".000", ""),
+            })
+          }
+        >
+          Edit
+        </Button>
       </div>
       <p>
         Version: <code>{item.versionId}</code> · Next:{" "}
-        {new Date(item.nextAt).toISOString()} (UTC)
+        {new Date(item.nextAt).toISOString()} (UTC) · Revision:{" "}
+        {item.revision ?? 0}
       </p>
       <code>{item._id}</code>
+      {edit && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            void perform(async () => {
+              const timing: RecipeTiming =
+                item.timing.kind === "cron"
+                  ? { kind: "cron", expression: edit.timing.trim() }
+                  : { kind: "once", at: parseUtc(edit.timing) }
+              validateTiming(timing)
+              await updateSchedule({
+                scheduleId: item._id,
+                expectedRevision: edit.expectedRevision,
+                versionId: edit.versionId,
+                timing,
+              })
+              setEdit(null)
+            })
+          }}
+        >
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor={`schedule-version-${item._id}`}>
+                Recipe version
+              </FieldLabel>
+              <Select
+                value={edit.versionId}
+                disabled={busy}
+                onValueChange={(value) => {
+                  const version = versions.find((v) => v._id === value)
+                  if (version) setEdit({ ...edit, versionId: version._id })
+                }}
+              >
+                <SelectTrigger id={`schedule-version-${item._id}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {!versions.some((v) => v._id === item.versionId) && (
+                      <SelectItem value={item.versionId}>
+                        {item.versionId}
+                      </SelectItem>
+                    )}
+                    {versions.map((version) => (
+                      <SelectItem key={version._id} value={version._id}>
+                        {version.name} · {version._id}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`schedule-timing-${item._id}`}>
+                {item.timing.kind === "once"
+                  ? "UTC date and time"
+                  : "Five-field UTC cron"}
+              </FieldLabel>
+              <Input
+                id={`schedule-timing-${item._id}`}
+                required
+                value={edit.timing}
+                disabled={busy}
+                onChange={(e) => setEdit({ ...edit, timing: e.target.value })}
+              />
+              <FieldDescription>
+                The next run time starts again from now. Missed times do not
+                run.
+              </FieldDescription>
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={busy}>
+                Save schedule
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setEdit(null)}
+              >
+                Discard
+              </Button>
+            </div>
+          </FieldGroup>
+        </form>
+      )}
       <Feedback message={message} />
     </li>
   )
