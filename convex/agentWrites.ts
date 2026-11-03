@@ -6,6 +6,7 @@ import { v, type Infer } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { internalMutation, type MutationCtx } from "./_generated/server"
 import { resolveGrant } from "./lib/agentGrant"
+import { workspaceBudgets } from "./lib/budgets"
 import {
   addField as addFieldToDefinition,
   checkCollection,
@@ -82,7 +83,12 @@ export const createCollection = internalMutation({
   ): Promise<Infer<typeof createCollectionResult>> => {
     const workspace = await writableWorkspace(ctx, digest)
     if (workspace.status !== "ok") return workspace
-    const checked = checkCollection(name, fields)
+    const budgets = await workspaceBudgets(ctx, workspace.workspaceId)
+    const checked = checkCollection(
+      name,
+      fields,
+      budgets.indexedFieldsPerCollection
+    )
     if (!checked.ok) return reject(checked.message)
     const id = await createVersionedCollection(ctx, {
       workspaceId: workspace.workspaceId,
@@ -114,7 +120,12 @@ export const addField = internalMutation({
     const found = await writableCollection(ctx, digest, collectionId)
     if (found.status !== "ok") return found
     const { collection } = found
-    const definition = addFieldToDefinition(collection.definition, field)
+    const budgets = await workspaceBudgets(ctx, collection.workspaceId)
+    const definition = addFieldToDefinition(
+      collection.definition,
+      field,
+      budgets.indexedFieldsPerCollection
+    )
     if (!definition.ok) return reject(definition.message)
     await publishCompatibleSchema(ctx, collection, definition.value)
     return { status: "added", version: definition.value.version }

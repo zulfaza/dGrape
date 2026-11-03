@@ -17,7 +17,8 @@ import {
   type QueryCtx,
 } from "./_generated/server"
 import { requireMembership } from "./lib/auth"
-import { runSavedQuery } from "./lib/savedQueries"
+import { workspaceBudgets } from "./lib/budgets"
+import { firstPageWithinBudget, runSavedQuery } from "./lib/savedQueries"
 import {
   pageDefinitionValidator,
   pageValidator,
@@ -362,12 +363,9 @@ export const liveBlock = query({
       const result = await runSavedQuery(ctx, {
         queryId: block.binding.queryId,
         expectedRevision: block.binding.revision,
-        paginationOpts: {
-          cursor: null,
-          numItems: 50,
-          maximumRowsRead: 100,
-          maximumBytesRead: 1_000_000,
-        },
+        paginationOpts: firstPageWithinBudget(
+          await workspaceBudgets(ctx, page.workspaceId)
+        ),
       })
       return { problem: null, result }
     } catch {

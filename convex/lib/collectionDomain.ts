@@ -104,10 +104,15 @@ function checkField(field: CollectionField): Checked<CollectionField> {
   return { ok: true, value: { ...field, label } }
 }
 
-/** Trims the name and labels, and checks lengths and unique field IDs. */
+/**
+ * Trims the name and labels, and checks lengths and unique field IDs.
+ * `maxIndexed` is the workspace budget for new collections; it defaults to
+ * the platform ceiling.
+ */
 export function checkCollection(
   name: string,
-  fields: ReadonlyArray<CollectionField>
+  fields: ReadonlyArray<CollectionField>,
+  maxIndexed = MAX_INDEXED_FIELDS
 ): Checked<{ name: string; fields: CollectionField[] }> {
   const trimmed = name.trim()
   if (!trimmed || trimmed.length > MAX_NAME_LENGTH)
@@ -124,18 +129,20 @@ export function checkCollection(
     ids.add(field.id)
     checked.push(result.value)
   }
-  if (checked.filter((field) => field.indexed).length > MAX_INDEXED_FIELDS)
-    return invalid(`Index at most ${MAX_INDEXED_FIELDS} fields`)
+  if (checked.filter((field) => field.indexed).length > maxIndexed)
+    return invalid(`Index at most ${maxIndexed} fields`)
   return { ok: true, value: { name: trimmed, fields: checked } }
 }
 
 /**
  * Adds one field to a definition and increases its version. The new field is
  * optional, so the records that exist stay valid without a migration.
+ * `maxIndexed` is the workspace budget for indexed fields.
  */
 export function addField(
   definition: CollectionDefinition,
-  field: Omit<CollectionField, "optional">
+  field: Omit<CollectionField, "optional">,
+  maxIndexed = MAX_INDEXED_FIELDS
 ): Checked<CollectionDefinition> {
   if (definition.fields.length >= MAX_FIELDS)
     return invalid(`A collection can have at most ${MAX_FIELDS} fields`)
@@ -146,11 +153,9 @@ export function addField(
   if (
     field.indexed &&
     definition.fields.filter((existing) => existing.indexed).length >=
-      MAX_INDEXED_FIELDS
+      maxIndexed
   )
-    return invalid(
-      `A collection can index at most ${MAX_INDEXED_FIELDS} fields`
-    )
+    return invalid(`A collection can index at most ${maxIndexed} fields`)
   return {
     ok: true,
     value: {
