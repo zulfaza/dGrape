@@ -85,6 +85,39 @@ export const DeletedRecord = Schema.Struct({
   status: Schema.Literal("deleted"),
 })
 
+const Artifact = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  contentType: Schema.String,
+  size: Schema.Number,
+  createdAt: Schema.String,
+})
+
+export const ArtifactPage = Schema.Struct({
+  page: Schema.Array(Artifact),
+  isDone: Schema.Boolean,
+  continueCursor: Schema.String,
+})
+
+export const ArtifactUpload = Schema.Struct({
+  uploadId: Schema.String,
+  uploadUrl: Schema.String,
+  expiresAt: Schema.String,
+  next: Schema.String,
+})
+
+export const CreatedArtifact = Schema.Struct({ id: Schema.String })
+
+export const ArtifactDownload = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  contentType: Schema.String,
+  size: Schema.Number,
+  createdAt: Schema.String,
+  url: Schema.String,
+  expiresInSeconds: Schema.Number,
+})
+
 const ErrorBody = Schema.Struct({ error: Schema.String })
 
 export interface ListRecordsInput {
@@ -131,6 +164,11 @@ export interface DeleteRecordInput {
   readonly expectedRevision: number
 }
 
+export interface ListArtifactsInput {
+  readonly limit?: number | undefined
+  readonly cursor?: string | undefined
+}
+
 type Call<A> = Effect.Effect<A, AgentApiError, AgentCredential>
 
 export class AgentApi extends Context.Service<
@@ -143,6 +181,18 @@ export class AgentApi extends Context.Service<
     readonly queryRecords: (
       input: QueryRecordsInput
     ) => Call<typeof RecordPage.Type>
+    readonly listArtifacts: (
+      input: ListArtifactsInput
+    ) => Call<typeof ArtifactPage.Type>
+    readonly createArtifactUpload: (input: {
+      readonly name: string
+    }) => Call<typeof ArtifactUpload.Type>
+    readonly completeArtifactUpload: (input: {
+      readonly uploadId: string
+    }) => Call<typeof CreatedArtifact.Type>
+    readonly artifactDownload: (input: {
+      readonly artifactId: string
+    }) => Call<typeof ArtifactDownload.Type>
     readonly createCollection: (
       input: CreateCollectionInput
     ) => Call<typeof CreatedCollection.Type>
@@ -235,6 +285,36 @@ export const layer = (baseUrl: string) =>
           send(
             json(HttpClientRequest.post(url("/agent/records/query")), input),
             RecordPage
+          ),
+        listArtifacts: ({ limit, cursor }) =>
+          send(
+            HttpClientRequest.get(url("/agent/artifacts")).pipe(
+              HttpClientRequest.setUrlParams({
+                ...(limit === undefined ? {} : { limit: String(limit) }),
+                ...(cursor === undefined ? {} : { cursor }),
+              })
+            ),
+            ArtifactPage
+          ),
+        createArtifactUpload: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/artifacts/uploads")),
+              input
+            ),
+            ArtifactUpload
+          ),
+        completeArtifactUpload: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/artifacts")), input),
+            CreatedArtifact
+          ),
+        artifactDownload: ({ artifactId }) =>
+          send(
+            HttpClientRequest.get(url("/agent/artifacts/download")).pipe(
+              HttpClientRequest.setUrlParams({ artifactId })
+            ),
+            ArtifactDownload
           ),
         createCollection: (input) =>
           send(

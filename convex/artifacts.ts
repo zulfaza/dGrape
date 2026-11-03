@@ -193,6 +193,22 @@ export function downloadUrl(key: string) {
   return r2.getUrl(key, { expiresIn: DOWNLOAD_URL_SECONDS })
 }
 
+export const listForWorkspace = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    cursor: v.union(v.string(), v.null()),
+    limit: v.number(),
+  },
+  returns: paginationResultValidator(artifactValidator),
+  // Callers (convex/http.ts) validate limit and cursor size at the boundary.
+  handler: (ctx, { workspaceId, cursor, limit }) =>
+    ctx.db
+      .query("artifacts")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+      .order("desc")
+      .paginate({ cursor, numItems: limit }),
+})
+
 // ---- Signed-in app ----
 
 export const createUpload = mutation({

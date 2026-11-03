@@ -1,5 +1,9 @@
 import { httpRouter } from "convex/server"
-import { httpAction } from "./_generated/server"
+import type { Id } from "./_generated/dataModel"
+import { httpAction, type ActionCtx } from "./_generated/server"
+import { downloadUrl } from "./artifacts"
+import type { AgentScope } from "./lib/agentScope"
+import { DOWNLOAD_URL_SECONDS } from "./lib/artifactDomain"
 import { internal } from "./_generated/api"
 import { digestToken } from "./agentAccess"
 import {
@@ -363,4 +367,176 @@ http.route({
   handler: protectedResource,
 })
 http.route({ path: "/auth.md", method: "GET", handler: skill })
+type Credential = {
+  grantId: Id<"agentGrants">
+  workspaceId: Id<"workspaces">
+  scope: AgentScope
+}
+
+/** Resolves the Bearer credential, or returns the 401/403 response. */
+async function credential(
+  ctx: ActionCtx,
+  request: Request,
+  needs: AgentScope
+): Promise<Credential | Response> {
+  const token = bearerToken(request)
+  if (!token) return unauthorized()
+  const grant = await ctx.runQuery(internal.agentGrants.resolve, {
+    digest: await digestToken(token),
+    now: Date.now(),
+  })
+  if (!grant) return reply(403, "Forbidden")
+  if (needs === "readwrite" && grant.scope !== "readwrite")
+    return replyJson(403, {
+      error: "This credential is read-only. Use a read-and-write one.",
+    })
+  return grant
+}
+
+/** Public artifact fields; the R2 key stays internal. */
+function artifactJson(artifact: {
+  _id: string
+  _creationTime: number
+  name: string
+  contentType: string
+  size: number
+}) {
+  return {
+    id: artifact._id,
+    name: artifact.name,
+    contentType: artifact.contentType,
+    size: artifact.size,
+    createdAt: new Date(artifact._creationTime).toISOString(),
+  }
+}
+
+for (const path of [
+  "/agent/artifacts",
+  "/agent/artifacts/uploads",
+  "/agent/artifacts/download",
+])
+  http.route({ path, method: "OPTIONS", handler: preflight })
+
+http.route({
+  path: "/agent/artifacts/uploads",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const grant = await credential(ctx, request, "readwrite")
+      if (grant instanceof Response) return grant
+      const body = await readJson(request)
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        !("name" in body) ||
+        typeof body.name !== "string"
+      )
+        return replyJson(400, { error: "Send JSON: { name }." })
+      const result = await ctx.runMutation(internal.artifacts.insertUpload, {
+        workspaceId: grant.workspaceId,
+        name: body.name,
+        createdBy: { kind: "agent", grantId: grant.grantId },
+        now: Date.now(),
+      })
+      if (result.status === "invalid")
+        return replyJson(400, { error: result.message })
+      return replyJson(201, {
+        uploadId: result.key,
+        uploadUrl: result.url,
+        expiresAt: new Date(result.expiresAt).toISOString(),
+        next: "PUT the file bytes to uploadUrl with a Content-Type header, then POST { uploadId } to /agent/artifacts.",
+      })
+    } catch {
+      return reply(503, "Service unavailable")
+    }
+  }),
+})
+
+http.route({
+  path: "/agent/artifacts",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const grant = await credential(ctx, request, "readwrite")
+      if (grant instanceof Response) return grant
+      const body = await readJson(request)
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        !("uploadId" in body) ||
+        typeof body.uploadId !== "string"
+      )
+        return replyJson(400, { error: "Send JSON: { uploadId }." })
+      const result = await ctx.runAction(
+        internal.artifacts.completeUploadForWorkspace,
+        { workspaceId: grant.workspaceId, key: body.uploadId }
+      )
+      if (result.status === "invalid")
+        return replyJson(400, { error: result.message })
+      return replyJson(201, { id: result.artifactId })
+    } catch {
+      return reply(503, "Service unavailable")
+    }
+  }),
+})
+
+http.route({
+  path: "/agent/artifacts",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const grant = await credential(ctx, request, "readonly")
+      if (grant instanceof Response) return grant
+      const params = new URL(request.url).searchParams
+      const cursor = params.get("cursor")
+      const limit = Number(params.get("limit") ?? MAX_PAGE_SIZE)
+      if (
+        !Number.isInteger(limit) ||
+        limit < 1 ||
+        limit > MAX_PAGE_SIZE ||
+        (cursor !== null &&
+          new TextEncoder().encode(cursor).length > MAX_CURSOR_BYTES)
+      )
+        return reply(400, "Invalid request")
+      const page = await ctx.runQuery(internal.artifacts.listForWorkspace, {
+        workspaceId: grant.workspaceId,
+        cursor,
+        limit,
+      })
+      return replyJson(200, {
+        page: page.page.map(artifactJson),
+        isDone: page.isDone,
+        continueCursor: page.continueCursor,
+      })
+    } catch {
+      return reply(503, "Service unavailable")
+    }
+  }),
+})
+
+http.route({
+  path: "/agent/artifacts/download",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const grant = await credential(ctx, request, "readonly")
+      if (grant instanceof Response) return grant
+      const artifactId = new URL(request.url).searchParams.get("artifactId")
+      if (!artifactId) return reply(400, "Invalid request")
+      const artifact = await ctx.runQuery(internal.artifacts.getArtifact, {
+        artifactId,
+      })
+      if (!artifact || artifact.workspaceId !== grant.workspaceId)
+        return reply(403, "Forbidden")
+      return replyJson(200, {
+        ...artifactJson(artifact),
+        url: await downloadUrl(artifact.key),
+        expiresInSeconds: DOWNLOAD_URL_SECONDS,
+      })
+    } catch {
+      return reply(503, "Service unavailable")
+    }
+  }),
+})
+
 export default http

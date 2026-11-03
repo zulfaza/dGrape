@@ -239,3 +239,17 @@ export const queryPage = internalQuery({
     return { status: "ok", result: result.value }
   },
 })
+
+/** The workspace, scope and ID of a valid credential, or null. */
+export const resolve = internalQuery({
+  args: { digest: v.string(), now: v.number() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      grantId: v.id("agentGrants"),
+      workspaceId: v.id("workspaces"),
+      scope: agentScopeValidator,
+    })
+  ),
+  handler: (ctx, { digest, now }) => resolveGrant(ctx, digest, now),
+})
