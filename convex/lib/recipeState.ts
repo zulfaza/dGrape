@@ -59,6 +59,7 @@ export const recipeTables = {
   })
     .index("by_workspaceId", ["workspaceId"])
     .index("by_workspaceId_and_key", ["workspaceId", "key"])
+    .index("by_workspaceId_and_finishedAt", ["workspaceId", "finishedAt"])
     .index("by_state_and_leaseUntil", ["state", "leaseUntil"]),
   recipeStepAttempts: defineTable({
     runId: v.id("recipeRuns"),
