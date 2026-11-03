@@ -6,10 +6,16 @@ import {
 import {
   paginationOptsValidator,
   paginationResultValidator,
+  type PaginationOptions,
 } from "convex/server"
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
-import { mutation, query, type QueryCtx } from "./_generated/server"
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server"
 import { requireMembership } from "./lib/auth"
 import { runSavedQuery } from "./lib/savedQueries"
 import {
@@ -56,26 +62,31 @@ async function bindingProblem(
       q.eq("queryId", saved._id).eq("revision", block.binding.revision)
     )
     .unique()
-  if (!version) return "Query revision is unavailable"
+  if (!version)
+    return `Query revision ${block.binding.revision} is unavailable; the latest is ${saved.revision}`
   const collection = await ctx.db.get(saved.collectionId)
   if (!collection || collection.workspaceId !== workspaceId)
     return "Source collection is unavailable"
   if (collection.definition.version !== version.schemaVersion)
     return "Query schema is stale; save and bind a new query revision"
   const fields = version.resultSchema.fields
-  if (block.kind === "table")
-    return block.fields.every((id) => fields.some((f) => f.id === id))
+  const has = (id: string) => fields.some((f) => f.id === id)
+  const numeric = (id: string) =>
+    fields.some((f) => f.id === id && f.type === "number")
+  const available = `Result fields: ${fields.map((f) => `${f.id} (${f.type})`).join(", ") || "none"}`
+  if (block.kind === "table") {
+    const missing = block.fields.filter((id) => !has(id))
+    return missing.length === 0
       ? null
-      : "Table field is missing from the query result"
+      : `Table field ${missing.map((id) => `"${id}"`).join(", ")} is missing from the query result. ${available}`
+  }
   if (block.kind === "metric")
-    return block.operation === "count" ||
-      fields.some((f) => f.id === block.field && f.type === "number")
+    return block.operation === "count" || numeric(block.field)
       ? null
-      : "Metric requires a numeric result field"
-  return fields.some((f) => f.id === block.chart.labelField) &&
-    fields.some((f) => f.id === block.chart.valueField && f.type === "number")
+      : `Metric requires a numeric result field; "${block.field}" is not one. ${available}`
+  return has(block.chart.labelField) && numeric(block.chart.valueField)
     ? null
-    : "Chart requires a label and numeric result field"
+    : `Chart requires a label and numeric result field; got label "${block.chart.labelField}" and value "${block.chart.valueField}". ${available}`
 }
 
 async function validateBindings(
@@ -83,9 +94,135 @@ async function validateBindings(
   workspaceId: Id<"workspaces">,
   definition: PageDefinition
 ) {
-  for (const block of definition.blocks) {
+  for (const [index, block] of definition.blocks.entries()) {
     const problem = await bindingProblem(ctx, workspaceId, block)
-    if (problem) throw new Error(problem)
+    if (problem)
+      throw new Error(`Block ${index + 1} (${block.kind}): ${problem}`)
+  }
+}
+
+/**
+ * Saves a new draft revision of a page in `workspaceId`. The caller has
+ * already proved access to the workspace; `createdBy` is its user ID.
+ */
+export async function savePageDraft(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">,
+  createdBy: string,
+  args: {
+    pageId?: Id<"pages">
+    expectedRevision?: number
+    definition: PageDefinition
+  }
+): Promise<{ pageId: Id<"pages">; revision: number }> {
+  validatePage(args.definition)
+  await validateBindings(ctx, workspaceId, args.definition)
+  let pageId: Id<"pages">
+  let revision: number
+  if (args.pageId) {
+    const page = await ctx.db.get(args.pageId)
+    if (!page || page.workspaceId !== workspaceId)
+      throw new Error("Page access denied")
+    if (page.revision !== args.expectedRevision)
+      throw new Error("Page revision conflict")
+    pageId = page._id
+    revision = page.revision + 1
+    await ctx.db.patch(pageId, { revision, title: args.definition.title })
+  } else {
+    if (args.expectedRevision !== undefined)
+      throw new Error("New pages have no expected revision")
+    revision = 1
+    pageId = await ctx.db.insert("pages", {
+      workspaceId,
+      title: args.definition.title,
+      revision,
+    })
+  }
+  await ctx.db.insert("pageVersions", {
+    pageId,
+    revision,
+    definition: args.definition,
+    createdBy,
+    createdAt: Date.now(),
+  })
+  return { pageId, revision }
+}
+
+/** Publishes (or rolls back to) a stored revision of a page in `workspaceId`. */
+export async function publishPage(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">,
+  args: {
+    pageId: Id<"pages">
+    revision: number
+    expectedRevision: number
+    expectedPublishedRevision: number | null
+  }
+): Promise<null> {
+  const page = await ctx.db.get(args.pageId)
+  if (!page || page.workspaceId !== workspaceId)
+    throw new Error("Page access denied")
+  if (
+    page.revision !== args.expectedRevision ||
+    (page.publishedRevision ?? null) !== args.expectedPublishedRevision
+  )
+    throw new Error("Page revision conflict")
+  const version = await getVersion(ctx, page._id, args.revision)
+  if (!version) throw new Error("Page version not found")
+  await validateBindings(ctx, page.workspaceId, version.definition)
+  await ctx.db.patch(page._id, { publishedRevision: version.revision })
+  return null
+}
+
+/**
+ * Reads a page of `workspaceId` and one version: `revision`, or the published
+ * one. `bindings` has one problem (or null) for each block of that version.
+ */
+export async function getPage(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  pageId: Id<"pages">,
+  revision: number | undefined
+) {
+  const page = await ctx.db.get(pageId)
+  if (!page || page.workspaceId !== workspaceId)
+    throw new Error("Page access denied")
+  const selected = revision ?? page.publishedRevision
+  const version =
+    selected === undefined ? null : await getVersion(ctx, page._id, selected)
+  if (revision !== undefined && !version)
+    throw new Error("Page version not found")
+  const bindings = version
+    ? await Promise.all(
+        version.definition.blocks.map((block) =>
+          bindingProblem(ctx, page.workspaceId, block)
+        )
+      )
+    : []
+  return { page, version, bindings }
+}
+
+/** Lists the pages of `workspaceId`, newest first, at most 20 at a time. */
+export async function listPages(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  paginationOpts: PaginationOptions
+) {
+  if (
+    !Number.isSafeInteger(paginationOpts.numItems) ||
+    paginationOpts.numItems < 1 ||
+    paginationOpts.numItems > 20
+  )
+    throw new Error("Page size must be 1 to 20")
+  const result = await ctx.db
+    .query("pages")
+    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+    .order("desc")
+    .paginate(paginationOpts)
+  return {
+    page: result.page,
+    isDone: result.isDone,
+    continueCursor: result.continueCursor,
   }
 }
 
@@ -97,39 +234,9 @@ export const save = mutation({
     definition: pageDefinitionValidator,
   },
   returns: v.object({ pageId: v.id("pages"), revision: v.number() }),
-  handler: async (ctx, args) => {
-    const member = await requireMembership(ctx, args.workspaceId)
-    validatePage(args.definition)
-    await validateBindings(ctx, args.workspaceId, args.definition)
-    let pageId: Id<"pages">
-    let revision: number
-    if (args.pageId) {
-      const page = await ctx.db.get(args.pageId)
-      if (!page || page.workspaceId !== args.workspaceId)
-        throw new Error("Page access denied")
-      if (page.revision !== args.expectedRevision)
-        throw new Error("Page revision conflict")
-      pageId = page._id
-      revision = page.revision + 1
-      await ctx.db.patch(pageId, { revision, title: args.definition.title })
-    } else {
-      if (args.expectedRevision !== undefined)
-        throw new Error("New pages have no expected revision")
-      revision = 1
-      pageId = await ctx.db.insert("pages", {
-        workspaceId: args.workspaceId,
-        title: args.definition.title,
-        revision,
-      })
-    }
-    await ctx.db.insert("pageVersions", {
-      pageId,
-      revision,
-      definition: args.definition,
-      createdBy: member.userId,
-      createdAt: Date.now(),
-    })
-    return { pageId, revision }
+  handler: async (ctx, { workspaceId, ...args }) => {
+    const member = await requireMembership(ctx, workspaceId)
+    return savePageDraft(ctx, workspaceId, member.userId, args)
   },
 })
 
@@ -146,16 +253,7 @@ export const publish = mutation({
     const page = await ctx.db.get(args.pageId)
     if (!page) throw new Error("Page access denied")
     await requireMembership(ctx, page.workspaceId)
-    if (
-      page.revision !== args.expectedRevision ||
-      (page.publishedRevision ?? null) !== args.expectedPublishedRevision
-    )
-      throw new Error("Page revision conflict")
-    const version = await getVersion(ctx, page._id, args.revision)
-    if (!version) throw new Error("Page version not found")
-    await validateBindings(ctx, page.workspaceId, version.definition)
-    await ctx.db.patch(page._id, { publishedRevision: version.revision })
-    return null
+    return publishPage(ctx, page.workspaceId, args)
   },
 })
 
@@ -170,19 +268,7 @@ export const get = query({
     const page = await ctx.db.get(args.pageId)
     if (!page) throw new Error("Page access denied")
     await requireMembership(ctx, page.workspaceId)
-    const revision = args.revision ?? page.publishedRevision
-    const version =
-      revision === undefined ? null : await getVersion(ctx, page._id, revision)
-    if (args.revision !== undefined && !version)
-      throw new Error("Page version not found")
-    const bindings = version
-      ? await Promise.all(
-          version.definition.blocks.map((block) =>
-            bindingProblem(ctx, page.workspaceId, block)
-          )
-        )
-      : []
-    return { page, version, bindings }
+    return getPage(ctx, page.workspaceId, page._id, args.revision)
   },
 })
 
@@ -198,22 +284,7 @@ export const list = query({
   }),
   handler: async (ctx, args) => {
     await requireMembership(ctx, args.workspaceId)
-    if (
-      !Number.isSafeInteger(args.paginationOpts.numItems) ||
-      args.paginationOpts.numItems < 1 ||
-      args.paginationOpts.numItems > 20
-    )
-      throw new Error("Page size must be 1 to 20")
-    const result = await ctx.db
-      .query("pages")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
-      .order("desc")
-      .paginate(args.paginationOpts)
-    return {
-      page: result.page,
-      isDone: result.isDone,
-      continueCursor: result.continueCursor,
-    }
+    return listPages(ctx, args.workspaceId, args.paginationOpts)
   },
 })
 
