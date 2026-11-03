@@ -215,21 +215,98 @@
     background-color: var(--mascot-surface);
   }
 }
-/* Landing sloth: a slow, slight breath. */
-@keyframes dfe-sloth-breathe {
-  from {
-    scale: 1 1;
+/* The limbs move in short turns, with a rest between each wiggle. */
+@keyframes dfe-sloth-hand {
+  0%,
+  12%,
+  55%,
+  100% {
+    rotate: 0deg;
   }
-  to {
-    scale: 1.008 1.02;
+  24%,
+  44% {
+    rotate: 14deg;
+  }
+  34% {
+    rotate: -10deg;
+  }
+}
+@keyframes dfe-sloth-leg {
+  0%,
+  35%,
+  85%,
+  100% {
+    rotate: 0deg;
+  }
+  48%,
+  72% {
+    rotate: -16deg;
+  }
+  60% {
+    rotate: 12deg;
+  }
+}
+@keyframes dfe-sloth-foot {
+  0%,
+  45%,
+  95%,
+  100% {
+    rotate: 0deg;
+  }
+  60%,
+  82% {
+    rotate: -12deg;
+  }
+  72% {
+    rotate: 8deg;
+  }
+}
+
+/* Clip each atlas cell; place each joint inside its overlapping root. */
+.dfe-sloth-sprite {
+  position: absolute;
+  inset: 0;
+  background-image: url("/brand/mascot/lying-layers.png");
+  background-size: 200% 200%;
+  background-repeat: no-repeat;
+}
+.dfe-sloth-body {
+  background-position: 0 0;
+  clip-path: inset(2% 16% 18% 8%);
+}
+.dfe-sloth-hand {
+  background-position: 100% 0;
+  clip-path: inset(52% 40% 10% 28%);
+  transform-origin: 54% 65%;
+  translate: -4% -4%;
+  animation: dfe-sloth-hand 5.2s ease-in-out infinite;
+}
+.dfe-sloth-leg {
+  background-position: 0 100%;
+  clip-path: inset(30% 18% 8% 58%);
+  transform-origin: 65% 44%;
+  translate: 7% 15%;
+  scale: 0.88;
+  animation: dfe-sloth-leg 5.2s ease-in-out infinite;
+}
+.dfe-sloth-foot {
+  background-position: 100% 100%;
+  clip-path: inset(42% 10% 27% 70%);
+  transform-origin: 74% 57%;
+  translate: 1% 6%;
+  animation: dfe-sloth-foot 5.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dfe-sloth-still {
+    display: none;
+  }
+  .dfe-sloth-puppet {
+    display: block;
   }
 }
 
 @layer utilities {
-  .dfe-sloth-breathe {
-    transform-origin: 40% 78%;
-    animation: dfe-sloth-breathe 2.6s ease-in-out infinite alternate;
-  }
   .dfe-type-line {
     animation: dfe-type-line 650ms steps(24, end) both;
   }

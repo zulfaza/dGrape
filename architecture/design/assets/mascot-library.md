@@ -153,3 +153,17 @@ Output: `public/brand/mascot/lying-frames/sprite.webp`, six 768×384 frames in o
 ### Landing direction change — 2026-11-02
 
 The animated hero sloth did not look smooth: drawn frames crossfade with a slight body wobble, and several motions overlapped. The user kept the hero with a simple animation and moved the other landing sections to a PostHog-like direction (product first, few still mascots). The hero now shows `lying.png` as one still drawing that settles once and breathes slowly. The sprite (`public/brand/mascot/lying-frames/`) and `scripts/build-sloth-sprite.py` were removed; restore them from git history if needed.
+
+
+### Lying limb sprites — 2026-11-03
+
+Output: `public/brand/mascot/lying-layers.png` (1774×887, transparent PNG).
+Tool: built-in imagegen. Reference: `public/brand/mascot/lying.png`.
+
+The atlas has four equal cells: body, hand, leg, and rear foot. CSS clips each cell and overlaps the limb roots. The hand moves from −10° to 14°; the leg moves from −16° to 12°. The loop takes 5.2 seconds and has a rest between turns. The head stays still. Reduced motion uses the original drawing. No image slicing or frame blending is needed.
+
+Exact prompt:
+
+```text
+Use case: identity-preserve. Asset type: transparent layered sprite atlas for smooth CSS limb animation. Edit target: attached exact DFE lying sloth. Produce a wide 2:1 transparent image, a precise 2-column by 2-row atlas with four equal 2:1 cells. Each cell is the SAME 768x384 coordinate canvas as the reference; preserve the reference pixel placement, size, face and colors. TOP LEFT CELL: stationary sloth body/head, keep the face and resting left forearm exactly as reference; REMOVE only the dangling front hand/forearm at x245..445 y215..335, dangling hindleg at x530..635 y210..370, and far-right horizontal rear foot at x615..720 y210..300. Fill missing limb roots naturally with brown body/belly so no holes; leave rounded stubs under the head and on rump for overlay joints. TOP RIGHT CELL: ONLY the removed dangling front hand and forearm, matching reference shape and cream claws, at its ORIGINAL coordinate position x245..445 y215..335 in this cell; extend a rounded shoulder root slightly for overlap. BOTTOM LEFT CELL: ONLY the removed long hanging hindleg with cream claws, at its ORIGINAL coordinate position x530..635 y210..370; extend a rounded hip root slightly for overlap. BOTTOM RIGHT CELL: ONLY the horizontal rear foot with cream claws at its ORIGINAL coordinate position x615..720 y210..300, rounded root for overlap. All other areas genuinely transparent. Exact same scale and alignment in all four cells, generous transparent padding, no contact between cells. Keep same warm brown fills, cream face and claws, dark brown outlines and friendly exact face, simple flat illustration. No labels, grid lines, checkerboard, shadows, extra sloths, extra limbs, motion lines, text or scenery. Do NOT draw a full sloth in the limb-only cells.
+```
