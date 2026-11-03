@@ -25,3 +25,14 @@ test("static snapshots remove scripts, handlers, navigation and resource attribu
     doc.querySelector("meta[http-equiv]")?.getAttribute("content")
   ).toContain("default-src 'none'")
 })
+
+test("static snapshots keep the head styles of a complete document", () => {
+  const doc = new DOMParser().parseFromString(
+    staticSnapshot(
+      "<!doctype html><html><head><style>td{color:red}</style></head><body><table><tr><td>A</td></tr></table></body></html>"
+    ),
+    "text/html"
+  )
+  expect(doc.querySelector("style")?.textContent).toBe("td{color:red}")
+  expect(doc.querySelector("td")?.textContent).toBe("A")
+})

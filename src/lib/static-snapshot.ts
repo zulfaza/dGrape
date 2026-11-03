@@ -85,6 +85,8 @@ export function staticSnapshot(source: string): string {
       "text-anchor",
       "font-size",
     ],
+    // Keep head styles of full documents: parse all input as body content.
+    FORCE_BODY: true,
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
   })
