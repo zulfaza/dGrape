@@ -120,6 +120,59 @@ export const ArtifactDownload = Schema.Struct({
   expiresInSeconds: Schema.Number,
 })
 
+export const Capabilities = Schema.Struct({
+  workspace: Schema.Struct({ id: Schema.String, name: Schema.String }),
+  scope: Schema.Literals(["readonly", "readwrite"]),
+  capabilities: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      access: Schema.Literals(["read", "write"]),
+      allowed: Schema.Boolean,
+      description: Schema.String,
+    })
+  ),
+})
+
+export const CollectionDescription = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  version: Schema.Number,
+  fields: Schema.Array(Field),
+})
+
+/** A connection without secret values: only the credential's safe metadata. */
+export const Connection = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  origin: Schema.String,
+  routes: Schema.Array(
+    Schema.Struct({
+      path: Schema.String,
+      method: Schema.Literals(["GET", "POST"]),
+      queryKeys: Schema.Array(Schema.String),
+      fields: Schema.Array(Schema.String),
+    })
+  ),
+  credential: Schema.Struct({
+    label: Schema.String,
+    owner: Schema.Literals(["workspace", "user"]),
+    status: Schema.Literals([
+      "ready",
+      "pending",
+      "deleting",
+      "deleted",
+      "missing",
+    ]),
+  }),
+  usable: Schema.Boolean,
+})
+
+export const ConnectionPage = Schema.Struct({
+  page: Schema.Array(Connection),
+  isDone: Schema.Boolean,
+  continueCursor: Schema.String,
+})
+
 const ErrorBody = Schema.Struct({ error: Schema.String })
 
 export interface ListRecordsInput {
@@ -164,6 +217,11 @@ export interface DeleteRecordInput {
   readonly collectionId: string
   readonly recordId: string
   readonly expectedRevision: number
+}
+
+export interface ListConnectionsInput {
+  readonly limit?: number | undefined
+  readonly cursor?: string | undefined
 }
 
 export interface ListArtifactsInput {
@@ -216,6 +274,16 @@ export class AgentApi extends Context.Service<
       input: typeof Queries.RunInput.Type
     ) => Call<typeof Queries.RunPage.Type>
     readonly describeWorkspace: Call<typeof WorkspaceDescription.Type>
+    readonly capabilities: Call<typeof Capabilities.Type>
+    readonly describeCollection: (input: {
+      readonly collectionId: string
+    }) => Call<typeof CollectionDescription.Type>
+    readonly listConnections: (
+      input: ListConnectionsInput
+    ) => Call<typeof ConnectionPage.Type>
+    readonly describeConnection: (input: {
+      readonly connectionId: string
+    }) => Call<typeof Connection.Type>
     readonly listRecords: (
       input: ListRecordsInput
     ) => Call<typeof RecordPage.Type>
@@ -385,6 +453,34 @@ export const layer = (baseUrl: string) =>
           HttpClientRequest.get(url("/agent/workspace")),
           WorkspaceDescription
         ),
+        capabilities: send(
+          HttpClientRequest.get(url("/agent/capabilities")),
+          Capabilities
+        ),
+        describeCollection: ({ collectionId }) =>
+          send(
+            HttpClientRequest.get(url("/agent/collections/describe")).pipe(
+              HttpClientRequest.setUrlParams({ collectionId })
+            ),
+            CollectionDescription
+          ),
+        listConnections: ({ limit, cursor }) =>
+          send(
+            HttpClientRequest.get(url("/agent/connections")).pipe(
+              HttpClientRequest.setUrlParams({
+                ...(limit === undefined ? {} : { limit: String(limit) }),
+                ...(cursor === undefined ? {} : { cursor }),
+              })
+            ),
+            ConnectionPage
+          ),
+        describeConnection: ({ connectionId }) =>
+          send(
+            HttpClientRequest.get(url("/agent/connections/describe")).pipe(
+              HttpClientRequest.setUrlParams({ connectionId })
+            ),
+            Connection
+          ),
         listRecords: ({ collectionId, limit, cursor }) =>
           send(
             HttpClientRequest.get(url("/agent/records")).pipe(
