@@ -248,3 +248,39 @@ test("agent collection creation and optional additions also preserve versions", 
     )?.fields
   ).toHaveLength(2)
 })
+
+test("agent discovery reports capabilities by scope and describes one collection", async () => {
+  const { t, collectionId, workspaceId } = await fixture()
+  const { digestToken } = await import("./agentAccess")
+  const bearer = "d".repeat(64)
+  await t.run(async (ctx) => {
+    await ctx.db.insert("agentGrants", {
+      workspaceId,
+      owner: "owner",
+      digest: await digestToken(bearer),
+      scope: "readonly",
+      state: "active",
+      expiresAt: Date.now() + 60000,
+    })
+  })
+  const get = (path: string) =>
+    t.fetch(path, { headers: { Authorization: `Bearer ${bearer}` } })
+  const capabilities = await (await get("/agent/capabilities")).json()
+  expect(capabilities.scope).toBe("readonly")
+  for (const capability of capabilities.capabilities)
+    expect(capability.allowed).toBe(capability.access === "read")
+  expect(
+    await (
+      await get(`/agent/collections/describe?collectionId=${collectionId}`)
+    ).json()
+  ).toEqual({
+    id: collectionId,
+    name: "Rows",
+    version: 1,
+    fields: [{ id: "name", label: "Name", type: "text", indexed: true }],
+  })
+  expect(
+    (await get("/agent/collections/describe?collectionId=missing")).status
+  ).toBe(403)
+  expect((await get("/agent/collections/describe")).status).toBe(400)
+})

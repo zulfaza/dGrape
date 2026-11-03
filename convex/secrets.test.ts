@@ -497,3 +497,82 @@ describe("authenticated HTTP settings recovery", () => {
     vi.restoreAllMocks()
   })
 })
+describe("agent connection discovery", () => {
+  it("lists and describes visible connections over HTTP without secret values", async () => {
+    vi.stubEnv("CONNECTOR_ALLOWED_ORIGINS", "https://api.example.com")
+    const { t, owner, workspaceId, secretRef } = await fixture()
+    const connectionId = await owner.mutation(api.connectors.create, {
+      workspaceId,
+      secretRef,
+      label: "API",
+      origin: config.origin,
+      routes: config.routes,
+    })
+    const { digestToken } = await import("./agentAccess")
+    const bearer = "b".repeat(64)
+    const otherBearer = "c".repeat(64)
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        workspaceId,
+        userId: "other",
+        role: "owner",
+      })
+      for (const [owner, value] of [
+        ["owner", bearer],
+        ["other", otherBearer],
+      ])
+        await ctx.db.insert("agentGrants", {
+          workspaceId,
+          owner,
+          digest: await digestToken(value),
+          scope: "readonly",
+          state: "active",
+          expiresAt: Date.now() + 60000,
+        })
+    })
+    const get = (path: string, value = bearer) =>
+      t.fetch(path, { headers: { Authorization: `Bearer ${value}` } })
+    const expected = {
+      id: connectionId,
+      label: "API",
+      origin: config.origin,
+      routes: config.routes,
+      credential: { label: "API", owner: "user", status: "ready" },
+      usable: true,
+    }
+    const list = await get("/agent/connections")
+    expect(list.status).toBe(200)
+    const listText = await list.text()
+    expect(JSON.parse(listText).page).toEqual([expected])
+    const one = await get(
+      `/agent/connections/describe?connectionId=${connectionId}`
+    )
+    expect(await one.json()).toEqual(expected)
+    const meta = await owner.query(internal.secrets.metadata, { secretRef })
+    if (meta.state.kind !== "ready") throw new Error("Expected ready")
+    for (const hidden of [secretRef, meta.state.name, meta.state.objectId])
+      expect(listText).not.toContain(hidden)
+    // A member without a use grant sees nothing.
+    expect(
+      (await (await get("/agent/connections", otherBearer)).json()).page
+    ).toEqual([])
+    expect(
+      (
+        await get(
+          `/agent/connections/describe?connectionId=${connectionId}`,
+          otherBearer
+        )
+      ).status
+    ).toBe(403)
+    await owner.mutation(api.secrets.rotate, { secretRef, revision: 1 })
+    expect(
+      await (
+        await get(`/agent/connections/describe?connectionId=${connectionId}`)
+      ).json()
+    ).toMatchObject({ credential: { status: "pending" }, usable: false })
+    vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site")
+    expect((await t.fetch("/agent/connections")).status).toBe(401)
+    expect((await get("/agent/connections?limit=0")).status).toBe(400)
+    vi.unstubAllEnvs()
+  })
+})

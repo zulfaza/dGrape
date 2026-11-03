@@ -28,6 +28,46 @@ const DescribeWorkspace = Tool.make("workspace_describe", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Readonly, true)
 
+const ListCapabilities = Tool.make("capabilities_list", {
+  description:
+    "List what this credential can do: its workspace, its scope (readonly or readwrite), and each capability with `allowed` true or false. Call this first to plan which tools you can use.",
+  parameters: Tool.EmptyParams,
+  success: AgentApi.Capabilities,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const DescribeCollection = Tool.make("collections_describe", {
+  description:
+    "Describe one collection: its name, schema `version`, and fields (id, label, type, optional, indexed). Use it before you write records or add a field.",
+  parameters: Schema.Struct({ collectionId: Schema.String }),
+  success: AgentApi.CollectionDescription,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const ListConnections = Tool.make("connections_list", {
+  description: `List the connections that the credential owner can use in recipe fetch steps: origin, routes, credential label and status, and \`usable\`. Secret values are never returned. Returns up to \`limit\` (1 to ${MAX_PAGE_SIZE}). A page can have fewer items than \`limit\`; when \`isDone\` is false, pass \`continueCursor\` as \`cursor\`.`,
+  parameters: Schema.Struct({
+    limit: Schema.optionalKey(
+      Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_PAGE_SIZE }))
+    ),
+    cursor: Schema.optionalKey(Schema.String),
+  }),
+  success: AgentApi.ConnectionPage,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const DescribeConnection = Tool.make("connections_describe", {
+  description:
+    "Describe one connection: its origin, each route (path, method, allowed query keys, returned fields), and its credential label, owner, and status. `usable` is false when the credential is not ready or the origin is not approved. Secret values are never returned. A person adds credentials in the dashboard, never through MCP.",
+  parameters: Schema.Struct({ connectionId: Schema.String }),
+  success: AgentApi.Connection,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
 const ListRecords = Tool.make("records_list", {
   description: `List records of one collection, oldest first. Returns up to \`limit\` records (1 to ${MAX_PAGE_SIZE}, default ${MAX_PAGE_SIZE}). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\` to get the next page.`,
   parameters: Schema.Struct({
@@ -316,7 +356,11 @@ const DfeToolkit = Toolkit.make(
   QueryRun,
 
   ListTemplates,
+  ListCapabilities,
   DescribeWorkspace,
+  DescribeCollection,
+  ListConnections,
+  DescribeConnection,
   ListRecords,
   QueryRecords,
   ListArtifacts,
@@ -348,7 +392,11 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       queries_list: (input) => api.queryList(input),
       queries_run: (input) => api.queryRun(input),
       collections_templates: () => Effect.succeed(collectionTemplates()),
+      capabilities_list: () => api.capabilities,
       workspace_describe: () => api.describeWorkspace,
+      collections_describe: (input) => api.describeCollection(input),
+      connections_list: (input) => api.listConnections(input),
+      connections_describe: (input) => api.describeConnection(input),
       records_list: (input) => api.listRecords(input),
       records_query: (input) => api.queryRecords(input),
       artifacts_list: (input) => api.listArtifacts(input),
@@ -391,7 +439,8 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision.",
+      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. " +
+      "Recipes fetch and transform data without a model. A recipe fetch step uses a connection: connections_list and connections_describe show each connection's origin, routes, and credential status, never secret values. A person adds credentials in the dashboard. recipes_publish saves an immutable recipe version (fetch, map, filter, join, aggregate, upsert, snapshot, and artifact steps); recipes_versions lists versions. recipes_trigger starts a run (reuse its idempotencyKey to retry), recipes_runs lists runs, recipes_history lists the attempts of one run, and recipes_cancel stops a run. recipes_schedule creates a UTC schedule, recipes_schedules lists schedules, recipes_set_enabled turns one on or off, and recipes_set_run_access lets another user run a recipe. Only the recipe creator manages schedules and run access.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)
     ),

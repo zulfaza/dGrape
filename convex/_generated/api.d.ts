@@ -9,6 +9,7 @@
  */
 
 import type * as agentAccess from "../agentAccess.js";
+import type * as agentDiscoveryHttp from "../agentDiscoveryHttp.js";
 import type * as agentGrants from "../agentGrants.js";
 import type * as agentIdentityHttp from "../agentIdentityHttp.js";
 import type * as agentQueries from "../agentQueries.js";
@@ -24,6 +25,7 @@ import type * as http from "../http.js";
 import type * as lib_agentAuthConfig from "../lib/agentAuthConfig.js";
 import type * as lib_agentAuthCrypto from "../lib/agentAuthCrypto.js";
 import type * as lib_agentAuthDiscovery from "../lib/agentAuthDiscovery.js";
+import type * as lib_agentCapabilities from "../lib/agentCapabilities.js";
 import type * as lib_agentGrant from "../lib/agentGrant.js";
 import type * as lib_agentQueryTransport from "../lib/agentQueryTransport.js";
 import type * as lib_agentRecipeTransport from "../lib/agentRecipeTransport.js";
@@ -72,6 +74,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agentAccess: typeof agentAccess;
+  agentDiscoveryHttp: typeof agentDiscoveryHttp;
   agentGrants: typeof agentGrants;
   agentIdentityHttp: typeof agentIdentityHttp;
   agentQueries: typeof agentQueries;
@@ -87,6 +90,7 @@ declare const fullApi: ApiFromModules<{
   "lib/agentAuthConfig": typeof lib_agentAuthConfig;
   "lib/agentAuthCrypto": typeof lib_agentAuthCrypto;
   "lib/agentAuthDiscovery": typeof lib_agentAuthDiscovery;
+  "lib/agentCapabilities": typeof lib_agentCapabilities;
   "lib/agentGrant": typeof lib_agentGrant;
   "lib/agentQueryTransport": typeof lib_agentQueryTransport;
   "lib/agentRecipeTransport": typeof lib_agentRecipeTransport;
