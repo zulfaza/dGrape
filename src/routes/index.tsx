@@ -2,9 +2,11 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import {
   Cable,
   CalendarClock,
+  Code,
   KeyRound,
   LayoutDashboard,
   Paperclip,
+  RefreshCw,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react"
@@ -16,42 +18,77 @@ import { Button } from "@/components/ui/button"
 
 export const Route = createFileRoute("/")({ component: Home })
 
-const planned: ReadonlyArray<{
+type Feature = {
   title: string
   icon: LucideIcon
   body: string
-}> = [
+}
+
+const shipped: ReadonlyArray<Feature> = [
   {
     title: "Connect and compute",
     icon: Cable,
-    body: "Connectors will gather API data. Fixed recipes will map, combine, and total it without a model call on each run.",
+    body: "Connectors gather API data. Fixed recipes map, filter, join, and total it without a model call on each run.",
   },
   {
     title: "Run on your schedule",
     icon: CalendarClock,
-    body: "Plan one-off or recurring runs, inspect history, retry failures, and see when data was last refreshed.",
+    body: "Plan one-off or recurring runs, inspect the run history, and retry failed runs.",
   },
   {
     title: "Keep the source",
     icon: Paperclip,
-    body: "Store private files next to your data, with previews of the material behind your work.",
+    body: "Store private files next to your records, and preview text, CSV, Markdown, and JSON files.",
   },
   {
     title: "Make the view yours",
     icon: LayoutDashboard,
-    body: "Build versioned pages with tables, metrics, charts, and isolated custom HTML reports.",
+    body: "Build versioned pages with text, tables, metrics, charts, and files. Publish a version when it is ready.",
   },
   {
     title: "Connect without pasting",
     icon: KeyRound,
-    body: "Agent registration will let your agent ask for access, and you approve it in DFE.",
+    body: "Agent registration lets your agent ask for access, and you approve it in DFE.",
   },
   {
     title: "Stay in control",
     icon: ShieldCheck,
-    body: "Credentials for other services will use secret references, so records never show their values.",
+    body: "Credentials for other services use secret references, so records never show their values.",
   },
 ]
+
+const planned: ReadonlyArray<Feature> = [
+  {
+    title: "Custom reports",
+    icon: Code,
+    body: "Add custom HTML reports to your pages. Each report runs isolated from your workspace.",
+  },
+  {
+    title: "Know your data is fresh",
+    icon: RefreshCw,
+    body: "See when each source was last refreshed, and which data is out of date.",
+  },
+]
+
+function FeatureList({ items }: { items: ReadonlyArray<Feature> }) {
+  return (
+    <ul className="mt-10 grid gap-x-12 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((item) => (
+        <li key={item.title} className="flex gap-4 border-t py-6">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
+            <item.icon aria-hidden className="size-5" />
+          </span>
+          <div>
+            <h3 className="text-lg font-semibold">{item.title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {item.body}
+            </p>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 function WorkspaceLink({
   signedIn,
@@ -111,6 +148,12 @@ function Home() {
               How it works
             </a>
             <a
+              href="#features"
+              className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline"
+            >
+              Features
+            </a>
+            <a
               href="#planned"
               className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline"
             >
@@ -157,6 +200,24 @@ function Home() {
           </section>
 
           <section
+            id="features"
+            aria-labelledby="features-heading"
+            className="border-t py-14 sm:py-20"
+          >
+            <h2
+              id="features-heading"
+              className="text-3xl font-semibold tracking-tight sm:text-4xl"
+            >
+              Works today
+            </h2>
+            <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
+              Collections, records, and agent access over MCP and HTTP, with
+              these parts around them.
+            </p>
+            <FeatureList items={shipped} />
+          </section>
+
+          <section
             id="planned"
             aria-labelledby="planned-heading"
             className="border-t py-14 sm:py-20"
@@ -171,25 +232,9 @@ function Home() {
               <Badge variant="outline">Planned, not available yet</Badge>
             </div>
             <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
-              Collections, records, and agent access over MCP and HTTP work
-              today. These parts bring your data, agent, and reports closer
-              together.
+              These parts bring your data, agent, and reports closer together.
             </p>
-            <ul className="mt-10 grid gap-x-12 sm:grid-cols-2 lg:grid-cols-3">
-              {planned.map((item) => (
-                <li key={item.title} className="flex gap-4 border-t py-6">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
-                    <item.icon aria-hidden className="size-5" />
-                  </span>
-                  <div>
-                    <h3 className="text-lg font-semibold">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                      {item.body}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <FeatureList items={planned} />
           </section>
 
           <section className="mb-14 grid items-center gap-10 rounded-xl bg-primary px-6 py-12 text-primary-foreground sm:px-12 md:grid-cols-[1fr_auto]">
