@@ -67,17 +67,17 @@ const CAPABILITIES = [
     id: "recipes.run",
     scopes: ["jobs.run"],
     description:
-      "Start recipes and cancel runs. This needs run permission on the recipe, and connections.use for a recipe with a fetch step.",
+      "Start, retry, and cancel recipe runs. This needs run permission on the recipe, and connections.use for a recipe with a fetch step.",
   },
   {
     id: "queries.read",
-    access: "read",
+    scopes: ["data.read"],
     description:
       "List saved queries with their result fields, and run a saved query revision.",
   },
   {
     id: "queries.write",
-    access: "write",
+    scopes: ["data.write"],
     description: "Save records queries as new immutable revisions.",
   },
   {
