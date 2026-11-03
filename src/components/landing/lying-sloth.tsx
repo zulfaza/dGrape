@@ -1,8 +1,7 @@
 /**
- * The landing hero's lying sloth: one still drawing (public/brand/mascot/
- * lying.png) resting on the dashboard's edge. It settles once on load (see
- * HeroShowcase) and then only breathes slowly. Decorative only; reduced
- * motion keeps it still.
+ * The atlas has four equal cells: body, hand, leg, and rear foot.
+ * Separate joints keep the face still while the limbs move. CSS sets the
+ * overlap at each joint and keeps the original drawing for reduced motion.
  */
 export function LyingSloth({ className }: { className?: string }) {
   return (
@@ -13,8 +12,14 @@ export function LyingSloth({ className }: { className?: string }) {
         width={768}
         height={384}
         draggable={false}
-        className="dfe-anim dfe-sloth-breathe h-auto w-full select-none"
+        className="dfe-sloth-still h-auto w-full select-none"
       />
+      <div className="dfe-sloth-puppet relative hidden aspect-2/1 w-full">
+        <span className="dfe-anim dfe-sloth-sprite dfe-sloth-foot" />
+        <span className="dfe-sloth-sprite dfe-sloth-body" />
+        <span className="dfe-anim dfe-sloth-sprite dfe-sloth-leg" />
+        <span className="dfe-anim dfe-sloth-sprite dfe-sloth-hand" />
+      </div>
     </div>
   )
 }
