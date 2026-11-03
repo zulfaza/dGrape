@@ -49,7 +49,7 @@ async function setup(kind: "upsert" | "snapshot" = "upsert", maxPages = 3) {
       definition: {
         version: 1,
         fields: [
-          { id: "id", label: "ID", type: "text" },
+          { id: "id", label: "ID", type: "text", indexed: true },
           { id: "total", label: "Total", type: "number" },
         ],
       },
@@ -110,6 +110,68 @@ describe("durable recipe checkpoints", () => {
     expect(result.records.map((row) => row.revision)).toEqual([1, 1])
     expect(result.run?.state).toBe("succeeded")
     expect(result.cursor?.cursor).toBe("")
+  })
+  it("records source freshness: never synced, synced, then stale after a failed run", async () => {
+    const { t, owner, args, collectionId } = await setup()
+    const workspaceId = await t.run(async (ctx) => {
+      const collection = await ctx.db.get(collectionId)
+      if (!collection) throw new Error("Collection missing")
+      return collection.workspaceId
+    })
+    expect(await owner.query(api.sourceSyncs.list, { workspaceId })).toEqual([])
+    await t.action(internal.recipeRunner.execute, { ...args, step: 0 })
+    await t.action(internal.recipeRunner.execute, { ...args, step: 1 })
+    const [synced] = await owner.query(api.sourceSyncs.list, { workspaceId })
+    expect(synced).toMatchObject({
+      collectionId,
+      name: "Data",
+      freshness: { kind: "synced", runId: args.runId },
+    })
+    const versionId = await t.run(async (ctx) => {
+      const run = await ctx.db.get(args.runId)
+      if (!run) throw new Error("Run missing")
+      return run.versionId
+    })
+    const failedRunId = await owner.mutation(api.recipes.trigger, {
+      versionId,
+      idempotencyKey: "two",
+    })
+    const [claim] = await t.mutation(internal.recipes.dispatch, {})
+    await t.mutation(internal.recipeExecution.finishFailed, {
+      runId: failedRunId,
+      epoch: claim.epoch,
+    })
+    const [stale] = await owner.query(api.sourceSyncs.list, { workspaceId })
+    expect(stale?.freshness).toMatchObject({
+      kind: "stale",
+      lastSuccessfulSyncAt:
+        synced?.freshness.kind === "synced"
+          ? synced.freshness.lastSuccessfulSyncAt
+          : -1,
+      failedRunId,
+    })
+    const saved = await owner.mutation(api.savedQueries.save, {
+      collectionId,
+      name: "Totals",
+      query: { fieldId: "id", order: "asc" },
+    })
+    const page = await owner.query(api.savedQueries.run, {
+      queryId: saved.queryId,
+      expectedRevision: saved.revision,
+      paginationOpts: {
+        numItems: 10,
+        cursor: null,
+        maximumRowsRead: 100,
+        maximumBytesRead: 1_000_000,
+      },
+    })
+    expect(page.source.freshness.kind).toBe("stale")
+    expect(page.dataAsOf).toBe(
+      stale?.freshness.kind === "stale"
+        ? stale.freshness.lastSuccessfulSyncAt
+        : -1
+    )
+    expect(page.evaluatedAt).toBeGreaterThanOrEqual(page.dataAsOf ?? 0)
   })
   it("rejects an output from another workspace before reading its cursor", async () => {
     const { t, args, collectionId } = await setup()

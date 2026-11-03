@@ -1,10 +1,25 @@
-import type { PaginationOptions, PaginationResult } from "convex/server"
+import {
+  paginationResultValidator,
+  type PaginationOptions,
+  type PaginationResult,
+} from "convex/server"
+import { v } from "convex/values"
 import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
 import { requireMembership } from "./auth"
 import { workspaceBudgets, type Budgets } from "./budgets"
 import { recordAuditEvent, type AuditActor } from "./auditEvents"
+import {
+  collectionDefinitionValidator,
+  collectionRecordValidator,
+} from "./collectionDomain"
 import { checkQuery, queryRecords, type RecordQuery } from "./recordQuery"
+import {
+  dataAsOf,
+  readSourceStatus,
+  sourceStatusValidator,
+  type SourceStatus,
+} from "./sourceSync"
 
 type SaveQueryArgs = {
   collectionId: Id<"collections">
@@ -90,13 +105,30 @@ export async function saveQueryInWorkspace(
   return { queryId, revision }
 }
 
+/**
+ * A saved query page with its source freshness. `evaluatedAt` is when the
+ * query read the records. `dataAsOf` is the last successful sync of the
+ * source, or null when no sync succeeded. An empty page is not a sync state.
+ */
+export const savedQueryPageValidator = paginationResultValidator(
+  collectionRecordValidator
+).extend({
+  queryId: v.id("queryDefinitions"),
+  revision: v.number(),
+  resultSchema: collectionDefinitionValidator,
+  completeness: v.union(v.literal("complete"), v.literal("partial")),
+  evaluatedAt: v.number(),
+  dataAsOf: v.union(v.number(), v.null()),
+  source: sourceStatusValidator,
+})
 export type SavedQueryPage = PaginationResult<Doc<"collectionRecords">> & {
   queryId: Id<"queryDefinitions">
   revision: number
   resultSchema: Doc<"collections">["definition"]
   completeness: "complete" | "partial"
-  freshness: "live"
-  readAt: number
+  evaluatedAt: number
+  dataAsOf: number | null
+  source: SourceStatus
 }
 
 type RunSavedQueryArgs = {
@@ -175,6 +207,7 @@ export async function runSavedQueryInWorkspace(
   ).length
   if (resultBytes > opts.maximumBytesRead)
     throw new Error("Query result byte budget exceeded; reduce page size")
+  const source = await readSourceStatus(ctx, collection)
   return {
     queryId: saved._id,
     revision: version.revision,
@@ -184,8 +217,9 @@ export async function runSavedQueryInWorkspace(
       result.value.isDone && result.value.pageStatus !== "SplitRequired"
         ? "complete"
         : "partial",
-    freshness: "live",
-    readAt: Date.now(),
+    evaluatedAt: Date.now(),
+    dataAsOf: dataAsOf(source.freshness),
+    source,
   }
 }
 

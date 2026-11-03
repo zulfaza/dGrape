@@ -1,13 +1,5 @@
-import {
-  collectionRecordValidator,
-  collectionDefinitionValidator,
-  collectionFieldValidator,
-} from "./lib/collectionDomain"
-import {
-  paginationOptsValidator,
-  paginationResultValidator,
-  type PaginationOptions,
-} from "convex/server"
+import { collectionFieldValidator } from "./lib/collectionDomain"
+import { paginationOptsValidator, type PaginationOptions } from "convex/server"
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 import {
@@ -18,7 +10,11 @@ import {
 } from "./_generated/server"
 import { requireMembership } from "./lib/auth"
 import { workspaceBudgets } from "./lib/budgets"
-import { firstPageWithinBudget, runSavedQuery } from "./lib/savedQueries"
+import {
+  firstPageWithinBudget,
+  runSavedQuery,
+  savedQueryPageValidator,
+} from "./lib/savedQueries"
 import { recordAuditEvent, type AuditActor } from "./lib/auditEvents"
 import { previewKind } from "./lib/artifactPreview"
 import {
@@ -356,20 +352,10 @@ export const history = query({
 })
 
 /** Only stored, authorized block bindings can execute. No client query input. */
-const liveResultValidator = paginationResultValidator(
-  collectionRecordValidator
-).extend({
-  queryId: v.id("queryDefinitions"),
-  revision: v.number(),
-  resultSchema: collectionDefinitionValidator,
-  completeness: v.union(v.literal("complete"), v.literal("partial")),
-  freshness: v.literal("live"),
-  readAt: v.number(),
-})
 export const liveBlock = query({
   returns: v.union(
     v.object({ problem: v.string(), result: v.null() }),
-    v.object({ problem: v.null(), result: liveResultValidator })
+    v.object({ problem: v.null(), result: savedQueryPageValidator })
   ),
   args: { pageId: v.id("pages"), revision: v.number(), blockIndex: v.number() },
   handler: async (ctx, args) => {

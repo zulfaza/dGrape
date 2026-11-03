@@ -57,6 +57,8 @@ test("saved queries enforce membership, immutable revisions, source schema, and 
   })
   expect(first.page.map((row) => row.values.name)).toEqual(["a", "b"])
   expect(first.completeness).toBe("partial")
+  expect(first.source.freshness).toEqual({ kind: "never_synced" })
+  expect(first.dataAsOf).toBeNull()
   const split = await owner.query(api.savedQueries.run, {
     queryId: saved.queryId,
     expectedRevision: 1,
