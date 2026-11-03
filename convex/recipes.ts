@@ -13,6 +13,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel"
 import { recipeTables } from "./lib/recipeState"
 import { requireMembership } from "./lib/auth"
+import { recipeBudgetProblem, workspaceBudgets } from "./lib/budgets"
 import {
   checkRecordValues,
   recordValuesValidator,
@@ -162,6 +163,11 @@ export async function checkRecipe(
   recipe: Recipe
 ) {
   validateRecipe(recipe)
+  const overBudget = recipeBudgetProblem(
+    recipe,
+    await workspaceBudgets(ctx, workspaceId)
+  )
+  if (overBudget) throw new Error(overBudget)
   let output: Doc<"collections"> | null = null
   for (const step of recipe.steps) {
     if (step.kind === "fetch") {
@@ -263,6 +269,11 @@ export async function publishForPrincipal(
 ) {
   const member = await recipeMember(ctx, args.workspaceId, agent)
   validateRecipe(args.recipe)
+  const overBudget = recipeBudgetProblem(
+    args.recipe,
+    await workspaceBudgets(ctx, args.workspaceId)
+  )
+  if (overBudget) throw new Error(overBudget)
   if (!args.name.trim() || args.name.length > 120)
     throw new Error("Recipe name must be 1 to 120 characters")
   const versionId = await ctx.db.insert("recipeVersions", {
@@ -690,7 +701,7 @@ export const cancel = mutation({
   handler: (ctx, args) => cancelForPrincipal(ctx, args),
 })
 
-/** Called by the one Cloudflare dispatcher. No Convex cron is registered. */
+/** Called by the one Cloudflare dispatcher. No Convex cron runs it. */
 export const dispatch = internalMutation({
   args: {},
   returns: v.array(
@@ -786,6 +797,16 @@ export const begin = internalMutation({
     if (run.state === "running") return run
     const version = await ctx.db.get(run.versionId)
     if (!version) throw new Error("Recipe missing")
+    // The budget may be lower than when the version was published.
+    if (
+      recipeBudgetProblem(
+        version.recipe,
+        await workspaceBudgets(ctx, run.workspaceId)
+      )
+    ) {
+      await ctx.db.patch(runId, { state: "failed", finishedAt: now })
+      return null
+    }
     const output = version.recipe.steps.at(-1)
     const outputToken =
       output && (output.kind === "upsert" || output.kind === "snapshot")

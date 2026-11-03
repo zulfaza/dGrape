@@ -3,6 +3,11 @@ import type { Id } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
 import { MAX_ARTIFACT_BYTES } from "./artifactDomain"
 import { MAX_INDEXED_FIELDS, type Checked } from "./collectionDomain"
+import {
+  MAX_RECIPE_DURATION_MS,
+  MAX_RECIPE_STEPS,
+  type Recipe,
+} from "./recipeDomain"
 
 /**
  * Per-workspace budgets. A workspace stores only the budgets its owner
@@ -22,6 +27,9 @@ export const budgetsValidator = v.object({
   queryBytesRead: v.number(),
   artifactFileBytes: v.number(),
   artifactTotalBytes: v.number(),
+  runSteps: v.number(),
+  runDurationMs: v.number(),
+  runRetentionDays: v.number(),
 })
 export const budgetOverridesValidator = budgetsValidator.partial()
 
@@ -31,7 +39,7 @@ export type BudgetKey = keyof Budgets
 
 export type BudgetSpec = {
   readonly label: string
-  readonly unit: "count" | "bytes"
+  readonly unit: "count" | "bytes" | "ms" | "days"
   readonly min: number
   readonly default: number
   readonly max: number
@@ -80,6 +88,28 @@ export const BUDGET_SPECS = {
     default: 1024 ** 3,
     max: 10 * 1024 ** 3,
   },
+  runSteps: {
+    label: "Steps per recipe",
+    unit: "count",
+    min: 1,
+    default: MAX_RECIPE_STEPS,
+    max: MAX_RECIPE_STEPS,
+  },
+  runDurationMs: {
+    label: "Recipe run duration",
+    unit: "ms",
+    min: 1000,
+    default: MAX_RECIPE_DURATION_MS,
+    max: MAX_RECIPE_DURATION_MS,
+  },
+  // The default (ten years) keeps all run history in practice.
+  runRetentionDays: {
+    label: "Days to keep finished runs",
+    unit: "days",
+    min: 1,
+    default: 3650,
+    max: 3650,
+  },
 } satisfies { readonly [K in BudgetKey]: BudgetSpec }
 
 const isBudgetKey = (key: string): key is BudgetKey =>
@@ -104,6 +134,9 @@ export function effectiveBudgets(
     queryBytesRead: budget(overrides, "queryBytesRead"),
     artifactFileBytes: budget(overrides, "artifactFileBytes"),
     artifactTotalBytes: budget(overrides, "artifactTotalBytes"),
+    runSteps: budget(overrides, "runSteps"),
+    runDurationMs: budget(overrides, "runDurationMs"),
+    runRetentionDays: budget(overrides, "runRetentionDays"),
   }
 }
 
@@ -122,6 +155,18 @@ export function checkBudgetOverrides(
       }
   }
   return { ok: true, value: overrides }
+}
+
+/** Why a recipe exceeds the run budgets, or null. */
+export function recipeBudgetProblem(
+  recipe: Recipe,
+  budgets: Budgets
+): string | null {
+  if (recipe.steps.length > budgets.runSteps)
+    return `This workspace allows at most ${budgets.runSteps} recipe steps`
+  if (recipe.limits.durationMs > budgets.runDurationMs)
+    return `This workspace allows a recipe duration of at most ${budgets.runDurationMs} ms`
+  return null
 }
 
 /** The budgets of a workspace. Callers check access first. */
