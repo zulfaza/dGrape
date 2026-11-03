@@ -1,5 +1,5 @@
 import { useConvex, useMutation, usePaginatedQuery } from "convex/react"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -29,6 +29,7 @@ export function WorkspacePages({
   )
   const [draft, setDraft] = useState<Draft | null>(null)
   const [pending, setPending] = useState(false)
+  const running = useRef(false)
   const [message, setMessage] = useState("")
   const [dirty, setDirty] = useState(false)
   const history = usePaginatedQuery(
@@ -38,17 +39,18 @@ export function WorkspacePages({
   )
 
   async function run(action: () => Promise<void>) {
+    if (running.current) return
+    running.current = true
     setPending(true)
     setMessage("")
     try {
       await action()
-    } catch (error) {
+    } catch {
       setMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not complete this action. Try again."
+        "Could not complete this action. Check the title and block bindings. If another member changed this page, copy your edits before opening it again."
       )
     } finally {
+      running.current = false
       setPending(false)
     }
   }
@@ -150,9 +152,7 @@ export function WorkspacePages({
       {pending && <p role="status">Working…</p>}
       {message && (
         <p role="alert" className="break-words">
-          {message}{" "}
-          {message.includes("revision conflict") &&
-            "Your changes are kept. Open the page again to load the latest revision."}
+          {message}
         </p>
       )}
       {draft && (
@@ -199,6 +199,24 @@ export function WorkspacePages({
                   </p>
                 )
               )}
+              {draft.definition.blocks.map((block, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => {
+                    if (window.confirm(`Remove block ${index + 1}?`))
+                      change({
+                        ...draft.definition,
+                        blocks: draft.definition.blocks.filter(
+                          (_, position) => position !== index
+                        ),
+                      })
+                  }}
+                >
+                  Remove block {index + 1} ({block.kind})
+                </Button>
+              ))}
               <Button
                 variant="outline"
                 disabled={pending || draft.definition.blocks.length >= 20}
@@ -221,7 +239,9 @@ export function WorkspacePages({
                 {draft.definition.blocks.map((block, index) => (
                   <div key={index}>
                     {block.kind === "markdown" ? (
-                      <ReactMarkdown skipHtml>{block.text}</ReactMarkdown>
+                      <ReactMarkdown skipHtml disallowedElements={["img"]}>
+                        {block.text}
+                      </ReactMarkdown>
                     ) : (
                       <p>
                         Preview unavailable for {block.kind}: {block.title}.
@@ -269,10 +289,7 @@ export function WorkspacePages({
           {draft.pageId && (
             <div className="space-y-3">
               <h3 className="font-semibold">Publication history</h3>
-              <p>
-                Rollback changes the published revision. Unsaved edits stay in
-                the editor.
-              </p>
+              <p>Save your edits before changing the published revision.</p>
               {history.status === "LoadingFirstPage" && (
                 <p role="status">Loading history…</p>
               )}
@@ -284,7 +301,9 @@ export function WorkspacePages({
                   >
                     <span>
                       Revision {version.revision}
-                      {draft.publishedRevision === version.revision
+                      {(results.find((page) => page._id === draft.pageId)
+                        ?.publishedRevision ?? draft.publishedRevision) ===
+                      version.revision
                         ? " (published)"
                         : ""}
                     </span>
@@ -293,7 +312,9 @@ export function WorkspacePages({
                       disabled={
                         pending ||
                         dirty ||
-                        draft.publishedRevision === version.revision
+                        (results.find((page) => page._id === draft.pageId)
+                          ?.publishedRevision ?? draft.publishedRevision) ===
+                          version.revision
                       }
                       onClick={() => void publishRevision(version.revision)}
                     >

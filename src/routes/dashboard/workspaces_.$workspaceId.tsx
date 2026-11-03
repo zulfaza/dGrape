@@ -165,7 +165,9 @@ function WorkspacePage() {
             </p>
           )}
         </section>
-        {workspace && <WorkspacePages workspaceId={workspace._id} />}
+        {workspace && (
+          <WorkspacePages key={workspace._id} workspaceId={workspace._id} />
+        )}
         {workspace && <WorkspaceArtifacts workspaceId={workspace._id} />}
         {workspace && (
           <AgentAccessBoundary key={workspace._id}>
