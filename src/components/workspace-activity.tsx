@@ -22,6 +22,8 @@ function describe(event: AuditEvent): string {
   switch (event.operation) {
     case "workspace.create":
       return "created the workspace"
+    case "workspace.setBudgets":
+      return "changed the workspace budgets"
     case "collection.create":
       return "created a collection"
     case "collection.addField":
