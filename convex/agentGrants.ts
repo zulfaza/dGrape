@@ -135,6 +135,7 @@ export const revoke = mutation({
       grant.owner !== member.userId
     )
       throw new Error("Access denied")
+    if (grant.state === "revoked") return null
     await ctx.db.patch(grantId, { state: "revoked" })
     await recordAuditEvent(
       ctx,

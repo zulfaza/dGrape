@@ -478,6 +478,10 @@ export const grantUse = mutation({
         q.eq("connectionId", connection._id).eq("userId", args.userId)
       )
       .unique()
+    if (
+      args.allowed ? existing?.secretUse === args.secretUse : existing === null
+    )
+      return null
     if (existing) await ctx.db.delete(existing._id)
     if (args.allowed)
       await ctx.db.insert("connectionUseGrants", {

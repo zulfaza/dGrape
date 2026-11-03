@@ -128,6 +128,7 @@ export async function setRunAccessForPrincipal(
       q.eq("versionId", version._id).eq("userId", args.userId)
     )
     .unique()
+  if (args.allowed === (grant !== null)) return null
   if (args.allowed && !grant)
     await ctx.db.insert("recipeRunGrants", {
       versionId: version._id,
@@ -665,7 +666,7 @@ export async function cancelForPrincipal(
   const version = await ctx.db.get(run.versionId)
   if (!version) throw new Error("Recipe not found")
   const actor = await requireRecipeAccess(ctx, version, "run", agent)
-  if (terminal(run)) return null
+  if (terminal(run) || run.cancelRequested) return null
   await ctx.db.patch(
     run._id,
     run.state === "pending"
