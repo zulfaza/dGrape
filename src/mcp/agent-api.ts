@@ -22,10 +22,21 @@ export class AgentApiError extends Schema.TaggedError<AgentApiError>()(
   { message: Schema.String }
 ) {}
 
+/** The field types; collectionDomain.ts defines what each value must be. */
+export const FieldType = Schema.Literals([
+  "text",
+  "number",
+  "boolean",
+  "integer",
+  "currency",
+  "timestamp",
+  "date",
+])
+
 export const Field = Schema.Struct({
   id: Schema.String,
   label: Schema.String,
-  type: Schema.Literals(["text", "number", "boolean", "integer", "currency"]),
+  type: FieldType,
   optional: Schema.optionalKey(Schema.Literal(true)),
   indexed: Schema.optionalKey(Schema.Literal(true)),
 })

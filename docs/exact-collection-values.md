@@ -37,3 +37,15 @@ Existing `number` fields remain general finite numbers.
 Totals must group by currency, and addition must check safe integer overflow at
 each step. These field kinds do not implement aggregation or currency conversion.
 Collection templates and materialized reports are separate follow-up work.
+
+## Dates and times
+
+Two field kinds keep dates exact and sortable:
+
+- `timestamp`: a safe integer of milliseconds since 1970-01-01T00:00:00Z, in
+  the range of a JavaScript `Date`. The UI shows and edits it in local time.
+  CSV export writes it as ISO 8601 text in UTC; JSON export keeps the number.
+- `date`: a calendar date with no time zone, written as `YYYY-MM-DD`. The value
+  must be a real date, so `2026-02-30` is not valid.
+
+Both kinds can be indexed. Index ranges sort them in time order.

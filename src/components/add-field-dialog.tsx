@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "@/components/ui/toast"
+import { FIELD_TYPE_LABELS, FIELD_TYPES } from "@/lib/field-types"
 
 type Field = Doc<"collections">["definition"]["fields"][number]
 type FieldType = Field["type"]
@@ -143,13 +144,11 @@ export function AddFieldDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="text">Text</SelectItem>
-                    <SelectItem value="number">Number</SelectItem>
-                    <SelectItem value="integer">
-                      Integer / minor units
-                    </SelectItem>
-                    <SelectItem value="currency">Currency code</SelectItem>
-                    <SelectItem value="boolean">Yes / no</SelectItem>
+                    {FIELD_TYPES.map((fieldType) => (
+                      <SelectItem key={fieldType} value={fieldType}>
+                        {FIELD_TYPE_LABELS[fieldType]}
+                      </SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>

@@ -54,7 +54,10 @@ function safeText(value: string): string {
   return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
 }
 
-/** CSV: one row per record; field columns use the field IDs. */
+/**
+ * CSV: one row per record; field columns use the field IDs. Timestamps are
+ * ISO 8601 text in UTC, so spreadsheets can read them as dates.
+ */
 export function toCsv(
   collection: Collection,
   records: ReadonlyArray<CollectionRecord>
@@ -75,6 +78,8 @@ export function toCsv(
     ...fields.map((field) => {
       const value = record.values[field.id]
       if (value === undefined) return ""
+      if (field.type === "timestamp" && typeof value === "number")
+        return new Date(value).toISOString()
       return typeof value === "string" ? safeText(value) : String(value)
     }),
   ])

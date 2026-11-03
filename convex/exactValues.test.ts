@@ -19,6 +19,7 @@ import type { CollectionTemplate } from "./lib/collectionTemplates"
 import { checkQuery } from "./lib/recordQuery"
 import { parseCreateCollection } from "./lib/agentRequests"
 import { Field } from "../src/mcp/agent-api"
+import * as Queries from "./lib/agentQueryTransport"
 import { stageSnapshotChunk, upsertSourceRecord } from "./lib/recordPublication"
 const modules = import.meta.glob("./**/*.ts")
 const fields: CollectionField[] = [
@@ -75,6 +76,34 @@ test("safe integer boundaries and currency shape apply to records and query boun
       fieldId: "currency",
       order: "asc",
       where: { eq: "usd" },
+    }).ok
+  ).toBe(false)
+})
+
+test("timestamps are safe integer milliseconds and dates are real YYYY-MM-DD dates", () => {
+  const dated: CollectionField[] = [
+    { id: "at", label: "At", type: "timestamp", indexed: true },
+    { id: "day", label: "Day", type: "date", indexed: true },
+  ]
+  expect(
+    parseCreateCollection({ name: "Dated", fields: dated })?.fields
+  ).toEqual(dated)
+  for (const field of dated) {
+    expect(Schema.decodeUnknownSync(Field)(field)).toEqual(field)
+    expect(Schema.decodeUnknownSync(Queries.Field)(field)).toEqual(field)
+  }
+  for (const at of [0, -1, Date.UTC(2026, 10, 4), 8_640_000_000_000_000])
+    expect(checkRecordValues(dated, { at, day: "2024-02-29" }).ok).toBe(true)
+  expect(checkRecordValues(dated, { at: 0, day: "0004-02-29" }).ok).toBe(true)
+  for (const at of [1.5, 8_640_000_000_000_001, "2026-11-04T00:00:00Z", NaN])
+    expect(checkRecordValues(dated, { at, day: "2026-11-04" }).ok).toBe(false)
+  for (const day of ["2026-02-29", "2026-13-01", "2026-1-01", "20261104", 1])
+    expect(checkRecordValues(dated, { at: 0, day }).ok).toBe(false)
+  expect(
+    checkQuery(dated, {
+      fieldId: "day",
+      order: "asc",
+      where: { lower: { value: "2026-11-31", inclusive: true } },
     }).ok
   ).toBe(false)
 })

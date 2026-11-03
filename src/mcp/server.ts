@@ -141,7 +141,7 @@ const CompleteArtifactUpload = Tool.make("artifacts_complete_upload", {
 }).annotate(Tool.Destructive, false)
 
 const FieldsDescription =
-  'Use integer for exact money in minor units (safe integers only), with a separate currency field (three uppercase letters, e.g. USD). Keep totals separate by currency. Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", "boolean", "integer", or "currency". Set `optional` to true when a record may leave the field out. Set `indexed` to true for fields you will filter or sort by (at most 5; indexed text is at most 200 characters).'
+  'Use integer for exact money in minor units (safe integers only), with a separate currency field (three uppercase letters, e.g. USD). Keep totals separate by currency. Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), or "date" (a calendar date as YYYY-MM-DD). Set `optional` to true when a record may leave the field out. Set `indexed` to true for fields you will filter or sort by (at most 5; indexed text is at most 200 characters).'
 
 const CreateCollection = Tool.make("collections_create", {
   description: `Create a collection in the workspace. Needs the data.write scope. ${FieldsDescription} Give 1 to 50 fields.`,
@@ -156,19 +156,13 @@ const CreateCollection = Tool.make("collections_create", {
 
 const AddField = Tool.make("collections_add_field", {
   description:
-    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, a `type`: "text", "number", "boolean", "integer", or "currency", and `indexed: true` when you will filter or sort by it. Returns the new schema version. Needs the data.write scope.',
+    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), or "date" (a calendar date as YYYY-MM-DD), and `indexed: true` when you will filter or sort by it. Returns the new schema version. Needs the data.write scope.',
   parameters: Schema.Struct({
     collectionId: Schema.String,
     field: Schema.Struct({
       id: Schema.String,
       label: Schema.String,
-      type: Schema.Literals([
-        "text",
-        "number",
-        "boolean",
-        "integer",
-        "currency",
-      ]),
+      type: AgentApi.FieldType,
       indexed: Schema.optionalKey(Schema.Literal(true)),
     }),
   }),
