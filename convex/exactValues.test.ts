@@ -91,6 +91,7 @@ test("timestamps are safe integer milliseconds and dates are real YYYY-MM-DD dat
     expect(Schema.decodeUnknownSync(Field)(field)).toEqual(field)
   for (const at of [0, -1, Date.UTC(2026, 10, 4), 8_640_000_000_000_000])
     expect(checkRecordValues(dated, { at, day: "2024-02-29" }).ok).toBe(true)
+  expect(checkRecordValues(dated, { at: 0, day: "0004-02-29" }).ok).toBe(true)
   for (const at of [1.5, 8_640_000_000_000_001, "2026-11-04T00:00:00Z", NaN])
     expect(checkRecordValues(dated, { at, day: "2026-11-04" }).ok).toBe(false)
   for (const day of ["2026-02-29", "2026-13-01", "2026-1-01", "20261104", 1])

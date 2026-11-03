@@ -141,6 +141,17 @@ export function CollectionRecords({
       const value = draft.values[field.id]
       // An empty optional field has no value, so the record leaves it out.
       if (field.optional && (value === undefined || value === "")) continue
+      const stored = draft.record?.values[field.id]
+      // Local time can be ambiguous (a daylight saving change), so an
+      // unchanged timestamp keeps its stored value.
+      if (
+        field.type === "timestamp" &&
+        typeof stored === "number" &&
+        value === timestampInputText(stored)
+      ) {
+        values[field.id] = stored
+        continue
+      }
       if (typeof value === "string") {
         const parsed = fromInputText(field.type, value)
         if (!parsed.ok) {
