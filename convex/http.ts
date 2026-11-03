@@ -1,6 +1,8 @@
 import { registerAgentRecipeRoutes } from "./agentRecipeHttp"
 import { collectionTemplates } from "./lib/collectionTemplates"
 import { registerRecipeRoutes } from "./recipeHttp"
+import { agentRoute } from "./lib/agentRoute"
+import * as Queries from "./lib/agentQueryTransport"
 import { httpRouter } from "convex/server"
 import type { Id } from "./_generated/dataModel"
 import { httpAction, type ActionCtx } from "./_generated/server"
@@ -138,6 +140,39 @@ http.route({
 })
 registerRecipeRoutes(http)
 registerAgentRecipeRoutes(http)
+agentRoute(
+  http,
+  "/agent/queries/save",
+  Queries.SaveInput,
+  (ctx, digest, input) =>
+    ctx.runMutation(internal.agentQueries.save, {
+      ...input,
+      query: Queries.toRecordQuery(input.query),
+      digest,
+    })
+)
+agentRoute(
+  http,
+  "/agent/queries/list",
+  Queries.ListInput,
+  (ctx, digest, input) =>
+    ctx.runQuery(internal.agentQueries.list, {
+      digest,
+      now: Date.now(),
+      numItems: input.limit ?? Queries.MAX_PAGE_SIZE,
+      cursor: input.cursor ?? null,
+    })
+)
+agentRoute(http, "/agent/queries/run", Queries.RunInput, (ctx, digest, input) =>
+  ctx.runQuery(internal.agentQueries.run, {
+    digest,
+    now: Date.now(),
+    queryId: input.queryId,
+    revision: input.revision,
+    numItems: input.limit ?? Queries.MAX_PAGE_SIZE,
+    cursor: input.cursor ?? null,
+  })
+)
 http.route({ path: "/agent/workspace", method: "OPTIONS", handler: preflight })
 http.route({
   path: "/agent/workspace",

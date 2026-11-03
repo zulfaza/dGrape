@@ -1,3 +1,4 @@
+import * as Queries from "../../convex/lib/agentQueryTransport"
 import * as Recipes from "../../convex/lib/agentRecipeTransport"
 import { collectionTemplates } from "../../convex/lib/collectionTemplates"
 import { Effect, Layer, Schema } from "effect"
@@ -274,6 +275,30 @@ const RecipeSetRunAccess = Tool.make("recipes_set_run_access", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Destructive, false)
 
+const QuerySave = Tool.make("queries_save", {
+  description: `Save a records query so pages can show its results. \`query\` has the records_query shape: \`fieldId\` (an indexed field), \`order\`, and \`where\`. Each save makes a new immutable revision. To change a saved query, pass its \`queryId\` and its current \`revision\` as \`expectedRevision\`; if it changed since you read it, the call fails and you must list it again. Returns \`queryId\` and \`revision\`. Needs a read-and-write credential.`,
+  parameters: Queries.SaveInput,
+  success: Queries.Saved,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const QueryList = Tool.make("queries_list", {
+  description: `List the workspace's saved queries with their current \`revision\` and result \`fields\`. \`status\` is "stale" when the collection schema changed after that revision: save the query again before you use it. Returns up to \`limit\` (1 to ${Queries.MAX_PAGE_SIZE}). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\`.`,
+  parameters: Queries.ListInput,
+  success: Queries.SavedQueryPage,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const QueryRun = Tool.make("queries_run", {
+  description: `Run one revision of a saved query. Returns up to \`limit\` records (1 to ${Queries.MAX_PAGE_SIZE}), the result schema, and \`completeness\` ("partial" when more pages remain or the read budget stopped the page). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\`.`,
+  parameters: Queries.RunInput,
+  success: Queries.RunPage,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
 const DfeToolkit = Toolkit.make(
   RecipePublish,
   RecipeVersions,
@@ -285,6 +310,10 @@ const DfeToolkit = Toolkit.make(
   RecipeSetEnabled,
   RecipeCancel,
   RecipeSetRunAccess,
+
+  QuerySave,
+  QueryList,
+  QueryRun,
 
   ListTemplates,
   DescribeWorkspace,
@@ -315,6 +344,9 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       recipes_set_enabled: (input) => api.recipeSetEnabled(input),
       recipes_cancel: (input) => api.recipeCancel(input),
       recipes_set_run_access: (input) => api.recipeSetRunAccess(input),
+      queries_save: (input) => api.querySave(input),
+      queries_list: (input) => api.queryList(input),
+      queries_run: (input) => api.queryRun(input),
       collections_templates: () => Effect.succeed(collectionTemplates()),
       workspace_describe: () => api.describeWorkspace,
       records_list: (input) => api.listRecords(input),
@@ -359,7 +391,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data.",
+      "DFE stores workspace data in collections of typed records. Use workspace_describe to find collections and their fields, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With a read-and-write credential, collections_create, collections_add_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)
     ),

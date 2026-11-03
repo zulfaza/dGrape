@@ -3,6 +3,7 @@ import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
 import schema from "./schema"
 import { api } from "./_generated/api"
+import * as Queries from "./lib/agentQueryTransport"
 import { insertRecord } from "./lib/records"
 const modules = import.meta.glob("./**/*.ts")
 
@@ -138,3 +139,123 @@ test("saved queries enforce membership, immutable revisions, source schema, and 
     })
   ).rejects.toThrow("schema mismatch")
 })
+
+test("agent credentials save, list, and run queries in their own workspace", async () => {
+  const t = convexTest(schema, modules)
+  const { digestToken } = await import("./agentAccess")
+  const writer = "a".repeat(64)
+  const reader = "b".repeat(64)
+  const { collectionId, foreignCollectionId } = await t.run(async (ctx) => {
+    const workspaceId = await ctx.db.insert("workspaces", { name: "Mine" })
+    await ctx.db.insert("workspaceMembers", {
+      workspaceId,
+      userId: "owner",
+      role: "owner",
+    })
+    for (const [token, scope] of [
+      [writer, "readwrite"],
+      [reader, "readonly"],
+    ] as const)
+      await ctx.db.insert("agentGrants", {
+        workspaceId,
+        owner: "owner",
+        digest: await digestToken(token),
+        scope,
+        state: "active",
+        expiresAt: Date.now() + 60000,
+      })
+    const id = await ctx.db.insert("collections", {
+      workspaceId,
+      name: "Rows",
+      definition: {
+        version: 1,
+        fields: [{ id: "name", label: "Name", type: "text", indexed: true }],
+      },
+    })
+    const collection = await ctx.db.get(id)
+    if (!collection) throw new Error("Missing fixture")
+    for (const name of ["a", "b", "c"])
+      await insertRecord(ctx, collection, { name })
+    const other = await ctx.db.insert("workspaces", { name: "Other" })
+    const foreignCollectionId = await ctx.db.insert("collections", {
+      workspaceId: other,
+      name: "Theirs",
+      definition: { version: 1, fields: [] },
+    })
+    return { collectionId: id, foreignCollectionId }
+  })
+  type Body =
+    | typeof Queries.SaveInput.Type
+    | typeof Queries.ListInput.Type
+    | typeof Queries.RunInput.Type
+  const call = async (operation: string, body: Body, token = writer) => {
+    const response = await t.fetch(`/agent/queries/${operation}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    })
+    return { status: response.status, body: await response.json() }
+  }
+  const query = { fieldId: "name", where: { lower: { value: "b" } } }
+
+  expect(
+    await call("save", { collectionId, name: "From b", query }, reader)
+  ).toMatchObject({ status: 403 })
+  expect(
+    await call("save", {
+      collectionId: foreignCollectionId,
+      name: "Theirs",
+      query,
+    })
+  ).toMatchObject({ status: 403 })
+  expect(
+    await call("save", {
+      collectionId,
+      name: "Bad",
+      query: { fieldId: "missing" },
+    })
+  ).toEqual({ status: 400, body: { error: 'Unknown field "missing"' } })
+
+  const saved = await call("save", { collectionId, name: "From b", query })
+  expect(saved).toMatchObject({ status: 200, body: { revision: 1 } })
+  const { queryId } = saved.body
+  expect(
+    await call("save", {
+      collectionId,
+      name: "Again",
+      query,
+      queryId,
+      expectedRevision: 2,
+    })
+  ).toMatchObject({ status: 409 })
+
+  expect(await call("list", {}, reader)).toMatchObject({
+    status: 200,
+    body: {
+      isDone: true,
+      page: [{ queryId, name: "From b", revision: 1, status: "current" }],
+    },
+  })
+  const run = await call("run", { queryId, revision: 1, limit: 1 }, reader)
+  expect(run).toMatchObject({
+    status: 200,
+    body: { queryId, revision: 1, completeness: "partial", isDone: false },
+  })
+  expect(run.body.page.map((row: { values: unknown }) => row.values)).toEqual([
+    { name: "b" },
+  ])
+  expect(run.body.page[0]).not.toHaveProperty("collectionId")
+  expect(
+    await call("run", { queryId, revision: 1, cursor: run.body.continueCursor })
+  ).toMatchObject({ status: 200, body: { completeness: "complete" } })
+  expect(await call("run", { queryId, revision: 9 })).toEqual({
+    status: 400,
+    body: { error: "Query revision mismatch" },
+  })
+  expect(await call("run", { queryId: "nope", revision: 1 })).toMatchObject({
+    status: 403,
+  })
+}, 30_000)
