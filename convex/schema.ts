@@ -16,6 +16,7 @@ import {
 } from "./lib/collectionDomain"
 
 import { budgetOverridesValidator } from "./lib/budgets"
+import { recordCountValidator } from "./lib/recordCounts"
 import { recipeTables } from "./lib/recipeState"
 import { secretFields, connectionFields } from "./lib/secretDomain"
 
@@ -120,6 +121,8 @@ export default defineSchema({
   }).index("by_queryId_and_revision", ["queryId", "revision"]),
   collections: defineTable({
     dataRevision: v.optional(v.number()),
+    /** See convex/lib/recordCounts.ts. */
+    recordCount: v.optional(recordCountValidator),
     workspaceId: v.id("workspaces"),
     name: v.string(),
     definition: collectionDefinitionValidator,

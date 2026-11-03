@@ -7,6 +7,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import { internalMutation, type MutationCtx } from "./_generated/server"
 import { resolveGrant } from "./lib/agentGrant"
 import { workspaceBudgets } from "./lib/budgets"
+import { recordBudgetProblem } from "./lib/recordCounts"
 import {
   addField as addFieldToDefinition,
   checkCollection,
@@ -182,6 +183,8 @@ export const createRecord = internalMutation({
     }
     const checked = checkRecordValues(collection.definition.fields, values)
     if (!checked.ok) return reject(checked.message)
+    const overBudget = await recordBudgetProblem(ctx, collection)
+    if (overBudget) return reject(overBudget)
     const id = await insertRecord(
       ctx,
       collection,

@@ -1,13 +1,17 @@
 import type { Doc } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
 import { checkCollection, type CollectionDefinition } from "./collectionDomain"
+import { EMPTY_RECORD_COUNT } from "./recordCounts"
 
 /** New collections preserve their initial definition in the same transaction. */
 export async function createVersionedCollection(
   ctx: MutationCtx,
   collection: Omit<Doc<"collections">, "_id" | "_creationTime">
 ) {
-  const collectionId = await ctx.db.insert("collections", collection)
+  const collectionId = await ctx.db.insert("collections", {
+    ...collection,
+    recordCount: EMPTY_RECORD_COUNT,
+  })
   await ctx.db.insert("collectionSchemaVersions", {
     collectionId,
     definition: collection.definition,
