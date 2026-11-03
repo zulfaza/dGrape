@@ -4,7 +4,7 @@ CI runs on pull requests and pushes to main. It uses Node 24.18.0 and pnpm
 12.10.1, a frozen lockfile, frontend/backend/design-system type checks, lint,
 Vitest, both builds, and an offline `cf deploy --prebuilt --dry-run`.
 Fork PRs get no deployment secrets. Checkout does not keep its GitHub token.
-Vitest currently has no test files; its existing passWithNoTests policy remains.
+Vitest runs the repository test suite; its existing passWithNoTests policy remains.
 
 Formatting checks cover changed TS/JS/JSON source files, excluding generated
 Convex files. The full `pnpm check` fails on 28 existing files as of main
