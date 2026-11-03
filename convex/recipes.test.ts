@@ -239,6 +239,23 @@ describe("recipe credentials", () => {
         })
       }
     })
+    const runner = t.withIdentity({ tokenIdentifier: "test|runner" })
+    expect(await owner.query(api.recipes.permissions, { versionId })).toEqual({
+      canManage: true,
+      canRun: true,
+    })
+    expect(await runner.query(api.recipes.permissions, { versionId })).toEqual({
+      canManage: false,
+      canRun: false,
+    })
+    await expect(
+      t.query(api.recipes.permissions, { versionId })
+    ).rejects.toThrow("Unauthenticated")
+    await expect(
+      t
+        .withIdentity({ tokenIdentifier: "test|outsider" })
+        .query(api.recipes.permissions, { versionId })
+    ).rejects.toThrow("access denied")
     const input = { versionId, idempotencyKey: "credential" }
     for (const digest of ["missing", "reader", "runner"])
       await expect(
@@ -248,6 +265,10 @@ describe("recipe credentials", () => {
       versionId,
       userId: "test|runner",
       allowed: true,
+    })
+    expect(await runner.query(api.recipes.permissions, { versionId })).toEqual({
+      canManage: false,
+      canRun: true,
     })
     const runId = await t.mutation(internal.agentRecipes.trigger, {
       ...input,
@@ -310,6 +331,10 @@ describe("recipe credentials", () => {
       versionId,
       userId: "test|runner",
       allowed: false,
+    })
+    expect(await runner.query(api.recipes.permissions, { versionId })).toEqual({
+      canManage: false,
+      canRun: false,
     })
     await expect(
       t.mutation(internal.agentRecipes.trigger, { ...input, digest: "runner" })
