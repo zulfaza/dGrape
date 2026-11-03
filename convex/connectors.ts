@@ -11,6 +11,7 @@ import {
   internalQuery,
   mutation,
   query,
+  type MutationCtx,
   type QueryCtx,
 } from "./_generated/server"
 import { resolveGrant } from "./lib/agentGrant"
@@ -18,14 +19,18 @@ import { requireMembership, requireUserId } from "./lib/auth"
 import {
   checkOrigin,
   checkRoute,
-  connectionFields,
   methodValidator,
   routeValidator,
   rowValidator,
   safeLabel,
 } from "./lib/secretDomain"
 import { configuredSecretLayer } from "./lib/secretService"
-import { fetchConnectorPage } from "./lib/connectorFetch"
+import { fetchConnectorPage, httpRoutes } from "./lib/connectorFetch"
+import {
+  githubHeaders,
+  githubOrigin,
+  githubRoutes,
+} from "./lib/githubConnector"
 
 /** Only trusted recipe ownership/run code may supply principalUserId. */
 export const useArgs = {
@@ -67,14 +72,17 @@ export async function requireConnectionUse(
       !grant?.secretUse)
   )
     throw new Error("Connection access denied")
-  checkOrigin(connection.origin)
-  if (
-    !(process.env.CONNECTOR_ALLOWED_ORIGINS ?? "")
-      .split(",")
-      .includes(connection.origin)
-  )
-    throw new Error("Connection access denied")
-  connection.routes.forEach(checkRoute)
+  // Trusted code fixes the GitHub origin; operators approve every HTTP origin.
+  if (connection.kind !== "github") {
+    checkOrigin(connection.origin)
+    if (
+      !(process.env.CONNECTOR_ALLOWED_ORIGINS ?? "")
+        .split(",")
+        .includes(connection.origin)
+    )
+      throw new Error("Connection access denied")
+    connection.routes.forEach(checkRoute)
+  }
   return { connection, secret }
 }
 export const authorizeUse = internalQuery({
@@ -85,11 +93,18 @@ export const authorizeUse = internalQuery({
     return null
   },
 })
+const executionConnector = v.union(
+  v.object({
+    kind: v.literal("http"),
+    origin: v.string(),
+    routes: v.array(routeValidator),
+  }),
+  v.object({ kind: v.literal("github") })
+)
 export const executionConfig = internalQuery({
   args: useArgs,
   returns: v.object({
-    origin: v.string(),
-    routes: v.array(routeValidator),
+    connector: executionConnector,
     name: v.string(),
     scope: v.object({
       workspaceId: v.string(),
@@ -100,9 +115,16 @@ export const executionConfig = internalQuery({
     const { connection, secret } = await requireConnectionUse(ctx, args)
     if (secret.state.kind !== "ready")
       throw new Error("Connection access denied")
+    const connector: Infer<typeof executionConnector> =
+      connection.kind === "github"
+        ? { kind: "github" }
+        : {
+            kind: "http",
+            origin: connection.origin,
+            routes: connection.routes,
+          }
     return {
-      origin: connection.origin,
-      routes: connection.routes,
+      connector,
       name: secret.state.name,
       scope: {
         workspaceId: secret.workspaceId,
@@ -133,11 +155,30 @@ export const fetchPage = internalAction({
     nextCursor: string | null
     bytesRead: number
   }> => {
-    const config = await ctx.runQuery(internal.connectors.executionConfig, {
-      workspaceId: args.workspaceId,
-      connectionId: args.connectionId,
-      principalUserId: args.principalUserId,
-    })
+    const { connector, name, scope } = await ctx.runQuery(
+      internal.connectors.executionConfig,
+      {
+        workspaceId: args.workspaceId,
+        connectionId: args.connectionId,
+        principalUserId: args.principalUserId,
+      }
+    )
+    const config =
+      connector.kind === "github"
+        ? {
+            origin: githubOrigin,
+            routes: githubRoutes,
+            headers: githubHeaders,
+            name,
+            scope,
+          }
+        : {
+            origin: connector.origin,
+            routes: httpRoutes(connector.routes),
+            headers: {},
+            name,
+            scope,
+          }
     return Effect.runPromise(
       fetchConnectorPage(config, args).pipe(
         Effect.provide(configuredSecretLayer())
@@ -166,11 +207,9 @@ async function canSeeConnection(
  * name or ID, or secret reference ID: only the credential's safe label,
  * owner kind, and lifecycle status.
  */
-const agentConnectionValidator = v.object({
+const agentConnectionBase = {
   id: v.id("connections"),
   label: v.string(),
-  origin: v.string(),
-  routes: v.array(routeValidator),
   credential: v.object({
     label: v.string(),
     owner: v.union(v.literal("workspace"), v.literal("user")),
@@ -184,7 +223,21 @@ const agentConnectionValidator = v.object({
   }),
   /** True when a recipe of the credential owner can fetch with it now. */
   usable: v.boolean(),
-})
+}
+const agentConnectionValidator = v.union(
+  v.object({
+    ...agentConnectionBase,
+    kind: v.literal("http"),
+    origin: v.string(),
+    routes: v.array(routeValidator),
+  }),
+  /** `reads` are the route IDs a recipe fetch step can name. */
+  v.object({
+    ...agentConnectionBase,
+    kind: v.literal("github"),
+    reads: v.array(v.string()),
+  })
+)
 
 async function agentConnection(
   ctx: QueryCtx,
@@ -192,7 +245,7 @@ async function agentConnection(
   principalUserId: string
 ): Promise<Infer<typeof agentConnectionValidator>> {
   const secret = await ctx.db.get(connection.secretRef)
-  const credential: Infer<typeof agentConnectionValidator>["credential"] =
+  const credential: Infer<typeof agentConnectionBase.credential> =
     secret && secret.workspaceId === connection.workspaceId
       ? {
           label: secret.label,
@@ -210,14 +263,20 @@ async function agentConnection(
   } catch {
     usable = false
   }
-  return {
+  const base = {
     id: connection._id,
     label: connection.label,
-    origin: connection.origin,
-    routes: connection.routes,
     credential,
     usable,
   }
+  return connection.kind === "github"
+    ? { ...base, kind: "github", reads: githubRoutes.map((r) => r.id) }
+    : {
+        ...base,
+        kind: "http",
+        origin: connection.origin,
+        routes: connection.routes,
+      }
 }
 
 /** Connections that the agent credential's owner can see, one page. */
@@ -272,20 +331,31 @@ export const agentDescribe = internalQuery({
     return agentConnection(ctx, connection, grant.owner)
   },
 })
+const listedBase = {
+  id: v.id("connections"),
+  label: v.string(),
+  secretRef: v.id("secretRefs"),
+}
+const listedConnection = v.union(
+  v.object({
+    ...listedBase,
+    kind: v.literal("http"),
+    origin: v.string(),
+    routes: v.array(routeValidator),
+  }),
+  /** `reads` are the route IDs a recipe fetch step can name. */
+  v.object({
+    ...listedBase,
+    kind: v.literal("github"),
+    reads: v.array(v.string()),
+  })
+)
 export const list = query({
   args: {
     workspaceId: v.id("workspaces"),
     paginationOpts: paginationOptsValidator,
   },
-  returns: paginationResultValidator(
-    v.object({
-      id: v.id("connections"),
-      label: v.string(),
-      secretRef: v.id("secretRefs"),
-      origin: v.string(),
-      routes: v.array(routeValidator),
-    })
-  ),
+  returns: paginationResultValidator(listedConnection),
   handler: async (ctx, { workspaceId, paginationOpts }) => {
     const member = await requireMembership(ctx, workspaceId)
     if (
@@ -298,45 +368,47 @@ export const list = query({
       .query("connections")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
       .paginate(paginationOpts)
-    const visible: {
-      id: Id<"connections">
-      label: string
-      secretRef: Id<"secretRefs">
-      origin: string
-      routes: Doc<"connections">["routes"]
-    }[] = []
+    const visible: Infer<typeof listedConnection>[] = []
     for (const c of connections.page) {
-      if (await canSeeConnection(ctx, c, member.userId))
-        visible.push({
-          id: c._id,
-          label: c.label,
-          secretRef: c.secretRef,
-          origin: c.origin,
-          routes: c.routes,
-        })
+      if (!(await canSeeConnection(ctx, c, member.userId))) continue
+      const base = { id: c._id, label: c.label, secretRef: c.secretRef }
+      visible.push(
+        c.kind === "github"
+          ? { ...base, kind: "github", reads: githubRoutes.map((r) => r.id) }
+          : { ...base, kind: "http", origin: c.origin, routes: c.routes }
+      )
     }
     return { ...connections, page: visible }
   },
 })
+/** Only the creator of a ready credential can bind it to a connection. */
+async function requireOwnSecret(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">,
+  secretRef: Id<"secretRefs">
+) {
+  const member = await requireMembership(ctx, workspaceId)
+  const secret = await ctx.db.get(secretRef)
+  if (
+    !secret ||
+    secret.workspaceId !== workspaceId ||
+    secret.createdBy !== member.userId ||
+    secret.state.kind !== "ready"
+  )
+    throw new Error("Secret access denied")
+  return member
+}
 export const create = mutation({
   args: {
-    workspaceId: connectionFields.workspaceId,
-    secretRef: connectionFields.secretRef,
+    workspaceId: v.id("workspaces"),
+    secretRef: v.id("secretRefs"),
     label: v.string(),
     origin: v.string(),
     routes: v.array(routeValidator),
   },
   returns: v.id("connections"),
   handler: async (ctx, args) => {
-    const member = await requireMembership(ctx, args.workspaceId)
-    const secret = await ctx.db.get(args.secretRef)
-    if (
-      !secret ||
-      secret.workspaceId !== args.workspaceId ||
-      secret.createdBy !== member.userId ||
-      secret.state.kind !== "ready"
-    )
-      throw new Error("Secret access denied")
+    const member = await requireOwnSecret(ctx, args.workspaceId, args.secretRef)
     if (args.routes.length < 1 || args.routes.length > 10)
       throw new Error("Use 1 to 10 routes")
     checkOrigin(args.origin)
@@ -347,6 +419,25 @@ export const create = mutation({
     args.routes.forEach(checkRoute)
     return ctx.db.insert("connections", {
       ...args,
+      kind: "http",
+      label: safeLabel(args.label),
+      createdBy: member.userId,
+    })
+  },
+})
+/** The credential must be a GitHub token with read access only; no route is configurable. */
+export const createGithub = mutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    secretRef: v.id("secretRefs"),
+    label: v.string(),
+  },
+  returns: v.id("connections"),
+  handler: async (ctx, args) => {
+    const member = await requireOwnSecret(ctx, args.workspaceId, args.secretRef)
+    return ctx.db.insert("connections", {
+      ...args,
+      kind: "github",
       label: safeLabel(args.label),
       createdBy: member.userId,
     })

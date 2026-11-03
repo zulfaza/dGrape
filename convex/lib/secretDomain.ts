@@ -54,14 +54,26 @@ export const routeValidator = v.object({
   /** Absent means `{ rows, nextCursor }` with the `cursor` query parameter. */
   response: v.optional(responseValidator),
 })
-export const connectionFields = {
+const connectionBase = {
   workspaceId: v.id("workspaces"),
   createdBy: v.string(),
   label: v.string(),
   secretRef: v.id("secretRefs"),
-  origin: v.string(),
-  routes: v.array(routeValidator),
 }
+/**
+ * A generic HTTP connection stores its approved origin and routes.
+ * A GitHub connection stores none: trusted code owns its origin and reads.
+ * Rows from before connector kinds have no `kind` and are HTTP connections.
+ */
+export const connectionFields = v.union(
+  v.object({
+    ...connectionBase,
+    kind: v.optional(v.literal("http")),
+    origin: v.string(),
+    routes: v.array(routeValidator),
+  }),
+  v.object({ ...connectionBase, kind: v.literal("github") })
+)
 export const rowValidator = v.record(
   v.string(),
   v.union(v.string(), v.number(), v.boolean())

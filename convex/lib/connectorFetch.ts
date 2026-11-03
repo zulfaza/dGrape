@@ -13,11 +13,25 @@ export type PageRequest = {
   cursor: string | null
   limits: { maxRows: number; maxBytes: number }
 }
+/**
+ * A route as trusted code runs it. Recipes name it by `id`. `query` is fixed:
+ * callers and Link cursors cannot change it. Only trusted connector code sets
+ * `query` and `headers`; stored HTTP connections use {@link httpRoutes}.
+ */
+export type FetchRoute = ConnectorRoute & {
+  id: string
+  query: Record<string, string>
+}
 export type ConnectorConfig = {
   origin: string
-  routes: ConnectorRoute[]
+  routes: FetchRoute[]
+  headers: Record<string, string>
   name: string
   scope: SecretScope
+}
+/** Stored HTTP routes are named by their path and have no fixed query. */
+export function httpRoutes(routes: ConnectorRoute[]): FetchRoute[] {
+  return routes.map((route) => ({ ...route, id: route.path, query: {} }))
 }
 export type Row = Record<string, string | number | boolean>
 const denied = () => new Error("Connector request failed")
@@ -37,7 +51,7 @@ function onRoute(
   raw: string,
   base: URL | string,
   config: ConnectorConfig,
-  route: ConnectorRoute
+  route: FetchRoute
 ) {
   const url = new URL(raw, base)
   if (
@@ -66,41 +80,42 @@ function nextLink(header: string | null) {
 }
 function requestUrl(
   config: ConnectorConfig,
-  route: ConnectorRoute,
+  route: FetchRoute,
   mapping: ResponseMapping,
   input: PageRequest
 ) {
   const url = new URL(route.path, config.origin)
   const cursorParam = mapping.next.kind === "body" ? mapping.next.param : null
+  const open = (key: string) =>
+    route.queryKeys.includes(key) && !Object.hasOwn(route.query, key)
   for (const [key, value] of Object.entries(input.query)) {
-    if (
-      !route.queryKeys.includes(key) ||
-      key === cursorParam ||
-      value.length > 2048
-    )
-      throw denied()
+    if (!open(key) || key === cursorParam || value.length > 2048) throw denied()
     url.searchParams.set(key, value)
   }
-  if (input.cursor === null) return url
-  if (input.cursor.length > 2048) throw denied()
-  switch (mapping.next.kind) {
-    case "none":
-      throw denied()
-    case "body":
-      if (!route.queryKeys.includes(mapping.next.param)) throw denied()
-      url.searchParams.set(mapping.next.param, input.cursor)
-      return url
-    case "link": {
-      const next = onRoute(input.cursor, config.origin, config, route)
-      if ([...next.searchParams.keys()].length > 20) throw denied()
-      for (const [key, value] of next.searchParams) {
-        if (!route.queryKeys.includes(key) || value.length > 2048)
-          throw denied()
-        url.searchParams.set(key, value)
+  if (input.cursor !== null) {
+    if (input.cursor.length > 2048) throw denied()
+    switch (mapping.next.kind) {
+      case "none":
+        throw denied()
+      case "body":
+        if (!open(mapping.next.param)) throw denied()
+        url.searchParams.set(mapping.next.param, input.cursor)
+        break
+      case "link": {
+        const next = onRoute(input.cursor, config.origin, config, route)
+        if ([...next.searchParams.keys()].length > 20) throw denied()
+        for (const [key, value] of next.searchParams) {
+          // A Link URL repeats the fixed query; it is set again below.
+          if (Object.hasOwn(route.query, key)) continue
+          if (!open(key) || value.length > 2048) throw denied()
+          url.searchParams.set(key, value)
+        }
       }
-      return url
     }
   }
+  for (const [key, value] of Object.entries(route.query))
+    url.searchParams.set(key, value)
+  return url
 }
 /** No response bodies, headers, or provider errors escape this boundary. */
 export function fetchConnectorPage(
@@ -110,7 +125,7 @@ export function fetchConnectorPage(
 ) {
   return Effect.gen(function* () {
     const route = config.routes.find(
-      (r) => r.path === input.route && r.method === input.method
+      (r) => r.id === input.route && r.method === input.method
     )
     if (
       !route ||
@@ -136,8 +151,9 @@ export function fetchConnectorPage(
           method: input.method,
           redirect: "error",
           headers: {
-            Authorization: `Bearer ${token}`,
             Accept: "application/json",
+            ...config.headers,
+            Authorization: `Bearer ${token}`,
           },
           signal: AbortSignal.timeout(15000),
         })
