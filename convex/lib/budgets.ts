@@ -15,6 +15,7 @@ import { MAX_INDEXED_FIELDS, type Checked } from "./collectionDomain"
  * `effectiveBudgets`, and enforce it before the work starts.
  */
 export const budgetsValidator = v.object({
+  recordsPerCollection: v.number(),
   indexedFieldsPerCollection: v.number(),
   queryRowsRead: v.number(),
   queryBytesRead: v.number(),
@@ -34,6 +35,13 @@ export type BudgetSpec = {
 }
 
 export const BUDGET_SPECS = {
+  recordsPerCollection: {
+    label: "Records per collection",
+    unit: "count",
+    min: 0,
+    default: 500_000,
+    max: 1_000_000,
+  },
   indexedFieldsPerCollection: {
     label: "Indexed fields per collection",
     unit: "count",
@@ -73,6 +81,7 @@ export function effectiveBudgets(
   overrides: BudgetOverrides | undefined
 ): Budgets {
   return {
+    recordsPerCollection: budget(overrides, "recordsPerCollection"),
     indexedFieldsPerCollection: budget(overrides, "indexedFieldsPerCollection"),
     queryRowsRead: budget(overrides, "queryRowsRead"),
     queryBytesRead: budget(overrides, "queryBytesRead"),
