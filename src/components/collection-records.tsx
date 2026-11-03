@@ -14,6 +14,7 @@ import { AddFieldDialog } from "@/components/add-field-dialog"
 import { ExportRecordsButton } from "@/components/export-records-button"
 import { Mascot } from "@/components/mascot"
 import { RecordQueryBar } from "@/components/record-query-bar"
+import { SaveQueryDialog } from "@/components/save-query-dialog"
 import { PageHeader } from "@/components/page-header"
 import {
   Alert,
@@ -231,6 +232,13 @@ export function CollectionRecords({
           actions={
             <>
               <ExportRecordsButton collection={collection} disabled={saving} />
+              {query && (
+                <SaveQueryDialog
+                  collectionId={collectionId}
+                  query={query}
+                  disabled={saving}
+                />
+              )}
               <AddFieldDialog
                 collectionId={collectionId}
                 fields={fields}
