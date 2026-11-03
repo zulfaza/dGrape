@@ -1,3 +1,4 @@
+import * as Queries from "../../convex/lib/agentQueryTransport"
 import * as Recipes from "../../convex/lib/agentRecipeTransport"
 import { Context, Effect, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
@@ -205,6 +206,15 @@ export class AgentApi extends Context.Service<
     readonly recipeSetRunAccess: (
       input: typeof Recipes.AccessInput.Type
     ) => Call<typeof Schema.Null.Type>
+    readonly querySave: (
+      input: typeof Queries.SaveInput.Type
+    ) => Call<typeof Queries.Saved.Type>
+    readonly queryList: (
+      input: typeof Queries.ListInput.Type
+    ) => Call<typeof Queries.SavedQueryPage.Type>
+    readonly queryRun: (
+      input: typeof Queries.RunInput.Type
+    ) => Call<typeof Queries.RunPage.Type>
     readonly describeWorkspace: Call<typeof WorkspaceDescription.Type>
     readonly listRecords: (
       input: ListRecordsInput
@@ -355,6 +365,21 @@ export const layer = (baseUrl: string) =>
               input
             ),
             Schema.Null
+          ),
+        querySave: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/queries/save")), input),
+            Queries.Saved
+          ),
+        queryList: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/queries/list")), input),
+            Queries.SavedQueryPage
+          ),
+        queryRun: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/queries/run")), input),
+            Queries.RunPage
           ),
         describeWorkspace: send(
           HttpClientRequest.get(url("/agent/workspace")),
