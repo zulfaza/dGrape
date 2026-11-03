@@ -1,3 +1,4 @@
+import { registerAgentDiscoveryRoutes } from "./agentDiscoveryHttp"
 import { registerAgentRecipeRoutes } from "./agentRecipeHttp"
 import { collectionTemplates } from "./lib/collectionTemplates"
 import { registerRecipeRoutes } from "./recipeHttp"
@@ -173,6 +174,7 @@ agentRoute(http, "/agent/queries/run", Queries.RunInput, (ctx, digest, input) =>
     cursor: input.cursor ?? null,
   })
 )
+registerAgentDiscoveryRoutes(http)
 http.route({ path: "/agent/workspace", method: "OPTIONS", handler: preflight })
 http.route({
   path: "/agent/workspace",
