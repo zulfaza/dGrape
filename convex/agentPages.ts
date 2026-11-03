@@ -113,7 +113,8 @@ export const publish = internalMutation({
         ctx,
         grant.workspaceId,
         auditActor(grant.owner, grant),
-        { ...args, pageId: id }
+        { ...args, pageId: id },
+        "either"
       )
       const page = await ctx.db.get(id)
       if (!page) throw new Error("Page access denied")

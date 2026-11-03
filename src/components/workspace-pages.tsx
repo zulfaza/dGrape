@@ -1,16 +1,13 @@
 import { ArtifactPicker } from "./artifact-picker"
-import { ArtifactLink } from "./artifact-link"
-import { HtmlReportBlock } from "./html-snapshot"
 import { previewKind } from "../../convex/lib/artifactPreview"
 import { useConvex, useMutation, usePaginatedQuery } from "convex/react"
 import { useRef, useState } from "react"
-import ReactMarkdown from "react-markdown"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import type { PageDefinition } from "../../convex/lib/pageDomain"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
-import { PageLiveBlock } from "./page-live-block"
+import { PageBlockView, PagePreview, revisionAction } from "./page-preview"
 import { PageSourcePicker } from "./page-source-picker"
 
 type Draft = {
@@ -41,6 +38,7 @@ function WorkspacePagesEditor({
   const client = useConvex()
   const save = useMutation(api.pages.save)
   const publish = useMutation(api.pages.publish)
+  const rollback = useMutation(api.pages.rollback)
   const { results, status, loadMore } = usePaginatedQuery(
     api.pages.list,
     { workspaceId },
@@ -52,6 +50,7 @@ function WorkspacePagesEditor({
   const [message, setMessage] = useState("")
   const [artifactTitle, setArtifactTitle] = useState("")
   const [dirty, setDirty] = useState(false)
+  const [previewRevision, setPreviewRevision] = useState<number | null>(null)
   const history = usePaginatedQuery(
     api.pages.history,
     draft?.kind === "saved" ? { pageId: draft.pageId } : "skip",
@@ -90,6 +89,7 @@ function WorkspacePagesEditor({
         definition: result.version.definition,
       })
       setDirty(false)
+      setPreviewRevision(null)
     })
   }
   function change(definition: PageDefinition) {
@@ -97,18 +97,35 @@ function WorkspacePagesEditor({
     setDraft({ ...draft, definition })
     setDirty(true)
   }
-  async function publishRevision(revision: number) {
+  const publishedRevision =
+    draft?.kind === "saved"
+      ? (results.find((page) => page._id === draft.pageId)?.publishedRevision ??
+        draft.publishedRevision)
+      : null
+  /** Publish a newer revision or roll back to an older one. */
+  async function selectRevision(revision: number) {
     if (draft?.kind !== "saved") return
-    const pageId = draft.pageId
+    const action = revisionAction(revision, publishedRevision)
+    if (action === "published") return
+    if (
+      action === "rollback" &&
+      !window.confirm(`Roll back the published page to revision ${revision}?`)
+    )
+      return
     await run(async () => {
-      await publish({
-        pageId,
+      const args = {
+        pageId: draft.pageId,
         revision,
         expectedRevision: draft.revision,
-        expectedPublishedRevision: draft.publishedRevision,
-      })
+        expectedPublishedRevision: publishedRevision,
+      }
+      await (action === "rollback" ? rollback(args) : publish(args))
       setDraft({ ...draft, publishedRevision: revision })
-      setMessage(`Published revision ${revision}.`)
+      setMessage(
+        action === "rollback"
+          ? `Rolled back to revision ${revision}.`
+          : `Published revision ${revision}.`
+      )
     })
   }
   return (
@@ -132,6 +149,7 @@ function WorkspacePagesEditor({
             })
             setDirty(true)
             setMessage("")
+            setPreviewRevision(null)
           }}
         >
           New page
@@ -319,40 +337,16 @@ function WorkspacePagesEditor({
               <div className="space-y-4 break-words [&_a]:underline [&_h1]:text-2xl [&_h2]:text-xl [&_pre]:overflow-auto [&_ul]:list-disc [&_ul]:pl-5">
                 {draft.definition.blocks.map((block, index) => (
                   <div key={index}>
-                    {block.kind === "markdown" ? (
-                      <ReactMarkdown skipHtml disallowedElements={["img"]}>
-                        {block.text}
-                      </ReactMarkdown>
-                    ) : block.kind === "table" ||
-                      block.kind === "metric" ||
-                      block.kind === "chart" ? (
-                      draft.kind === "saved" && !dirty ? (
-                        <PageLiveBlock
-                          pageId={draft.pageId}
-                          revision={draft.revision}
-                          blockIndex={index}
-                          block={block}
-                        />
-                      ) : (
-                        <p>
-                          Save changes to preview live {block.kind}:{" "}
-                          {block.title}.
-                        </p>
-                      )
-                    ) : block.kind === "htmlReport" ? (
-                      <HtmlReportBlock
-                        artifactId={block.artifactId}
-                        title={block.title}
-                      />
-                    ) : (
-                      <section>
-                        <h4>{block.title}</h4>
-                        <ArtifactLink
-                          workspaceId={workspaceId}
-                          artifactId={block.artifactId}
-                        />
-                      </section>
-                    )}
+                    <PageBlockView
+                      workspaceId={workspaceId}
+                      stored={
+                        draft.kind === "saved" && !dirty
+                          ? { pageId: draft.pageId, revision: draft.revision }
+                          : null
+                      }
+                      blockIndex={index}
+                      block={block}
+                    />
                   </div>
                 ))}
               </div>
@@ -387,16 +381,31 @@ function WorkspacePagesEditor({
               variant="outline"
               disabled={pending || dirty || draft.kind === "new"}
               onClick={() => {
-                if (draft.kind === "saved") void publishRevision(draft.revision)
+                if (draft.kind === "saved") setPreviewRevision(draft.revision)
               }}
             >
-              Publish saved revision
+              Preview saved revision
             </Button>
           </div>
+          {draft.kind === "saved" && previewRevision !== null && (
+            <PagePreview
+              key={previewRevision}
+              workspaceId={workspaceId}
+              pageId={draft.pageId}
+              revision={previewRevision}
+              publishedRevision={publishedRevision}
+              pending={pending || dirty}
+              select={(revision) => void selectRevision(revision)}
+              close={() => setPreviewRevision(null)}
+            />
+          )}
           {draft.kind === "saved" && (
             <div className="space-y-3">
               <h3 className="font-semibold">Publication history</h3>
-              <p>Save your edits before changing the published revision.</p>
+              <p>
+                Preview a revision to publish it or roll back to it. Save your
+                edits first.
+              </p>
               {history.status === "LoadingFirstPage" && (
                 <p role="status">Loading history…</p>
               )}
@@ -408,24 +417,16 @@ function WorkspacePagesEditor({
                   >
                     <span>
                       Revision {version.revision}
-                      {(results.find((page) => page._id === draft.pageId)
-                        ?.publishedRevision ?? draft.publishedRevision) ===
-                      version.revision
+                      {publishedRevision === version.revision
                         ? " (published)"
                         : ""}
                     </span>
                     <Button
                       variant="outline"
-                      disabled={
-                        pending ||
-                        dirty ||
-                        (results.find((page) => page._id === draft.pageId)
-                          ?.publishedRevision ?? draft.publishedRevision) ===
-                          version.revision
-                      }
-                      onClick={() => void publishRevision(version.revision)}
+                      disabled={pending}
+                      onClick={() => setPreviewRevision(version.revision)}
                     >
-                      Publish revision {version.revision}
+                      Preview revision {version.revision}
                     </Button>
                   </li>
                 ))}

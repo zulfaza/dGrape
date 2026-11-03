@@ -1,6 +1,6 @@
 import { collectionFieldValidator } from "./lib/collectionDomain"
 import { paginationOptsValidator, type PaginationOptions } from "convex/server"
-import { v } from "convex/values"
+import { v, type Infer } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 import {
   mutation,
@@ -164,6 +164,13 @@ export async function savePageDraft(
   return { pageId, revision }
 }
 
+/**
+ * Which stored revisions a caller may select, relative to the published one.
+ * The user `publish` moves forward and `rollback` moves back. The agent
+ * `pages_publish` tool documents both, so it passes "either".
+ */
+export type PublishDirection = "forward" | "back" | "either"
+
 /** Publishes (or rolls back to) a stored revision of a page in `workspaceId`. */
 export async function publishPage(
   ctx: MutationCtx,
@@ -174,7 +181,8 @@ export async function publishPage(
     revision: number
     expectedRevision: number
     expectedPublishedRevision: number | null
-  }
+  },
+  direction: PublishDirection
 ): Promise<null> {
   const page = await ctx.db.get(args.pageId)
   if (!page || page.workspaceId !== workspaceId)
@@ -184,13 +192,23 @@ export async function publishPage(
     (page.publishedRevision ?? null) !== args.expectedPublishedRevision
   )
     throw new Error("Page revision conflict")
+  const published = page.publishedRevision ?? null
+  const back = published !== null && args.revision < published
+  if (
+    direction === "forward" &&
+    published !== null &&
+    args.revision <= published
+  )
+    throw new Error("Publish requires a newer revision; use rollback")
+  if (direction === "back" && !back)
+    throw new Error("Rollback requires a revision older than the published one")
   const version = await getVersion(ctx, page._id, args.revision)
   if (!version) throw new Error("Page version not found")
   await validateBindings(ctx, page.workspaceId, version.definition)
   if (page.publishedRevision === version.revision) return null
   await ctx.db.patch(page._id, { publishedRevision: version.revision })
   await recordAuditEvent(ctx, workspaceId, actor, {
-    operation: "page.publish",
+    operation: back ? "page.rollback" : "page.publish",
     pageId: page._id,
     revision: version.revision,
   })
@@ -269,25 +287,40 @@ export const save = mutation({
 })
 
 /** Publishing and rollback both select an existing immutable definition. */
+const selectRevisionArgs = v.object({
+  pageId: v.id("pages"),
+  revision: v.number(),
+  expectedRevision: v.number(),
+  expectedPublishedRevision: v.union(v.number(), v.null()),
+})
+
+async function selectRevision(
+  ctx: MutationCtx,
+  args: Infer<typeof selectRevisionArgs>,
+  direction: PublishDirection
+) {
+  const page = await ctx.db.get(args.pageId)
+  if (!page) throw new Error("Page access denied")
+  const member = await requireMembership(ctx, page.workspaceId)
+  return publishPage(
+    ctx,
+    page.workspaceId,
+    { kind: "user", userId: member.userId },
+    args,
+    direction
+  )
+}
+
 export const publish = mutation({
-  args: {
-    pageId: v.id("pages"),
-    revision: v.number(),
-    expectedRevision: v.number(),
-    expectedPublishedRevision: v.union(v.number(), v.null()),
-  },
+  args: selectRevisionArgs,
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const page = await ctx.db.get(args.pageId)
-    if (!page) throw new Error("Page access denied")
-    const member = await requireMembership(ctx, page.workspaceId)
-    return publishPage(
-      ctx,
-      page.workspaceId,
-      { kind: "user", userId: member.userId },
-      args
-    )
-  },
+  handler: (ctx, args) => selectRevision(ctx, args, "forward"),
+})
+
+export const rollback = mutation({
+  args: selectRevisionArgs,
+  returns: v.null(),
+  handler: (ctx, args) => selectRevision(ctx, args, "back"),
 })
 
 export const get = query({
