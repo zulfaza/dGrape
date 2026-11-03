@@ -1,3 +1,4 @@
+import { pageFields, pageVersionFields } from "./lib/pageDomain"
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
@@ -17,6 +18,11 @@ import { recipeTables } from "./lib/recipeState"
 
 export default defineSchema({
   ...recipeTables,
+  pages: defineTable(pageFields).index("by_workspaceId", ["workspaceId"]),
+  pageVersions: defineTable(pageVersionFields).index("by_pageId_and_revision", [
+    "pageId",
+    "revision",
+  ]),
   agentGrants: defineTable({
     workspaceId: v.id("workspaces"),
     owner: v.string(),
