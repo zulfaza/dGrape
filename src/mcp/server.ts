@@ -84,7 +84,7 @@ const ListRecords = Tool.make("records_list", {
 }).annotate(Tool.Readonly, true)
 
 const QueryRecords = Tool.make("records_query", {
-  description: `Filter and sort records by one indexed field (see \`indexed\` in workspace_describe). Records with no value for the field are left out. \`where\` is \`{ eq: value }\`, or \`{ lower?, upper? }\` where a bound is \`{ value, inclusive? }\` (inclusive is true by default). Values must have the field's type. \`order\` is "asc" (default) or "desc". Returns up to \`limit\` records (1 to ${MAX_PAGE_SIZE}, default ${MAX_PAGE_SIZE}). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\` with the same query to get the next page.`,
+  description: `Filter and sort records by one indexed field (see \`indexed\` in workspace_describe). Records with no value for the field are left out. \`where\` is \`{ eq: value }\`, or \`{ lower?, upper? }\` where a bound is \`{ value, inclusive? }\` (inclusive is true by default). Values must have the field's type. A multiSelect field needs \`{ eq: option }\`, which finds records that chose that option. \`order\` is "asc" (default) or "desc". Returns up to \`limit\` records (1 to ${MAX_PAGE_SIZE}, default ${MAX_PAGE_SIZE}). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\` with the same query to get the next page.`,
   parameters: Schema.Struct({
     collectionId: Schema.String,
     fieldId: Schema.String,
@@ -141,7 +141,7 @@ const CompleteArtifactUpload = Tool.make("artifacts_complete_upload", {
 }).annotate(Tool.Destructive, false)
 
 const FieldsDescription =
-  'Use integer for exact money in minor units (safe integers only), with a separate currency field (three uppercase letters, e.g. USD). Keep totals separate by currency. Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), or "date" (a calendar date as YYYY-MM-DD). Set `optional` to true when a record may leave the field out. Set `indexed` to true for fields you will filter or sort by (at most 5; indexed text is at most 200 characters).'
+  'Use integer for exact money in minor units (safe integers only), with a separate currency field (three uppercase letters, e.g. USD). Keep totals separate by currency. Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), "date" (a calendar date as YYYY-MM-DD), "select" (one of the `options`), or "multiSelect" (a list of different `options`). A select or multiSelect field needs `options`: 1 to 100 different texts. Set `optional` to true when a record may leave the field out. Set `indexed` to true for fields you will filter or sort by (at most 5; indexed text is at most 200 characters; filter an indexed multiSelect field with `{ eq: option }`).'
 
 const CreateCollection = Tool.make("collections_create", {
   description: `Create a collection in the workspace. Needs the data.write scope. ${FieldsDescription} Give 1 to 50 fields.`,
@@ -156,15 +156,10 @@ const CreateCollection = Tool.make("collections_create", {
 
 const AddField = Tool.make("collections_add_field", {
   description:
-    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), or "date" (a calendar date as YYYY-MM-DD), and `indexed: true` when you will filter or sort by it. Returns the new schema version. Needs the data.write scope.',
+    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), "date" (a calendar date as YYYY-MM-DD), "select" (one of the `options`), or "multiSelect" (a list of different `options`). Set `indexed: true` when you will filter or sort by it. A select or multiSelect field needs `options`: 1 to 100 different texts. Returns the new schema version. Needs the data.write scope.',
   parameters: Schema.Struct({
     collectionId: Schema.String,
-    field: Schema.Struct({
-      id: Schema.String,
-      label: Schema.String,
-      type: AgentApi.FieldType,
-      indexed: Schema.optionalKey(Schema.Literal(true)),
-    }),
+    field: AgentApi.NewField,
   }),
   success: AgentApi.AddedField,
   failure: AgentApi.AgentApiError,

@@ -1,7 +1,25 @@
 import type { Doc } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
-import { checkCollection, type CollectionDefinition } from "./collectionDomain"
+import {
+  checkCollection,
+  isChoiceField,
+  type CollectionDefinition,
+  type CollectionField,
+} from "./collectionDomain"
 import { EMPTY_RECORD_COUNT } from "./recordCounts"
+
+/**
+ * True when every value of `previous` is valid for `next`: the same type,
+ * and for select fields, every previous option is still there.
+ */
+function keepsValues(previous: CollectionField, next: CollectionField) {
+  if (next.type !== previous.type) return false
+  if (!isChoiceField(previous)) return true
+  return (
+    isChoiceField(next) &&
+    previous.options.every((option) => next.options.includes(option))
+  )
+}
 
 /** New collections preserve their initial definition in the same transaction. */
 export async function createVersionedCollection(
@@ -20,7 +38,8 @@ export async function createVersionedCollection(
 }
 
 /**
- * Only label changes and optional additions are compatible. Changes to existing
+ * Only label changes, new select options, and optional additions are
+ * compatible. Changes to existing
  * IDs, types, requiredness, or indexes must use a separately validated migration.
  * Callers authorize access before invoking this transaction-local helper.
  */
@@ -47,7 +66,7 @@ export async function publishCompatibleSchema(
     )
     if (
       !next ||
-      next.type !== field.type ||
+      !keepsValues(field, next) ||
       next.optional !== field.optional ||
       next.indexed !== field.indexed
     )

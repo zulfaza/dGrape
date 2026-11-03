@@ -6,9 +6,20 @@ import { v, type Infer } from "convex/values"
  * these, so a record is valid by the same rules on every path.
  */
 
-export const collectionFieldValidator = v.object({
+const fieldIdentity = {
   id: v.string(),
   label: v.string(),
+  /**
+   * When true, records can be filtered and sorted by this field. Each record
+   * keeps one index entry per indexed field that has a value (one per chosen
+   * option for a multi-select field). Indexed text values must be short.
+   */
+  indexed: v.optional(v.literal(true)),
+}
+
+/** A field whose value is one scalar. */
+const scalarFieldValidator = v.object({
+  ...fieldIdentity,
   type: v.union(
     v.literal("text"),
     v.literal("number"),
@@ -20,19 +31,35 @@ export const collectionFieldValidator = v.object({
     /** A calendar date with no time zone, as "YYYY-MM-DD". */
     v.literal("date")
   ),
-  /**
-   * When true, a record may leave this field out. When absent, every record
-   * must have a value. A field added after creation is always optional,
-   * because the records that exist already have no value for it.
-   */
-  optional: v.optional(v.literal(true)),
-  /**
-   * When true, records can be filtered and sorted by this field. Each record
-   * keeps one index entry per indexed field that has a value. Indexed text
-   * values must be short.
-   */
-  indexed: v.optional(v.literal(true)),
 })
+
+/**
+ * A field whose value comes from a fixed list of options: one option for
+ * "select", a list of different options for "multiSelect".
+ */
+const choiceFieldValidator = v.object({
+  ...fieldIdentity,
+  type: v.union(v.literal("select"), v.literal("multiSelect")),
+  options: v.array(v.string()),
+})
+
+/** A field before it is in a collection; `addField` makes it optional. */
+export const newCollectionFieldValidator = v.union(
+  scalarFieldValidator,
+  choiceFieldValidator
+)
+
+/**
+ * When `optional` is true, a record may leave the field out. When absent,
+ * every record must have a value. A field added after creation is always
+ * optional, because the records that exist already have no value for it.
+ */
+const requiredness = { optional: v.optional(v.literal(true)) }
+
+export const collectionFieldValidator = v.union(
+  scalarFieldValidator.extend(requiredness),
+  choiceFieldValidator.extend(requiredness)
+)
 
 /**
  * A collection's fields. `version` starts at 1 and increases by 1 for each
@@ -44,7 +71,16 @@ export const collectionDefinitionValidator = v.object({
   fields: v.array(collectionFieldValidator),
 })
 
-export const recordValueValidator = v.union(v.string(), v.number(), v.boolean())
+/** A value that can be in an index entry or a query bound. */
+export const indexValueValidator = v.union(v.string(), v.number(), v.boolean())
+
+/** A field value: a scalar, or the chosen options of a multi-select field. */
+export const recordValueValidator = v.union(
+  v.string(),
+  v.number(),
+  v.boolean(),
+  v.array(v.string())
+)
 
 export const recordValuesValidator = v.record(v.string(), recordValueValidator)
 
@@ -68,6 +104,8 @@ const FIELD_TYPES: Record<CollectionField["type"], true> = {
   currency: true,
   timestamp: true,
   date: true,
+  select: true,
+  multiSelect: true,
 }
 
 /** Shared by HTTP parsers and human forms; field kinds keep scalar wire values. */
@@ -75,11 +113,20 @@ export function isFieldType(value: unknown): value is CollectionField["type"] {
   return typeof value === "string" && Object.hasOwn(FIELD_TYPES, value)
 }
 
+/** True for a field whose value comes from its list of options. */
+export function isChoiceField<F extends NewCollectionField>(
+  field: F
+): field is Extract<F, { options: string[] }> {
+  return field.type === "select" || field.type === "multiSelect"
+}
+
 export function isNumericField(type: CollectionField["type"]): boolean {
   return type === "number" || type === "integer"
 }
 
 export type CollectionField = Infer<typeof collectionFieldValidator>
+export type NewCollectionField = Infer<typeof newCollectionFieldValidator>
+export type IndexValue = Infer<typeof indexValueValidator>
 export type CollectionDefinition = Infer<typeof collectionDefinitionValidator>
 export type RecordValue = Infer<typeof recordValueValidator>
 export type RecordValues = Infer<typeof recordValuesValidator>
@@ -90,6 +137,8 @@ export const MAX_INDEXED_FIELDS = 5
 export const MAX_INDEXED_TEXT_LENGTH = 200
 const MAX_TEXT_LENGTH = 10_000
 const MAX_RECORD_TEXT = 50_000
+export const MAX_OPTIONS = 100
+export const MAX_OPTION_LENGTH = 100
 const FIELD_ID = /^[a-z][a-z0-9_]{0,63}$/
 /** The range of a JavaScript `Date`, in milliseconds from the epoch. */
 const MAX_TIMESTAMP = 8_640_000_000_000_000
@@ -116,8 +165,38 @@ export type Checked<A> =
 
 const invalid = (message: string): Checked<never> => ({ ok: false, message })
 
+/** Trims the options, and checks that there are 1 to 100 different ones. */
+function checkOptions(
+  id: string,
+  options: ReadonlyArray<string>
+): Checked<string[]> {
+  const trimmed = options.map((option) => option.trim())
+  if (trimmed.length < 1 || trimmed.length > MAX_OPTIONS)
+    return invalid(`Field "${id}" must have 1 to ${MAX_OPTIONS} options`)
+  if (trimmed.some((option) => !option || option.length > MAX_OPTION_LENGTH))
+    return invalid(
+      `Each option of field "${id}" must be between 1 and ${MAX_OPTION_LENGTH} characters`
+    )
+  if (new Set(trimmed).size !== trimmed.length)
+    return invalid(`Field "${id}" has the same option twice`)
+  return { ok: true, value: trimmed }
+}
+
+/**
+ * Trims the label and options, and checks the label length, the ID format,
+ * and the options.
+ */
+function checkField<F extends NewCollectionField>(field: F): Checked<F> {
+  if (isChoiceField(field)) {
+    const options = checkOptions(field.id, field.options)
+    if (!options.ok) return options
+    return checkIdentity({ ...field, options: options.value })
+  }
+  return checkIdentity(field)
+}
+
 /** Trims the label and checks the label length and the ID format. */
-function checkField(field: CollectionField): Checked<CollectionField> {
+function checkIdentity<F extends NewCollectionField>(field: F): Checked<F> {
   const label = field.label.trim()
   if (!label || label.length > MAX_NAME_LENGTH)
     return invalid(
@@ -167,7 +246,7 @@ export function checkCollection(
  */
 export function addField(
   definition: CollectionDefinition,
-  field: Omit<CollectionField, "optional">,
+  field: NewCollectionField,
   maxIndexed = MAX_INDEXED_FIELDS
 ): Checked<CollectionDefinition> {
   if (definition.fields.length >= MAX_FIELDS)
@@ -189,6 +268,30 @@ export function addField(
       fields: [...definition.fields, { ...result.value, optional: true }],
     },
   }
+}
+
+/** A select value is one option; a multi-select value lists different options. */
+function checkChoice(
+  field: Extract<CollectionField, { options: string[] }>,
+  value: RecordValue | undefined
+): Checked<RecordValue> {
+  if (field.type === "select") {
+    if (typeof value === "string" && field.options.includes(value))
+      return { ok: true, value }
+    return invalid(
+      `Field "${field.id}" must be one of: ${field.options.join(", ")}`
+    )
+  }
+  const options = new Set(field.options)
+  if (
+    Array.isArray(value) &&
+    value.every((option) => options.has(option)) &&
+    new Set(value).size === value.length
+  )
+    return { ok: true, value }
+  return invalid(
+    `Field "${field.id}" must be a list of different options from: ${field.options.join(", ")}`
+  )
 }
 
 /**
@@ -213,7 +316,11 @@ export function checkRecordValues(
       return invalid(`Missing value for field "${field.id}"`)
     }
     const value = values[field.id]
-    if (field.type === "text") {
+    if (isChoiceField(field)) {
+      const checked = checkChoice(field, value)
+      if (!checked.ok) return checked
+      textLength += [checked.value].flat().join("").length
+    } else if (field.type === "text") {
       if (typeof value !== "string" || value.length > MAX_TEXT_LENGTH)
         return invalid(
           `Field "${field.id}" must be text of at most ${MAX_TEXT_LENGTH} characters`
@@ -252,8 +359,10 @@ export function checkRecordValues(
     } else if (field.type === "number") {
       if (typeof value !== "number" || !Number.isFinite(value))
         return invalid(`Field "${field.id}" must be a finite number`)
-    } else if (typeof value !== "boolean")
-      return invalid(`Field "${field.id}" must be true or false`)
+    } else if (field.type === "boolean") {
+      if (typeof value !== "boolean")
+        return invalid(`Field "${field.id}" must be true or false`)
+    }
   }
   if (textLength > MAX_RECORD_TEXT)
     return invalid(
@@ -262,14 +371,18 @@ export function checkRecordValues(
   return { ok: true, value: values }
 }
 
-/** The index entries of a record: one per indexed field that has a value. */
+/**
+ * The index entries of a record: one per indexed field that has a value,
+ * and one per chosen option of an indexed multi-select field.
+ */
 export function indexEntries(
   fields: ReadonlyArray<CollectionField>,
   values: RecordValues
-): Array<{ fieldId: string; value: RecordValue }> {
-  return fields.flatMap((field) =>
-    field.indexed && Object.hasOwn(values, field.id)
-      ? [{ fieldId: field.id, value: values[field.id] }]
-      : []
-  )
+): Array<{ fieldId: string; value: IndexValue }> {
+  return fields.flatMap((field) => {
+    const value = values[field.id]
+    if (!field.indexed || value === undefined) return []
+    const entries = Array.isArray(value) ? value : [value]
+    return entries.map((entry) => ({ fieldId: field.id, value: entry }))
+  })
 }

@@ -22,6 +22,9 @@ type Order = RecordQuery["order"]
 /** The select value for "no indexed field": records in the order added. */
 const ADDED = "__added"
 
+/** The select value for "no filter" on a select field. */
+const ANY = "__any"
+
 function isOrder(value: string): value is Order {
   return value === "asc" || value === "desc"
 }
@@ -47,8 +50,14 @@ export function RecordQueryBar({
 
   const selectField = (fieldId: string) => {
     setFilterText("")
+    if (fieldId === ADDED) return onChange(null)
+    const order = query?.order ?? "asc"
+    const next = indexed.find((f) => f.id === fieldId)
+    // A multi-select field can only be read one option at a time.
     onChange(
-      fieldId === ADDED ? null : { fieldId, order: query?.order ?? "asc" }
+      next?.type === "multiSelect" && next.options[0] !== undefined
+        ? { fieldId, order, where: { eq: next.options[0] } }
+        : { fieldId, order }
     )
   }
 
@@ -138,6 +147,42 @@ export function RecordQueryBar({
                     <SelectItem value="any">All</SelectItem>
                     <SelectItem value="true">Yes</SelectItem>
                     <SelectItem value="false">No</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : field.type === "select" || field.type === "multiSelect" ? (
+            <div className="grid gap-2">
+              <Label htmlFor="query-equals">
+                {field.type === "select" ? "Show" : "Has option"}
+              </Label>
+              <Select
+                value={
+                  query.where && "eq" in query.where
+                    ? String(query.where.eq)
+                    : ANY
+                }
+                onValueChange={(value) =>
+                  onChange(
+                    value === ANY
+                      ? { fieldId: query.fieldId, order: query.order }
+                      : { ...query, where: { eq: value } }
+                  )
+                }
+              >
+                <SelectTrigger id="query-equals" className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {field.type === "select" && (
+                      <SelectItem value={ANY}>All</SelectItem>
+                    )}
+                    {field.options.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>

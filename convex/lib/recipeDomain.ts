@@ -1,5 +1,5 @@
 import { v, type Infer } from "convex/values"
-import { recordValuesValidator, recordValueValidator } from "./collectionDomain"
+import { indexValueValidator, recordValuesValidator } from "./collectionDomain"
 
 export const recipeStepValidator = v.union(
   v.object({
@@ -15,7 +15,7 @@ export const recipeStepValidator = v.union(
   v.object({
     kind: v.literal("filter"),
     field: v.string(),
-    equals: recordValueValidator,
+    equals: indexValueValidator,
   }),
   v.object({
     kind: v.literal("join"),

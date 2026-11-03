@@ -10,6 +10,10 @@ import type { Doc, Id } from "../../convex/_generated/dataModel"
 import type { RecordQuery } from "../../convex/lib/recordQuery"
 import { ChevronLeft, Plus, Trash2 } from "lucide-react"
 import { AddFieldDialog } from "@/components/add-field-dialog"
+import {
+  MultiSelectFieldInput,
+  SelectFieldInput,
+} from "@/components/choice-field-input"
 import { ExportRecordsButton } from "@/components/export-records-button"
 import { Mascot } from "@/components/mascot"
 import { RecordQueryBar } from "@/components/record-query-bar"
@@ -61,7 +65,7 @@ type Values = Doc<"collectionRecords">["values"]
 type Field = Doc<"collections">["definition"]["fields"][number]
 type Draft = {
   record: Doc<"collectionRecords"> | null
-  values: Record<string, string | boolean>
+  values: Record<string, string | boolean | string[]>
 }
 
 function initialValues(fields: Field[]): Draft["values"] {
@@ -70,9 +74,11 @@ function initialValues(fields: Field[]): Draft["values"] {
       field.id,
       field.type === "boolean"
         ? false
-        : isNumericField(field.type) && !field.optional
-          ? "0"
-          : "",
+        : field.type === "multiSelect"
+          ? []
+          : isNumericField(field.type) && !field.optional
+            ? "0"
+            : "",
     ])
   )
 }
@@ -87,7 +93,7 @@ function editValues(fields: Field[], values: Values): Draft["values"] {
           field.id,
           field.type === "timestamp" && typeof value === "number"
             ? timestampInputText(value)
-            : typeof value === "boolean"
+            : typeof value === "boolean" || Array.isArray(value)
               ? value
               : String(value),
         ],
@@ -140,7 +146,13 @@ export function CollectionRecords({
     for (const field of collection?.definition.fields ?? []) {
       const value = draft.values[field.id]
       // An empty optional field has no value, so the record leaves it out.
-      if (field.optional && (value === undefined || value === "")) continue
+      if (
+        field.optional &&
+        (value === undefined ||
+          value === "" ||
+          (Array.isArray(value) && value.length === 0))
+      )
+        continue
       const stored = draft.record?.values[field.id]
       // Local time can be ambiguous (a daylight saving change), so an
       // unchanged timestamp keeps its stored value.
@@ -435,7 +447,22 @@ export function CollectionRecords({
                   }
                   key={field.id}
                 >
-                  {field.type === "boolean" ? (
+                  {field.type === "multiSelect" && (
+                    <MultiSelectFieldInput
+                      id={`record-${field.id}`}
+                      legend={fieldLabel(field)}
+                      options={field.options}
+                      value={draftOptions(draft.values[field.id])}
+                      disabled={saving}
+                      onChange={(options) =>
+                        setDraft({
+                          ...draft,
+                          values: { ...draft.values, [field.id]: options },
+                        })
+                      }
+                    />
+                  )}
+                  {field.type === "boolean" && (
                     <>
                       <Checkbox
                         disabled={saving}
@@ -455,36 +482,48 @@ export function CollectionRecords({
                         {field.label}
                       </Label>
                     </>
-                  ) : (
+                  )}
+                  {field.type !== "multiSelect" && field.type !== "boolean" && (
                     <>
                       <Label htmlFor={`record-${field.id}`}>
-                        {field.label}
-                        {field.optional && (
-                          <span className="font-normal text-muted-foreground">
-                            (optional)
-                          </span>
-                        )}
+                        {fieldLabel(field)}
                       </Label>
-                      <Input
-                        disabled={saving}
-                        id={`record-${field.id}`}
-                        type={inputType(field.type)}
-                        step={inputStep(field.type)}
-                        maxLength={field.type === "text" ? 10000 : undefined}
-                        required={
-                          !field.optional && inputType(field.type) !== "text"
-                        }
-                        value={String(draft.values[field.id] ?? "")}
-                        onChange={(e) =>
-                          setDraft({
-                            ...draft,
-                            values: {
-                              ...draft.values,
-                              [field.id]: e.target.value,
-                            },
-                          })
-                        }
-                      />
+                      {field.type === "select" ? (
+                        <SelectFieldInput
+                          id={`record-${field.id}`}
+                          options={field.options}
+                          optional={field.optional === true}
+                          value={String(draft.values[field.id] ?? "")}
+                          disabled={saving}
+                          onChange={(option) =>
+                            setDraft({
+                              ...draft,
+                              values: { ...draft.values, [field.id]: option },
+                            })
+                          }
+                        />
+                      ) : (
+                        <Input
+                          disabled={saving}
+                          id={`record-${field.id}`}
+                          type={inputType(field.type)}
+                          step={inputStep(field.type)}
+                          maxLength={field.type === "text" ? 10000 : undefined}
+                          required={
+                            !field.optional && inputType(field.type) !== "text"
+                          }
+                          value={String(draft.values[field.id] ?? "")}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              values: {
+                                ...draft.values,
+                                [field.id]: e.target.value,
+                              },
+                            })
+                          }
+                        />
+                      )}
                     </>
                   )}
                 </div>
@@ -575,6 +614,23 @@ export function CollectionRecords({
   )
 }
 
+/** The field label, marked when a record may leave the field out. */
+function fieldLabel(field: Field) {
+  return (
+    <>
+      {field.label}
+      {field.optional && (
+        <span className="font-normal text-muted-foreground">(optional)</span>
+      )}
+    </>
+  )
+}
+
+/** The chosen options of a multi-select draft value. */
+function draftOptions(value: Draft["values"][string] | undefined): string[] {
+  return Array.isArray(value) ? value : []
+}
+
 /**
  * Shows a stored value as text: booleans read as Yes or No, and timestamps
  * in local time.
@@ -584,6 +640,7 @@ function formatValue(field: Field, value: Values[string] | undefined) {
   if (field.type === "boolean") return value === true ? "Yes" : "No"
   if (field.type === "timestamp" && typeof value === "number")
     return new Date(value).toLocaleString()
+  if (Array.isArray(value)) return value.join(", ")
   if (typeof value === "number") return value.toLocaleString()
   return String(value)
 }

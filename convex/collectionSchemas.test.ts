@@ -206,6 +206,32 @@ test("compatible helper refuses incompatible changes and stale transaction-local
   ).toBeNull()
 })
 
+test("compatible helper keeps select options and accepts new ones", async () => {
+  const { t, owner, workspaceId } = await fixture()
+  const select = (options: string[]): CollectionField[] => [
+    { id: "stage", label: "Stage", type: "select", options },
+  ]
+  const collectionId = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Stages",
+    fields: select(["applied", "offer"]),
+  })
+  const publish = (version: number, fields: CollectionField[]) =>
+    t.run(async (ctx) => {
+      const collection = await ctx.db.get(collectionId)
+      if (!collection) throw new Error("Missing collection")
+      await publishCompatibleSchema(ctx, collection, { version, fields })
+    })
+  await expect(publish(2, select(["applied"]))).rejects.toThrow(
+    "requires migration"
+  )
+  await publish(2, select(["applied", "offer", "rejected"]))
+  expect(
+    (await owner.query(api.workspaces.getCollection, { collectionId }))
+      .definition.fields
+  ).toEqual(select(["applied", "offer", "rejected"]))
+})
+
 test("agent collection creation and optional additions also preserve versions", async () => {
   const { t, owner, workspaceId } = await fixture()
   await t.run((ctx) =>

@@ -1,5 +1,5 @@
 import { collectionTemplates } from "../../convex/lib/collectionTemplates"
-import { isFieldType } from "../../convex/lib/collectionDomain"
+import { isChoiceField, isFieldType } from "../../convex/lib/collectionDomain"
 import { useMutation } from "convex/react"
 import { Plus, Trash2 } from "lucide-react"
 import { useState, type FormEvent } from "react"
@@ -26,7 +26,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "@/components/ui/toast"
-import { FIELD_TYPE_LABELS, FIELD_TYPES } from "@/lib/field-types"
+import { FieldOptionsInput } from "@/components/field-options-input"
+import {
+  buildField,
+  FIELD_TYPE_LABELS,
+  FIELD_TYPES,
+  parseOptionLines,
+} from "@/lib/field-types"
 
 type FieldType =
   import("../../convex/lib/collectionDomain").CollectionField["type"]
@@ -34,6 +40,8 @@ type Field = {
   id: string
   label: string
   type: FieldType
+  /** Select options, one on each line. Other types ignore it. */
+  options: string
   indexed: boolean
   optional?: true
 }
@@ -44,6 +52,7 @@ const emptyField = (): Field => ({
   id: "",
   label: "",
   type: "text",
+  options: "",
   indexed: false,
 })
 
@@ -89,9 +98,16 @@ export function CreateCollectionDialog({
       await create({
         workspaceId,
         name,
-        fields: fields.map(({ indexed, ...field }) =>
-          indexed ? { ...field, indexed } : field
-        ),
+        fields: fields.map((field) => {
+          const built = buildField(
+            field.id,
+            field.label,
+            field.type,
+            parseOptionLines(field.options),
+            field.indexed
+          )
+          return field.optional ? { ...built, optional: field.optional } : built
+        }),
       })
       setName("")
       setFields([emptyField()])
@@ -139,8 +155,14 @@ export function CreateCollectionDialog({
                   setName(template.name)
                   setFields(
                     template.fields.map((field) => ({
-                      ...field,
+                      id: field.id,
+                      label: field.label,
+                      type: field.type,
+                      options: isChoiceField(field)
+                        ? field.options.join("\n")
+                        : "",
                       indexed: field.indexed === true,
+                      optional: field.optional,
                     }))
                   )
                 }}
@@ -245,6 +267,16 @@ export function CreateCollectionDialog({
                 >
                   <Trash2 aria-hidden />
                 </Button>
+                {(field.type === "select" || field.type === "multiSelect") && (
+                  <div className="sm:col-span-5">
+                    <FieldOptionsInput
+                      id={`options-${index}`}
+                      value={field.options}
+                      disabled={saving}
+                      onChange={(options) => updateField(index, { options })}
+                    />
+                  </div>
+                )}
               </div>
             ))}
             <Button

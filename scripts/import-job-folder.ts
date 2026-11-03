@@ -528,8 +528,12 @@ async function buildPlan(root: string, layout: Layout): Promise<Plan> {
 // ---------------------------------------------------------------------------
 // Report
 
-function cell(value: string | number | boolean | undefined) {
-  return String(value ?? "").replace(/\|/g, "\\|")
+/** A table cell; multi-select options are joined with commas. */
+function cell(
+  value: string | number | boolean | ReadonlyArray<string> | undefined
+) {
+  const text = Array.isArray(value) ? value.join(", ") : String(value ?? "")
+  return text.replace(/\|/g, "\\|")
 }
 
 function renderReport(plan: Plan) {

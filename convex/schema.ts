@@ -12,7 +12,8 @@ import {
 } from "./lib/agentRegistration"
 import {
   collectionDefinitionValidator,
-  recordValueValidator,
+  indexValueValidator,
+  recordValuesValidator,
 } from "./lib/collectionDomain"
 
 import { artifactUsageValidator } from "./lib/artifactUsage"
@@ -151,7 +152,7 @@ export default defineSchema({
     /** The collection's definition version when this record was last written. */
     schemaVersion: v.number(),
     revision: v.number(),
-    values: v.record(v.string(), v.union(v.string(), v.number(), v.boolean())),
+    values: recordValuesValidator,
     /** Set by agent creates so a retried request returns the same record. */
     idempotencyKey: v.optional(v.string()),
   })
@@ -212,7 +213,7 @@ export default defineSchema({
   snapshotRows: defineTable({
     generationId: v.id("snapshotGenerations"),
     chunkId: v.string(),
-    values: v.record(v.string(), recordValueValidator),
+    values: recordValuesValidator,
   }).index("by_generationId", ["generationId"]),
   snapshotPublications: defineTable({
     collectionId: v.id("collections"),
@@ -225,7 +226,7 @@ export default defineSchema({
     collectionId: v.id("collections"),
     recordId: v.id("collectionRecords"),
     fieldId: v.string(),
-    value: recordValueValidator,
+    value: indexValueValidator,
   })
     .index("by_collectionId_and_fieldId_and_value", [
       "collectionId",

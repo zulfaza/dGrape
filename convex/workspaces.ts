@@ -21,6 +21,7 @@ import {
   checkRecordValues,
   collectionDefinitionValidator,
   collectionFieldValidator,
+  newCollectionFieldValidator,
   collectionRecordValidator,
   recordValuesValidator,
   type RecordValues,
@@ -328,7 +329,7 @@ export const addField = mutation({
   returns: v.null(),
   args: {
     collectionId: v.id("collections"),
-    field: collectionFieldValidator.omit("optional"),
+    field: newCollectionFieldValidator,
   },
   handler: async (ctx, { collectionId, field }) => {
     const collection = await collectionForRecords(ctx, collectionId)
