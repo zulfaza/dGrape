@@ -1,4 +1,9 @@
 import {
+  MAX_PREVIEW_BYTES,
+  previewKind,
+  readPreview,
+} from "./lib/artifactPreview"
+import {
   paginationOptsValidator,
   paginationResultValidator,
 } from "convex/server"
@@ -295,5 +300,60 @@ export const remove = mutation({
     await r2.deleteObject(ctx, artifact.key)
     await ctx.db.delete(artifactId)
     return null
+  },
+})
+
+/** Text previews never send signed object URLs or executable content to the UI. */
+export const getPreview = action({
+  args: { artifactId: v.id("artifacts") },
+  returns: v.union(
+    v.object({ status: v.literal("unavailable"), message: v.string() }),
+    v.object({
+      status: v.literal("ready"),
+      text: v.string(),
+      capturedAt: v.number(),
+    })
+  ),
+  handler: async (
+    ctx,
+    { artifactId }
+  ): Promise<
+    | { status: "unavailable"; message: string }
+    | { status: "ready"; text: string; capturedAt: number }
+  > => {
+    const artifact = await ctx.runQuery(internal.artifacts.getArtifact, {
+      artifactId,
+    })
+    if (!artifact) throw new Error("Artifact not found")
+    await ctx.runQuery(internal.artifacts.membership, {
+      workspaceId: artifact.workspaceId,
+    })
+    if (previewKind(artifact.contentType) === "unsupported")
+      return {
+        status: "unavailable",
+        message:
+          "Preview is not available for this file type. Download the file to view it.",
+      }
+    if (artifact.size > MAX_PREVIEW_BYTES)
+      return {
+        status: "unavailable",
+        message:
+          "Preview supports files up to 512 KB. Download the file to view it.",
+      }
+    try {
+      const response = await fetch(await downloadUrl(artifact.key), {
+        credentials: "omit",
+        redirect: "error",
+        signal: AbortSignal.timeout(10000),
+      })
+      const text = await readPreview(response, artifact.contentType)
+      return { status: "ready", text, capturedAt: artifact._creationTime }
+    } catch {
+      return {
+        status: "unavailable",
+        message:
+          "The file could not be previewed. It may be unavailable or contain invalid text.",
+      }
+    }
   },
 })
