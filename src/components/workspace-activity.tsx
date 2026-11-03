@@ -38,6 +38,8 @@ function describe(event: AuditEvent): string {
       return `saved a page (revision ${event.revision})`
     case "page.publish":
       return `published a page (revision ${event.revision})`
+    case "page.rollback":
+      return `rolled back a page (revision ${event.revision})`
     case "recipe.publish":
       return "published a recipe version"
     case "recipe.setRunAccess":
