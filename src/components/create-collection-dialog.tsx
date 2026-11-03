@@ -172,7 +172,7 @@ export function CreateCollectionDialog({
             {fields.map((field, index) => (
               <div
                 key={index}
-                className="grid items-end gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_1fr_8rem_auto_auto]"
+                className="grid items-end gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_1fr_12rem_auto_auto]"
               >
                 <div className="grid gap-2">
                   <Label htmlFor={`label-${index}`}>Label</Label>
