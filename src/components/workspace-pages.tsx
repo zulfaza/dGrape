@@ -212,7 +212,9 @@ function WorkspacePagesEditor({
                 ) : (
                   <p key={index} className="rounded-md border p-3">
                     {block.kind} block: {block.title}.{" "}
-                    {block.kind === "table" || block.kind === "metric"
+                    {block.kind === "table" ||
+                    block.kind === "metric" ||
+                    block.kind === "chart"
                       ? "Remove and add a block to change its binding."
                       : "This block is kept unchanged."}
                   </p>
@@ -271,7 +273,9 @@ function WorkspacePagesEditor({
                       <ReactMarkdown skipHtml disallowedElements={["img"]}>
                         {block.text}
                       </ReactMarkdown>
-                    ) : block.kind === "table" || block.kind === "metric" ? (
+                    ) : block.kind === "table" ||
+                      block.kind === "metric" ||
+                      block.kind === "chart" ? (
                       draft.kind === "saved" && !dirty ? (
                         <PageLiveBlock
                           pageId={draft.pageId}

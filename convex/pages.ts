@@ -278,7 +278,12 @@ export const liveBlock = query({
       throw new Error("Invalid block address")
     const version = await getVersion(ctx, page._id, args.revision)
     const block = version?.definition.blocks[args.blockIndex]
-    if (!block || (block.kind !== "table" && block.kind !== "metric"))
+    if (
+      !block ||
+      (block.kind !== "table" &&
+        block.kind !== "metric" &&
+        block.kind !== "chart")
+    )
       return { problem: "Live block is unavailable", result: null }
     const problem = await bindingProblem(ctx, page.workspaceId, block)
     if (problem) return { problem, result: null }

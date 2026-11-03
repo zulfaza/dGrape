@@ -224,7 +224,17 @@ test("page bindings pin query revisions, validate result fields and expose schem
       definition: {
         title: "Bad",
         blocks: [
-          { kind: "table", title: "Bad", binding: saved, fields: ["amount"] },
+          {
+            kind: "chart",
+            title: "Bad",
+            binding: saved,
+            chart: {
+              type: "line",
+              labelField: "amount",
+              valueField: "amount",
+              unit: "USD",
+            },
+          },
         ],
       },
     })
@@ -266,7 +276,20 @@ test("live blocks authorize stored addresses, bound results and report stale sou
     workspaceId,
     definition: {
       title: "Live",
-      blocks: [{ kind: "table", title: "Rows", binding, fields: ["amount"] }],
+      blocks: [
+        { kind: "table", title: "Rows", binding, fields: ["amount"] },
+        {
+          kind: "chart",
+          title: "Chart",
+          binding,
+          chart: {
+            type: "bar",
+            labelField: "amount",
+            valueField: "amount",
+            unit: "USD",
+          },
+        },
+      ],
     },
   })
   const address = { pageId: page.pageId, revision: 1, blockIndex: 0 }
@@ -300,6 +323,15 @@ test("live blocks authorize stored addresses, bound results and report stale sou
     }
   })
   const live = await owner.query(api.pages.liveBlock, address)
+  const chart = await owner.query(api.pages.liveBlock, {
+    ...address,
+    blockIndex: 1,
+  })
+  expect(chart.result?.page).toEqual(live.result?.page)
+  expect(chart.result?.completeness).toBe("partial")
+  await expect(
+    other.query(api.pages.liveBlock, { ...address, blockIndex: 1 })
+  ).rejects.toThrow("Workspace access denied")
   expect(live.result?.page).toHaveLength(50)
   expect(live.result?.completeness).toBe("partial")
   expect(await owner.query(api.pages.sources, { workspaceId })).toHaveLength(1)
@@ -309,5 +341,9 @@ test("live blocks authorize stored addresses, bound results and report stale sou
   expect((await owner.query(api.pages.liveBlock, address)).problem).toContain(
     "schema is stale"
   )
+  expect(
+    (await owner.query(api.pages.liveBlock, { ...address, blockIndex: 1 }))
+      .problem
+  ).toContain("schema is stale")
   expect(await owner.query(api.pages.sources, { workspaceId })).toEqual([])
 })

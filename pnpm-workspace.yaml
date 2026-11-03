@@ -10,3 +10,4 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - '@shadcn/lint@0.2.5'
+  - '@tanstack/charts@1.2.1'
