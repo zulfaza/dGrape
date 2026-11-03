@@ -1,3 +1,4 @@
+import { bindingFields } from "./lib/artifactBindingDomain"
 import { pageFields, pageVersionFields } from "./lib/pageDomain"
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
@@ -19,6 +20,9 @@ import { secretFields, connectionFields } from "./lib/secretDomain"
 
 export default defineSchema({
   ...recipeTables,
+  artifactBindings: defineTable(bindingFields).index("by_recordId", [
+    "recordId",
+  ]),
   pages: defineTable(pageFields).index("by_workspaceId", ["workspaceId"]),
   pageVersions: defineTable(pageVersionFields).index("by_pageId_and_revision", [
     "pageId",

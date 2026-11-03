@@ -13,6 +13,7 @@ import type * as agentGrants from "../agentGrants.js";
 import type * as agentIdentityHttp from "../agentIdentityHttp.js";
 import type * as agentRegistrations from "../agentRegistrations.js";
 import type * as agentWrites from "../agentWrites.js";
+import type * as artifactBindings from "../artifactBindings.js";
 import type * as artifacts from "../artifacts.js";
 import type * as collectionSchemas from "../collectionSchemas.js";
 import type * as connectors from "../connectors.js";
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   agentIdentityHttp: typeof agentIdentityHttp;
   agentRegistrations: typeof agentRegistrations;
   agentWrites: typeof agentWrites;
+  artifactBindings: typeof artifactBindings;
   artifacts: typeof artifacts;
   collectionSchemas: typeof collectionSchemas;
   connectors: typeof connectors;

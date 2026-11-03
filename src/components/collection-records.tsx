@@ -1,3 +1,4 @@
+import { RecordArtifacts } from "./record-artifacts"
 import { Match } from "effect"
 import {
   isNumericField,
@@ -501,6 +502,13 @@ export function CollectionRecords({
                     </Button>
                   </AlertAction>
                 </Alert>
+              )}
+              {draft.record && (
+                <RecordArtifacts
+                  key={draft.record._id}
+                  workspaceId={collection.workspaceId}
+                  recordId={draft.record._id}
+                />
               )}
               <DialogFooter>
                 {draft.record && (
