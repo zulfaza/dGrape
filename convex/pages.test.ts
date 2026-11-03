@@ -149,6 +149,38 @@ test("page boundaries refuse other workspaces, including artifact and query refe
       },
     })
   ).rejects.toThrow("Artifact is unavailable")
+  const htmlReport = (id: typeof artifactId) =>
+    owner.mutation(api.pages.save, {
+      workspaceId,
+      definition: {
+        title: "Report",
+        blocks: [{ kind: "htmlReport", title: "Report", artifactId: id }],
+      },
+    })
+  await expect(htmlReport(artifactId)).rejects.toThrow(
+    "Artifact is unavailable"
+  )
+  const file = (contentType: string) =>
+    t.run((ctx) =>
+      ctx.db.insert("artifacts", {
+        workspaceId,
+        key: contentType,
+        name: "report",
+        size: 5,
+        contentType,
+        createdBy: { kind: "user", userId: "owner" },
+      })
+    )
+  await expect(htmlReport(await file("text/plain"))).rejects.toThrow(
+    "require an HTML file"
+  )
+  const html = await file("text/html; charset=utf-8")
+  await expect(htmlReport(html)).rejects.toThrow("data timestamp")
+  await owner.mutation(api.artifacts.setDataTimestamp, {
+    artifactId: html,
+    dataTimestamp: 1000,
+  })
+  expect((await htmlReport(html)).revision).toBe(1)
 })
 
 test("page bindings pin query revisions, validate result fields and expose schema invalidation", async () => {

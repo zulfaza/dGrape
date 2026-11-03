@@ -84,6 +84,12 @@ function pageDefinition<
           kind: v.literal("artifact"),
           title: v.string(),
           artifactId,
+        }),
+        /** Static HTML snapshot artifact, shown in a sandboxed opaque-origin frame. */
+        v.object({
+          kind: v.literal("htmlReport"),
+          title: v.string(),
+          artifactId,
         })
       )
     ),
@@ -116,7 +122,7 @@ export function validatePage(definition: PageDefinition) {
     if (block.kind === "markdown") continue
     if (!block.title.trim() || block.title.length > 100)
       throw new Error(`${at}: block title must be 1 to 100 characters`)
-    if (block.kind === "artifact") continue
+    if (block.kind === "artifact" || block.kind === "htmlReport") continue
     if (block.kind === "chart") validateChart(block.chart, at)
     if (
       !Number.isSafeInteger(block.binding.revision) ||

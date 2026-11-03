@@ -30,7 +30,7 @@ function resolvePageIds(
   const blocks = definition.blocks.map((block, index): PageBlock => {
     const at = `Block ${index + 1} (${block.kind})`
     if (block.kind === "markdown") return block
-    if (block.kind === "artifact") {
+    if (block.kind === "artifact" || block.kind === "htmlReport") {
       const artifactId = ctx.db.normalizeId("artifacts", block.artifactId)
       if (!artifactId)
         throw new Error(

@@ -20,6 +20,7 @@ import { requireMembership } from "./lib/auth"
 import { workspaceBudgets } from "./lib/budgets"
 import { firstPageWithinBudget, runSavedQuery } from "./lib/savedQueries"
 import { recordAuditEvent, type AuditActor } from "./lib/auditEvents"
+import { previewKind } from "./lib/artifactPreview"
 import {
   chartNumericFields,
   pageDefinitionValidator,
@@ -55,6 +56,16 @@ async function bindingProblem(
     return artifact?.workspaceId === workspaceId
       ? null
       : "Artifact is unavailable in this workspace"
+  }
+  if (block.kind === "htmlReport") {
+    const artifact = await ctx.db.get(block.artifactId)
+    if (artifact?.workspaceId !== workspaceId)
+      return "Artifact is unavailable in this workspace"
+    if (previewKind(artifact.contentType) !== "html")
+      return "HTML report blocks require an HTML file"
+    return artifact.dataTimestamp === undefined
+      ? "Set the report data timestamp first"
+      : null
   }
   const saved = await ctx.db.get(block.binding.queryId)
   if (!saved || saved.workspaceId !== workspaceId)

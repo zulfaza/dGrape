@@ -8,10 +8,16 @@ export function ArtifactPicker({
   workspaceId,
   disabled,
   choose,
+  label = "Choose workspace file",
+  accepts = () => true,
 }: {
   workspaceId: Id<"workspaces">
   disabled: boolean
   choose: (id: Id<"artifacts">, name: string) => void
+  /** Button text when the picker is closed. */
+  label?: string
+  /** Shows only files whose content type passes; the server validates again. */
+  accepts?: (contentType: string) => boolean
 }) {
   const [open, setOpen] = useState(false)
   const files = usePaginatedQuery(
@@ -27,7 +33,7 @@ export function ArtifactPicker({
         disabled={disabled}
         onClick={() => setOpen(!open)}
       >
-        {open ? "Close file picker" : "Choose workspace file"}
+        {open ? "Close file picker" : label}
       </Button>
       {open && (
         <div
@@ -40,20 +46,22 @@ export function ArtifactPicker({
           {files.status === "Exhausted" && files.results.length === 0 && (
             <p>Upload a file in Files first.</p>
           )}
-          {files.results.map((file) => (
-            <Button
-              key={file._id}
-              type="button"
-              variant="outline"
-              disabled={disabled}
-              onClick={() => {
-                choose(file._id, file.name)
-                setOpen(false)
-              }}
-            >
-              {file.name}
-            </Button>
-          ))}
+          {files.results
+            .filter((file) => accepts(file.contentType))
+            .map((file) => (
+              <Button
+                key={file._id}
+                type="button"
+                variant="outline"
+                disabled={disabled}
+                onClick={() => {
+                  choose(file._id, file.name)
+                  setOpen(false)
+                }}
+              >
+                {file.name}
+              </Button>
+            ))}
           {files.status === "CanLoadMore" && (
             <Button type="button" onClick={() => files.loadMore(20)}>
               Load more files

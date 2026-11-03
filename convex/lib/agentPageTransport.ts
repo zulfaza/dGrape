@@ -60,6 +60,11 @@ export const Definition = Schema.Struct({
           title: Schema.String,
           artifactId: Schema.String,
         }),
+        Schema.Struct({
+          kind: Schema.Literal("htmlReport"),
+          title: Schema.String,
+          artifactId: Schema.String,
+        }),
       ])
     )
   ),
