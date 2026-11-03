@@ -1,6 +1,13 @@
 import * as React from "react"
-import { PanelsTopLeft } from "lucide-react"
-import { Link } from "@tanstack/react-router"
+import {
+  CalendarClock,
+  Database,
+  FileText,
+  Files,
+  PanelsTopLeft,
+  Plug,
+} from "lucide-react"
+import { Link, useParams } from "@tanstack/react-router"
 import type { User } from "@workos/authkit-tanstack-react-start"
 
 import { NavUser } from "@/components/nav-user"
@@ -9,6 +16,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -18,6 +26,35 @@ import {
 
 const ACTIVE_LINK_PROPS = { "data-active": true }
 
+/** Workspace sections, in sidebar order. Each one has its own route. */
+const WORKSPACE_SECTIONS = [
+  {
+    label: "Pages",
+    icon: FileText,
+    to: "/dashboard/workspaces/$workspaceId/pages",
+  },
+  {
+    label: "Data",
+    icon: Database,
+    to: "/dashboard/workspaces/$workspaceId/data",
+  },
+  {
+    label: "Jobs",
+    icon: CalendarClock,
+    to: "/dashboard/workspaces/$workspaceId/jobs",
+  },
+  {
+    label: "Connections",
+    icon: Plug,
+    to: "/dashboard/workspaces/$workspaceId/connections",
+  },
+  {
+    label: "Artifacts",
+    icon: Files,
+    to: "/dashboard/workspaces/$workspaceId/artifacts",
+  },
+] as const
+
 export function AppSidebar({
   user,
   ...props
@@ -26,6 +63,7 @@ export function AppSidebar({
 }) {
   const name =
     user.name || [user.firstName, user.lastName].filter(Boolean).join(" ")
+  const { workspaceId } = useParams({ strict: false })
   return (
     <Sidebar {...props}>
       <SidebarHeader>
@@ -64,6 +102,27 @@ export function AppSidebar({
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
+        {workspaceId && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarMenu>
+              {WORKSPACE_SECTIONS.map((section) => (
+                <SidebarMenuItem key={section.to}>
+                  <SidebarMenuButton asChild tooltip={section.label}>
+                    <Link
+                      activeProps={ACTIVE_LINK_PROPS}
+                      to={section.to}
+                      params={{ workspaceId }}
+                    >
+                      <section.icon />
+                      <span>{section.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <NavUser
