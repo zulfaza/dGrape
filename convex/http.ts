@@ -1,3 +1,4 @@
+import { registerAgentRecipeRoutes } from "./agentRecipeHttp"
 import { collectionTemplates } from "./lib/collectionTemplates"
 import { registerRecipeRoutes } from "./recipeHttp"
 import { httpRouter } from "convex/server"
@@ -136,6 +137,7 @@ http.route({
   ),
 })
 registerRecipeRoutes(http)
+registerAgentRecipeRoutes(http)
 http.route({ path: "/agent/workspace", method: "OPTIONS", handler: preflight })
 http.route({
   path: "/agent/workspace",

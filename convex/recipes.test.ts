@@ -212,3 +212,297 @@ describe("recipe lifecycle", () => {
     expect(await t.mutation(internal.recipes.dispatch, {})).toHaveLength(0)
   })
 })
+
+describe("recipe credentials", () => {
+  it("uses the credential owner, requires writes and keeps run grants separate from management", async () => {
+    const { t, owner, workspaceId, versionId } = await setup()
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        workspaceId,
+        userId: "test|runner",
+        role: "owner",
+      })
+      for (const [digest, user, scope] of [
+        ["owner", "test|owner", "readwrite"],
+        ["reader", "test|owner", "readonly"],
+        ["runner", "test|runner", "readwrite"],
+      ]) {
+        if (scope !== "readonly" && scope !== "readwrite")
+          throw new Error("Invalid scope")
+        await ctx.db.insert("agentGrants", {
+          workspaceId,
+          owner: user,
+          digest,
+          scope,
+          state: "active",
+          expiresAt: Date.now() + 60000,
+        })
+      }
+    })
+    const input = { versionId, idempotencyKey: "credential" }
+    for (const digest of ["missing", "reader", "runner"])
+      await expect(
+        t.mutation(internal.agentRecipes.trigger, { ...input, digest })
+      ).rejects.toThrow("denied")
+    await owner.mutation(api.recipes.setRunAccess, {
+      versionId,
+      userId: "test|runner",
+      allowed: true,
+    })
+    const runId = await t.mutation(internal.agentRecipes.trigger, {
+      ...input,
+      digest: "runner",
+    })
+    expect(
+      await t.mutation(internal.agentRecipes.trigger, {
+        ...input,
+        digest: "runner",
+      })
+    ).toBe(runId)
+    await expect(
+      t.mutation(internal.agentRecipes.schedule, {
+        digest: "runner",
+        versionId,
+        timing: { kind: "once", at: Date.now() + 60000 },
+      })
+    ).rejects.toThrow("denied")
+    await expect(
+      t.mutation(internal.agentRecipes.setRunAccess, {
+        digest: "runner",
+        versionId,
+        userId: "test|owner",
+        allowed: true,
+      })
+    ).rejects.toThrow("denied")
+    const published = await t
+      .withIdentity({ tokenIdentifier: "test|runner" })
+      .mutation(internal.agentRecipes.publish, {
+        digest: "owner",
+        name: "Agent",
+        recipe,
+      })
+    expect(
+      await t.run(async (ctx) => (await ctx.db.get(published))?.createdBy)
+    ).toBe("test|owner")
+    const scheduleId = await t.mutation(internal.agentRecipes.schedule, {
+      digest: "owner",
+      versionId,
+      timing: { kind: "once", at: Date.now() + 60000 },
+    })
+    await expect(
+      t.mutation(internal.agentRecipes.setEnabled, {
+        digest: "reader",
+        scheduleId,
+        enabled: false,
+      })
+    ).rejects.toThrow("denied")
+    await t.mutation(internal.agentRecipes.setEnabled, {
+      digest: "owner",
+      scheduleId,
+      enabled: false,
+    })
+    await t.mutation(internal.agentRecipes.cancel, { digest: "runner", runId })
+    expect(await t.run(async (ctx) => (await ctx.db.get(runId))?.state)).toBe(
+      "cancelled"
+    )
+    await t.mutation(internal.agentRecipes.setRunAccess, {
+      digest: "owner",
+      versionId,
+      userId: "test|runner",
+      allowed: false,
+    })
+    await expect(
+      t.mutation(internal.agentRecipes.trigger, { ...input, digest: "runner" })
+    ).rejects.toThrow("denied")
+  })
+
+  it("scopes IDs and pages and checks HTTP credentials and bodies", async () => {
+    const { t, owner, workspaceId, versionId } = await setup()
+    const { digestToken } = await import("./agentAccess")
+    const token = "a".repeat(64)
+    const digest = await digestToken(token)
+    await t.run(async (ctx) => {
+      await ctx.db.insert("agentGrants", {
+        workspaceId,
+        owner: "test|owner",
+        digest,
+        scope: "readwrite",
+        state: "active",
+        expiresAt: Date.now() + 60000,
+      })
+    })
+    const foreign = await t.run(async (ctx) => {
+      const workspaceId = await ctx.db.insert("workspaces", { name: "Other" })
+      return ctx.db.insert("recipeVersions", {
+        workspaceId,
+        name: "Other",
+        recipe,
+        createdBy: "test|owner",
+      })
+    })
+    await expect(
+      t.mutation(internal.agentRecipes.trigger, {
+        digest,
+        versionId: foreign,
+        idempotencyKey: "foreign",
+      })
+    ).rejects.toThrow("denied")
+    const foreignRun = await t.run(async (ctx) =>
+      ctx.db.insert("recipeRuns", {
+        workspaceId: (await ctx.db.get(foreign))?.workspaceId ?? workspaceId,
+        versionId: foreign,
+        key: "foreign",
+        state: "pending",
+        cancelRequested: false,
+        leaseUntil: 0,
+        epoch: 0,
+        nextStep: 0,
+      })
+    )
+    await expect(
+      t.mutation(internal.agentRecipes.history, {
+        digest,
+        runId: foreignRun,
+        paginationOpts: { numItems: 50, cursor: null },
+      })
+    ).rejects.toThrow("denied")
+    await expect(
+      t.mutation(internal.agentRecipes.cancel, { digest, runId: foreignRun })
+    ).rejects.toThrow("denied")
+    const foreignIds = await t.run(async (ctx) => {
+      const version = await ctx.db.get(foreign)
+      if (!version) throw new Error("Recipe missing")
+      const collectionId = await ctx.db.insert("collections", {
+        workspaceId: version.workspaceId,
+        name: "Foreign",
+        definition: {
+          version: 1,
+          fields: [{ id: "id", label: "ID", type: "text" }],
+        },
+      })
+      const scheduleId = await ctx.db.insert("recipeSchedules", {
+        workspaceId: version.workspaceId,
+        versionId: foreign,
+        timing: { kind: "once", at: Date.now() + 60000 },
+        enabled: true,
+        nextAt: Date.now() + 60000,
+      })
+      return { collectionId, scheduleId }
+    })
+    await expect(
+      t.mutation(internal.agentRecipes.setEnabled, {
+        digest,
+        scheduleId: foreignIds.scheduleId,
+        enabled: false,
+      })
+    ).rejects.toThrow("denied")
+    await expect(
+      t.mutation(internal.agentRecipes.publish, {
+        digest,
+        name: "Foreign output",
+        recipe: {
+          ...recipe,
+          steps: [{ kind: "snapshot", collectionId: foreignIds.collectionId }],
+        },
+      })
+    ).rejects.toThrow("denied")
+    await expect(
+      t.mutation(internal.agentRecipes.publish, {
+        digest,
+        name: "Invalid connection",
+        recipe: {
+          ...recipe,
+          steps: [
+            {
+              kind: "fetch",
+              connectionId: "missing",
+              route: "/data",
+              maxPages: 1,
+            },
+            ...recipe.steps,
+          ],
+        },
+      })
+    ).rejects.toThrow("denied")
+    const first = await t.mutation(internal.agentRecipes.versions, {
+      digest,
+      paginationOpts: { numItems: 1, cursor: null },
+    })
+    expect(first.page.map((item) => item._id)).toEqual([versionId])
+    await expect(
+      t.mutation(internal.agentRecipes.versions, {
+        digest,
+        paginationOpts: { numItems: 51, cursor: null },
+      })
+    ).rejects.toThrow("Invalid page")
+    const request = (operation: string, body: string, credential = token) =>
+      t.fetch(`/agent/recipes/${operation}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${credential}`,
+          "Content-Type": "application/json",
+        },
+        body,
+      })
+    expect(
+      (
+        await request(
+          "trigger",
+          JSON.stringify({ versionId, idempotencyKey: "http" }),
+          "b".repeat(64)
+        )
+      ).status
+    ).toBe(403)
+    expect((await request("trigger", "{}")).status).toBe(400)
+    expect((await request("publish", "x".repeat(256 * 1024 + 1))).status).toBe(
+      413
+    )
+    const response = await request(
+      "trigger",
+      JSON.stringify({ versionId, idempotencyKey: "http" })
+    )
+    expect(response.status).toBe(200)
+    const runs = await t.mutation(internal.agentRecipes.runs, {
+      digest,
+      paginationOpts: { numItems: 50, cursor: null },
+    })
+    expect(runs.page).toHaveLength(1)
+    expect(
+      (
+        await t.mutation(internal.agentRecipes.history, {
+          digest,
+          runId: runs.page[0]._id,
+          paginationOpts: { numItems: 50, cursor: null },
+        })
+      ).page
+    ).toEqual([])
+    expect(
+      (
+        await t.mutation(internal.agentRecipes.schedules, {
+          digest,
+          paginationOpts: { numItems: 50, cursor: null },
+        })
+      ).page
+    ).toEqual([])
+    await owner.mutation(api.recipes.trigger, {
+      versionId,
+      idempotencyKey: "other",
+    })
+    await t.run(async (ctx) => {
+      const grant = await ctx.db
+        .query("agentGrants")
+        .withIndex("by_digest", (q) => q.eq("digest", digest))
+        .unique()
+      if (!grant) throw new Error("Grant missing")
+      await ctx.db.patch(grant._id, { state: "revoked" })
+    })
+    expect(
+      (
+        await request(
+          "runs",
+          JSON.stringify({ paginationOpts: { numItems: 50, cursor: null } })
+        )
+      ).status
+    ).toBe(403)
+  })
+})

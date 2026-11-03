@@ -24,6 +24,7 @@ export async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
   if (!member || member.role !== "owner") return null
   return {
     grantId: grant._id,
+    owner: grant.owner,
     workspaceId: grant.workspaceId,
     scope: grant.scope,
   }

@@ -1,3 +1,4 @@
+import * as Recipes from "../../convex/lib/agentRecipeTransport"
 import { collectionTemplates } from "../../convex/lib/collectionTemplates"
 import { Effect, Layer, Schema } from "effect"
 import { McpProtocol, McpServer, Tool, Toolkit } from "effect/ai"
@@ -188,7 +189,103 @@ const ListTemplates = Tool.make("collections_templates", {
   ),
 }).annotate(Tool.Readonly, true)
 
+const RecipePublish = Tool.make("recipes_publish", {
+  description: "Publish an immutable recipe. Requires write access.",
+  parameters: Recipes.PublishInput,
+  success: Schema.String,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const RecipeVersions = Tool.make("recipes_versions", {
+  description: "List recipe versions. Use continueCursor for the next page.",
+  parameters: Recipes.PageInput,
+  success: Recipes.VersionPage,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const RecipeRuns = Tool.make("recipes_runs", {
+  description: "List recipe runs. Use continueCursor for the next page.",
+  parameters: Recipes.PageInput,
+  success: Recipes.RunPage,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const RecipeHistory = Tool.make("recipes_history", {
+  description:
+    "List attempts for one run. Use continueCursor for the next page.",
+  parameters: Recipes.HistoryInput,
+  success: Recipes.HistoryPage,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const RecipeTrigger = Tool.make("recipes_trigger", {
+  description:
+    "Start a recipe. Reuse idempotencyKey to retry. Requires write access.",
+  parameters: Recipes.TriggerInput,
+  success: Schema.String,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, true)
+
+const RecipeSchedule = Tool.make("recipes_schedule", {
+  description:
+    "Create a UTC schedule. Only the recipe creator can manage it. Requires write access.",
+  parameters: Recipes.ScheduleInput,
+  success: Schema.String,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, true)
+
+const RecipeSchedules = Tool.make("recipes_schedules", {
+  description: "List schedules. Use continueCursor for the next page.",
+  parameters: Recipes.PageInput,
+  success: Recipes.SchedulePage,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const RecipeSetEnabled = Tool.make("recipes_set_enabled", {
+  description:
+    "Enable or disable a schedule. Requires creator and write access.",
+  parameters: Recipes.EnabledInput,
+  success: Schema.Null,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, true)
+
+const RecipeCancel = Tool.make("recipes_cancel", {
+  description: "Cancel a run. Requires recipe run permission and write access.",
+  parameters: Recipes.CancelInput,
+  success: Schema.Null,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const RecipeSetRunAccess = Tool.make("recipes_set_run_access", {
+  description:
+    "Grant or remove recipe run permission. Requires creator and write access.",
+  parameters: Recipes.AccessInput,
+  success: Schema.Null,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
 const DfeToolkit = Toolkit.make(
+  RecipePublish,
+  RecipeVersions,
+  RecipeRuns,
+  RecipeHistory,
+  RecipeTrigger,
+  RecipeSchedule,
+  RecipeSchedules,
+  RecipeSetEnabled,
+  RecipeCancel,
+  RecipeSetRunAccess,
+
   ListTemplates,
   DescribeWorkspace,
   ListRecords,
@@ -208,6 +305,16 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
   Effect.gen(function* () {
     const api = yield* AgentApi.AgentApi
     return {
+      recipes_publish: (input) => api.recipePublish(input),
+      recipes_versions: (input) => api.recipeVersions(input),
+      recipes_runs: (input) => api.recipeRuns(input),
+      recipes_history: (input) => api.recipeHistory(input),
+      recipes_trigger: (input) => api.recipeTrigger(input),
+      recipes_schedule: (input) => api.recipeSchedule(input),
+      recipes_schedules: (input) => api.recipeSchedules(input),
+      recipes_set_enabled: (input) => api.recipeSetEnabled(input),
+      recipes_cancel: (input) => api.recipeCancel(input),
+      recipes_set_run_access: (input) => api.recipeSetRunAccess(input),
       collections_templates: () => Effect.succeed(collectionTemplates()),
       workspace_describe: () => api.describeWorkspace,
       records_list: (input) => api.listRecords(input),

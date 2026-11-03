@@ -2,12 +2,13 @@ import {
   paginationOptsValidator,
   paginationResultValidator,
 } from "convex/server"
-import { v } from "convex/values"
+import { v, type Infer } from "convex/values"
 import {
   mutation,
   query,
   internalMutation,
   type MutationCtx,
+  type QueryCtx,
 } from "./_generated/server"
 import type { Doc, Id } from "./_generated/dataModel"
 import { recipeTables } from "./lib/recipeState"
@@ -48,12 +49,29 @@ export async function recipeOutputToken(
   })
 }
 
+async function recipeMember(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  principal?: string
+) {
+  if (principal === undefined) return requireMembership(ctx, workspaceId)
+  const member = await ctx.db
+    .query("workspaceMembers")
+    .withIndex("by_workspace_user", (q) =>
+      q.eq("workspaceId", workspaceId).eq("userId", principal)
+    )
+    .unique()
+  if (!member) throw new Error("Workspace access denied")
+  return member
+}
+
 async function requireRecipeAccess(
   ctx: MutationCtx,
   version: Doc<"recipeVersions">,
-  operation: "run" | "manage"
+  operation: "run" | "manage",
+  principal?: string
 ) {
-  const member = await requireMembership(ctx, version.workspaceId)
+  const member = await recipeMember(ctx, version.workspaceId, principal)
   if (member.userId === version.createdBy) return
   if (operation === "run") {
     const grant = await ctx.db
@@ -67,38 +85,45 @@ async function requireRecipeAccess(
   throw new Error("Recipe permission denied")
 }
 
+export const setRunAccessArgs = v.object({
+  versionId: v.id("recipeVersions"),
+  userId: v.string(),
+  allowed: v.boolean(),
+})
+export const setRunAccessResult = v.null()
+export async function setRunAccessForPrincipal(
+  ctx: MutationCtx,
+  args: Infer<typeof setRunAccessArgs>,
+  principal?: string
+) {
+  const version = await ctx.db.get(args.versionId)
+  if (!version) throw new Error("Recipe not found")
+  await requireRecipeAccess(ctx, version, "manage", principal)
+  const member = await ctx.db
+    .query("workspaceMembers")
+    .withIndex("by_workspace_user", (q) =>
+      q.eq("workspaceId", version.workspaceId).eq("userId", args.userId)
+    )
+    .unique()
+  if (!member) throw new Error("Workspace member not found")
+  const grant = await ctx.db
+    .query("recipeRunGrants")
+    .withIndex("by_versionId_and_userId", (q) =>
+      q.eq("versionId", version._id).eq("userId", args.userId)
+    )
+    .unique()
+  if (args.allowed && !grant)
+    await ctx.db.insert("recipeRunGrants", {
+      versionId: version._id,
+      userId: args.userId,
+    })
+  if (!args.allowed && grant) await ctx.db.delete(grant._id)
+  return null
+}
 export const setRunAccess = mutation({
-  args: {
-    versionId: v.id("recipeVersions"),
-    userId: v.string(),
-    allowed: v.boolean(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const version = await ctx.db.get(args.versionId)
-    if (!version) throw new Error("Recipe not found")
-    await requireRecipeAccess(ctx, version, "manage")
-    const member = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", version.workspaceId).eq("userId", args.userId)
-      )
-      .unique()
-    if (!member) throw new Error("Workspace member not found")
-    const grant = await ctx.db
-      .query("recipeRunGrants")
-      .withIndex("by_versionId_and_userId", (q) =>
-        q.eq("versionId", version._id).eq("userId", args.userId)
-      )
-      .unique()
-    if (args.allowed && !grant)
-      await ctx.db.insert("recipeRunGrants", {
-        versionId: version._id,
-        userId: args.userId,
-      })
-    if (!args.allowed && grant) await ctx.db.delete(grant._id)
-    return null
-  },
+  args: setRunAccessArgs.fields,
+  returns: setRunAccessResult,
+  handler: (ctx, args) => setRunAccessForPrincipal(ctx, args),
 })
 
 const LEASE_MS = 120_000
@@ -106,85 +131,116 @@ const ACTIVE_LIMIT = 4
 const terminal = (run: Doc<"recipeRuns">) =>
   run.state !== "pending" && run.state !== "running"
 
+export const publishArgs = v.object({
+  workspaceId: v.id("workspaces"),
+  name: v.string(),
+  recipe: recipeValidator,
+})
+export const publishResult = v.id("recipeVersions")
+export async function publishForPrincipal(
+  ctx: MutationCtx,
+  args: Infer<typeof publishArgs>,
+  principal?: string
+) {
+  const member = await recipeMember(ctx, args.workspaceId, principal)
+  validateRecipe(args.recipe)
+  if (!args.name.trim() || args.name.length > 120)
+    throw new Error("Recipe name must be 1 to 120 characters")
+  return ctx.db.insert("recipeVersions", {
+    ...args,
+    name: args.name.trim(),
+    createdBy: member.userId,
+  })
+}
 export const publish = mutation({
-  args: {
-    workspaceId: v.id("workspaces"),
-    name: v.string(),
-    recipe: recipeValidator,
-  },
-  returns: v.id("recipeVersions"),
-  handler: async (ctx, args) => {
-    const member = await requireMembership(ctx, args.workspaceId)
-    validateRecipe(args.recipe)
-    if (!args.name.trim() || args.name.length > 120)
-      throw new Error("Recipe name must be 1 to 120 characters")
-    return ctx.db.insert("recipeVersions", {
-      ...args,
-      name: args.name.trim(),
-      createdBy: member.userId,
-    })
-  },
+  args: publishArgs.fields,
+  returns: publishResult,
+  handler: (ctx, args) => publishForPrincipal(ctx, args),
 })
+export const versionsArgs = v.object({
+  workspaceId: v.id("workspaces"),
+  paginationOpts: paginationOptsValidator,
+})
+export const versionsResult = paginationResultValidator(
+  v.object({
+    ...recipeTables.recipeVersions.validator.fields,
+    _id: v.id("recipeVersions"),
+    _creationTime: v.number(),
+  })
+)
+export async function versionsForPrincipal(
+  ctx: QueryCtx,
+  args: Infer<typeof versionsArgs>,
+  principal?: string
+) {
+  await recipeMember(ctx, args.workspaceId, principal)
+  return ctx.db
+    .query("recipeVersions")
+    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+    .order("desc")
+    .paginate(args.paginationOpts)
+}
 export const versions = query({
-  args: {
-    workspaceId: v.id("workspaces"),
-    paginationOpts: paginationOptsValidator,
-  },
-  returns: paginationResultValidator(
-    v.object({
-      ...recipeTables.recipeVersions.validator.fields,
-      _id: v.id("recipeVersions"),
-      _creationTime: v.number(),
-    })
-  ),
-  handler: async (ctx, args) => {
-    await requireMembership(ctx, args.workspaceId)
-    return ctx.db
-      .query("recipeVersions")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
-      .order("desc")
-      .paginate(args.paginationOpts)
-  },
+  args: versionsArgs.fields,
+  returns: versionsResult,
+  handler: (ctx, args) => versionsForPrincipal(ctx, args),
 })
+export const runsArgs = v.object({
+  workspaceId: v.id("workspaces"),
+  paginationOpts: paginationOptsValidator,
+})
+export const runsResult = paginationResultValidator(
+  v.object({
+    ...recipeTables.recipeRuns.validator.fields,
+    _id: v.id("recipeRuns"),
+    _creationTime: v.number(),
+  })
+)
+export async function runsForPrincipal(
+  ctx: QueryCtx,
+  args: Infer<typeof runsArgs>,
+  principal?: string
+) {
+  await recipeMember(ctx, args.workspaceId, principal)
+  return ctx.db
+    .query("recipeRuns")
+    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+    .order("desc")
+    .paginate(args.paginationOpts)
+}
 export const runs = query({
-  args: {
-    workspaceId: v.id("workspaces"),
-    paginationOpts: paginationOptsValidator,
-  },
-  returns: paginationResultValidator(
-    v.object({
-      ...recipeTables.recipeRuns.validator.fields,
-      _id: v.id("recipeRuns"),
-      _creationTime: v.number(),
-    })
-  ),
-  handler: async (ctx, args) => {
-    await requireMembership(ctx, args.workspaceId)
-    return ctx.db
-      .query("recipeRuns")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
-      .order("desc")
-      .paginate(args.paginationOpts)
-  },
+  args: runsArgs.fields,
+  returns: runsResult,
+  handler: (ctx, args) => runsForPrincipal(ctx, args),
 })
+export const historyArgs = v.object({
+  runId: v.id("recipeRuns"),
+  paginationOpts: paginationOptsValidator,
+})
+export const historyResult = paginationResultValidator(
+  v.object({
+    ...recipeTables.recipeStepAttempts.validator.fields,
+    _id: v.id("recipeStepAttempts"),
+    _creationTime: v.number(),
+  })
+)
+export async function historyForPrincipal(
+  ctx: QueryCtx,
+  args: Infer<typeof historyArgs>,
+  principal?: string
+) {
+  const run = await ctx.db.get(args.runId)
+  if (!run) throw new Error("Run not found")
+  await recipeMember(ctx, run.workspaceId, principal)
+  return ctx.db
+    .query("recipeStepAttempts")
+    .withIndex("by_runId_and_step", (q) => q.eq("runId", args.runId))
+    .paginate(args.paginationOpts)
+}
 export const history = query({
-  args: { runId: v.id("recipeRuns"), paginationOpts: paginationOptsValidator },
-  returns: paginationResultValidator(
-    v.object({
-      ...recipeTables.recipeStepAttempts.validator.fields,
-      _id: v.id("recipeStepAttempts"),
-      _creationTime: v.number(),
-    })
-  ),
-  handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.runId)
-    if (!run) throw new Error("Run not found")
-    await requireMembership(ctx, run.workspaceId)
-    return ctx.db
-      .query("recipeStepAttempts")
-      .withIndex("by_runId_and_step", (q) => q.eq("runId", args.runId))
-      .paginate(args.paginationOpts)
-  },
+  args: historyArgs.fields,
+  returns: historyResult,
+  handler: (ctx, args) => historyForPrincipal(ctx, args),
 })
 
 async function enqueue(
@@ -216,96 +272,140 @@ async function enqueue(
     nextStep: 0,
   })
 }
+export const triggerArgs = v.object({
+  versionId: v.id("recipeVersions"),
+  idempotencyKey: v.string(),
+})
+export const triggerResult = v.id("recipeRuns")
+export async function triggerForPrincipal(
+  ctx: MutationCtx,
+  args: Infer<typeof triggerArgs>,
+  principal?: string
+) {
+  const version = await ctx.db.get(args.versionId)
+  if (!version) throw new Error("Recipe not found")
+  await requireRecipeAccess(ctx, version, "run", principal)
+  if (!args.idempotencyKey || args.idempotencyKey.length > 200)
+    throw new Error("Idempotency key must be 1 to 200 characters")
+  return enqueue(ctx, version, `manual:${args.idempotencyKey}`)
+}
 export const trigger = mutation({
-  args: { versionId: v.id("recipeVersions"), idempotencyKey: v.string() },
-  returns: v.id("recipeRuns"),
-  handler: async (ctx, args) => {
-    const version = await ctx.db.get(args.versionId)
-    if (!version) throw new Error("Recipe not found")
-    await requireRecipeAccess(ctx, version, "run")
-    if (!args.idempotencyKey || args.idempotencyKey.length > 200)
-      throw new Error("Idempotency key must be 1 to 200 characters")
-    return enqueue(ctx, version, `manual:${args.idempotencyKey}`)
-  },
+  args: triggerArgs.fields,
+  returns: triggerResult,
+  handler: (ctx, args) => triggerForPrincipal(ctx, args),
 })
+export const scheduleArgs = v.object({
+  versionId: v.id("recipeVersions"),
+  timing: recipeTimingValidator,
+})
+export const scheduleResult = v.id("recipeSchedules")
+export async function scheduleForPrincipal(
+  ctx: MutationCtx,
+  args: Infer<typeof scheduleArgs>,
+  principal?: string
+) {
+  const version = await ctx.db.get(args.versionId)
+  if (!version) throw new Error("Recipe not found")
+  await requireRecipeAccess(ctx, version, "manage", principal)
+  validateTiming(args.timing)
+  const nextAt = nextOccurrence(args.timing, Date.now())
+  if (nextAt === null) throw new Error("Schedule must be in the future")
+  return ctx.db.insert("recipeSchedules", {
+    workspaceId: version.workspaceId,
+    ...args,
+    enabled: true,
+    nextAt,
+  })
+}
 export const schedule = mutation({
-  args: { versionId: v.id("recipeVersions"), timing: recipeTimingValidator },
-  returns: v.id("recipeSchedules"),
-  handler: async (ctx, args) => {
-    const version = await ctx.db.get(args.versionId)
-    if (!version) throw new Error("Recipe not found")
-    await requireRecipeAccess(ctx, version, "manage")
-    validateTiming(args.timing)
-    const nextAt = nextOccurrence(args.timing, Date.now())
-    if (nextAt === null) throw new Error("Schedule must be in the future")
-    return ctx.db.insert("recipeSchedules", {
-      workspaceId: version.workspaceId,
-      ...args,
-      enabled: true,
-      nextAt,
-    })
-  },
+  args: scheduleArgs.fields,
+  returns: scheduleResult,
+  handler: (ctx, args) => scheduleForPrincipal(ctx, args),
 })
+export const schedulesArgs = v.object({
+  workspaceId: v.id("workspaces"),
+  paginationOpts: paginationOptsValidator,
+})
+export const schedulesResult = paginationResultValidator(
+  v.object({
+    ...recipeTables.recipeSchedules.validator.fields,
+    _id: v.id("recipeSchedules"),
+    _creationTime: v.number(),
+  })
+)
+export async function schedulesForPrincipal(
+  ctx: QueryCtx,
+  args: Infer<typeof schedulesArgs>,
+  principal?: string
+) {
+  await recipeMember(ctx, args.workspaceId, principal)
+  return ctx.db
+    .query("recipeSchedules")
+    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+    .paginate(args.paginationOpts)
+}
 export const schedules = query({
-  args: {
-    workspaceId: v.id("workspaces"),
-    paginationOpts: paginationOptsValidator,
-  },
-  returns: paginationResultValidator(
-    v.object({
-      ...recipeTables.recipeSchedules.validator.fields,
-      _id: v.id("recipeSchedules"),
-      _creationTime: v.number(),
-    })
-  ),
-  handler: async (ctx, args) => {
-    await requireMembership(ctx, args.workspaceId)
-    return ctx.db
-      .query("recipeSchedules")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
-      .paginate(args.paginationOpts)
-  },
+  args: schedulesArgs.fields,
+  returns: schedulesResult,
+  handler: (ctx, args) => schedulesForPrincipal(ctx, args),
 })
+export const setEnabledArgs = v.object({
+  scheduleId: v.id("recipeSchedules"),
+  enabled: v.boolean(),
+})
+export const setEnabledResult = v.null()
+export async function setEnabledForPrincipal(
+  ctx: MutationCtx,
+  args: Infer<typeof setEnabledArgs>,
+  principal?: string
+) {
+  const item = await ctx.db.get(args.scheduleId)
+  if (!item) throw new Error("Schedule not found")
+  const version = await ctx.db.get(item.versionId)
+  if (!version) throw new Error("Recipe not found")
+  await requireRecipeAccess(ctx, version, "manage", principal)
+  if (args.enabled === item.enabled) return null
+  const nextAt = args.enabled
+    ? nextOccurrence(item.timing, Date.now())
+    : item.nextAt
+  if (nextAt === null) throw new Error("One-off schedule has ended")
+  await ctx.db.patch(item._id, { enabled: args.enabled, nextAt })
+  return null
+}
 export const setEnabled = mutation({
-  args: { scheduleId: v.id("recipeSchedules"), enabled: v.boolean() },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const item = await ctx.db.get(args.scheduleId)
-    if (!item) throw new Error("Schedule not found")
-    const version = await ctx.db.get(item.versionId)
-    if (!version) throw new Error("Recipe not found")
-    await requireRecipeAccess(ctx, version, "manage")
-    if (args.enabled === item.enabled) return null
-    const nextAt = args.enabled
-      ? nextOccurrence(item.timing, Date.now())
-      : item.nextAt
-    if (nextAt === null) throw new Error("One-off schedule has ended")
-    await ctx.db.patch(item._id, { enabled: args.enabled, nextAt })
-    return null
-  },
+  args: setEnabledArgs.fields,
+  returns: setEnabledResult,
+  handler: (ctx, args) => setEnabledForPrincipal(ctx, args),
 })
+export const cancelArgs = v.object({ runId: v.id("recipeRuns") })
+export const cancelResult = v.null()
+export async function cancelForPrincipal(
+  ctx: MutationCtx,
+  args: Infer<typeof cancelArgs>,
+  principal?: string
+) {
+  const run = await ctx.db.get(args.runId)
+  if (!run) throw new Error("Run not found")
+  const version = await ctx.db.get(run.versionId)
+  if (!version) throw new Error("Recipe not found")
+  await requireRecipeAccess(ctx, version, "run", principal)
+  if (!terminal(run))
+    await ctx.db.patch(
+      run._id,
+      run.state === "pending"
+        ? {
+            cancelRequested: true,
+            state: "cancelled",
+            finishedAt: Date.now(),
+          }
+        : { cancelRequested: true }
+    )
+  return null
+}
 export const cancel = mutation({
-  args: { runId: v.id("recipeRuns") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.runId)
-    if (!run) throw new Error("Run not found")
-    const version = await ctx.db.get(run.versionId)
-    if (!version) throw new Error("Recipe not found")
-    await requireRecipeAccess(ctx, version, "run")
-    if (!terminal(run))
-      await ctx.db.patch(
-        run._id,
-        run.state === "pending"
-          ? {
-              cancelRequested: true,
-              state: "cancelled",
-              finishedAt: Date.now(),
-            }
-          : { cancelRequested: true }
-      )
-    return null
-  },
+  args: cancelArgs.fields,
+  returns: cancelResult,
+  handler: (ctx, args) => cancelForPrincipal(ctx, args),
 })
 
 /** Called by the one Cloudflare dispatcher. No Convex cron is registered. */

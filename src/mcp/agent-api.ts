@@ -1,3 +1,4 @@
+import * as Recipes from "../../convex/lib/agentRecipeTransport"
 import { Context, Effect, Layer, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 
@@ -174,6 +175,36 @@ type Call<A> = Effect.Effect<A, AgentApiError, AgentCredential>
 export class AgentApi extends Context.Service<
   AgentApi,
   {
+    readonly recipePublish: (
+      input: typeof Recipes.PublishInput.Type
+    ) => Call<typeof Schema.String.Type>
+    readonly recipeVersions: (
+      input: typeof Recipes.PageInput.Type
+    ) => Call<typeof Recipes.VersionPage.Type>
+    readonly recipeRuns: (
+      input: typeof Recipes.PageInput.Type
+    ) => Call<typeof Recipes.RunPage.Type>
+    readonly recipeHistory: (
+      input: typeof Recipes.HistoryInput.Type
+    ) => Call<typeof Recipes.HistoryPage.Type>
+    readonly recipeTrigger: (
+      input: typeof Recipes.TriggerInput.Type
+    ) => Call<typeof Schema.String.Type>
+    readonly recipeSchedule: (
+      input: typeof Recipes.ScheduleInput.Type
+    ) => Call<typeof Schema.String.Type>
+    readonly recipeSchedules: (
+      input: typeof Recipes.PageInput.Type
+    ) => Call<typeof Recipes.SchedulePage.Type>
+    readonly recipeSetEnabled: (
+      input: typeof Recipes.EnabledInput.Type
+    ) => Call<typeof Schema.Null.Type>
+    readonly recipeCancel: (
+      input: typeof Recipes.CancelInput.Type
+    ) => Call<typeof Schema.Null.Type>
+    readonly recipeSetRunAccess: (
+      input: typeof Recipes.AccessInput.Type
+    ) => Call<typeof Schema.Null.Type>
     readonly describeWorkspace: Call<typeof WorkspaceDescription.Type>
     readonly listRecords: (
       input: ListRecordsInput
@@ -266,6 +297,65 @@ export const layer = (baseUrl: string) =>
       ) => HttpClientRequest.bodyJsonUnsafe(request, body)
 
       return {
+        recipePublish: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/recipes/publish")), input),
+            Schema.String
+          ),
+        recipeVersions: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/recipes/versions")), input),
+            Recipes.VersionPage
+          ),
+        recipeRuns: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/recipes/runs")), input),
+            Recipes.RunPage
+          ),
+        recipeHistory: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/recipes/history")), input),
+            Recipes.HistoryPage
+          ),
+        recipeTrigger: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/recipes/trigger")), input),
+            Schema.String
+          ),
+        recipeSchedule: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/recipes/schedule")), input),
+            Schema.String
+          ),
+        recipeSchedules: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/recipes/schedules")),
+              input
+            ),
+            Recipes.SchedulePage
+          ),
+        recipeSetEnabled: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/recipes/setEnabled")),
+              input
+            ),
+            Schema.Null
+          ),
+        recipeCancel: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/recipes/cancel")), input),
+            Schema.Null
+          ),
+        recipeSetRunAccess: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/recipes/setRunAccess")),
+              input
+            ),
+            Schema.Null
+          ),
         describeWorkspace: send(
           HttpClientRequest.get(url("/agent/workspace")),
           WorkspaceDescription
