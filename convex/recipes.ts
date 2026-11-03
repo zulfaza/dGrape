@@ -25,6 +25,11 @@ import {
   type Recipe,
 } from "./lib/recipeDomain"
 import {
+  auditActor,
+  recordAuditEvent,
+  type AgentPrincipal,
+} from "./lib/auditEvents"
+import {
   latestDue,
   nextOccurrence,
   occurrenceId,
@@ -62,13 +67,13 @@ export async function recipeOutputToken(
 async function recipeMember(
   ctx: QueryCtx,
   workspaceId: Id<"workspaces">,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
-  if (principal === undefined) return requireMembership(ctx, workspaceId)
+  if (agent === undefined) return requireMembership(ctx, workspaceId)
   const member = await ctx.db
     .query("workspaceMembers")
     .withIndex("by_workspace_user", (q) =>
-      q.eq("workspaceId", workspaceId).eq("userId", principal)
+      q.eq("workspaceId", workspaceId).eq("userId", agent.owner)
     )
     .unique()
   if (!member) throw new Error("Workspace access denied")
@@ -79,10 +84,11 @@ async function requireRecipeAccess(
   ctx: MutationCtx,
   version: Doc<"recipeVersions">,
   operation: "run" | "manage",
-  principal?: string
+  agent?: AgentPrincipal
 ) {
-  const member = await recipeMember(ctx, version.workspaceId, principal)
-  if (member.userId === version.createdBy) return
+  const member = await recipeMember(ctx, version.workspaceId, agent)
+  const actor = auditActor(member.userId, agent)
+  if (member.userId === version.createdBy) return actor
   if (operation === "run") {
     const grant = await ctx.db
       .query("recipeRunGrants")
@@ -90,7 +96,7 @@ async function requireRecipeAccess(
         q.eq("versionId", version._id).eq("userId", member.userId)
       )
       .unique()
-    if (grant) return
+    if (grant) return actor
   }
   throw new Error("Recipe permission denied")
 }
@@ -104,11 +110,11 @@ export const setRunAccessResult = v.null()
 export async function setRunAccessForPrincipal(
   ctx: MutationCtx,
   args: Infer<typeof setRunAccessArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
   const version = await ctx.db.get(args.versionId)
   if (!version) throw new Error("Recipe not found")
-  await requireRecipeAccess(ctx, version, "manage", principal)
+  const actor = await requireRecipeAccess(ctx, version, "manage", agent)
   const member = await ctx.db
     .query("workspaceMembers")
     .withIndex("by_workspace_user", (q) =>
@@ -122,12 +128,19 @@ export async function setRunAccessForPrincipal(
       q.eq("versionId", version._id).eq("userId", args.userId)
     )
     .unique()
+  if (args.allowed === (grant !== null)) return null
   if (args.allowed && !grant)
     await ctx.db.insert("recipeRunGrants", {
       versionId: version._id,
       userId: args.userId,
     })
   if (!args.allowed && grant) await ctx.db.delete(grant._id)
+  await recordAuditEvent(ctx, version.workspaceId, actor, {
+    operation: "recipe.setRunAccess",
+    versionId: version._id,
+    userId: args.userId,
+    allowed: args.allowed,
+  })
   return null
 }
 export const setRunAccess = mutation({
@@ -189,9 +202,9 @@ export const validateResult = v.union(
 export async function validateForPrincipal(
   ctx: QueryCtx,
   args: Infer<typeof validateArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
-  await recipeMember(ctx, args.workspaceId, principal)
+  await recipeMember(ctx, args.workspaceId, agent)
   return attempt(async () => {
     await checkRecipe(ctx, args.workspaceId, args.recipe)
     return { ok: true as const }
@@ -215,9 +228,9 @@ export const previewResult = v.union(
 export async function previewForPrincipal(
   ctx: QueryCtx,
   args: Infer<typeof previewArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
-  await recipeMember(ctx, args.workspaceId, principal)
+  await recipeMember(ctx, args.workspaceId, agent)
   return attempt(async () => {
     const output = await checkRecipe(ctx, args.workspaceId, args.recipe)
     const preview = previewRecipe(args.recipe, args.sample)
@@ -245,17 +258,24 @@ export const publishResult = v.id("recipeVersions")
 export async function publishForPrincipal(
   ctx: MutationCtx,
   args: Infer<typeof publishArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
-  const member = await recipeMember(ctx, args.workspaceId, principal)
+  const member = await recipeMember(ctx, args.workspaceId, agent)
   validateRecipe(args.recipe)
   if (!args.name.trim() || args.name.length > 120)
     throw new Error("Recipe name must be 1 to 120 characters")
-  return ctx.db.insert("recipeVersions", {
+  const versionId = await ctx.db.insert("recipeVersions", {
     ...args,
     name: args.name.trim(),
     createdBy: member.userId,
   })
+  await recordAuditEvent(
+    ctx,
+    args.workspaceId,
+    auditActor(member.userId, agent),
+    { operation: "recipe.publish", versionId }
+  )
+  return versionId
 }
 export const publish = mutation({
   args: publishArgs.fields,
@@ -276,9 +296,9 @@ export const versionsResult = paginationResultValidator(
 export async function versionsForPrincipal(
   ctx: QueryCtx,
   args: Infer<typeof versionsArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
-  await recipeMember(ctx, args.workspaceId, principal)
+  await recipeMember(ctx, args.workspaceId, agent)
   return ctx.db
     .query("recipeVersions")
     .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
@@ -324,9 +344,9 @@ export const runsResult = paginationResultValidator(
 export async function runsForPrincipal(
   ctx: QueryCtx,
   args: Infer<typeof runsArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
-  await recipeMember(ctx, args.workspaceId, principal)
+  await recipeMember(ctx, args.workspaceId, agent)
   return ctx.db
     .query("recipeRuns")
     .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
@@ -352,11 +372,11 @@ export const historyResult = paginationResultValidator(
 export async function historyForPrincipal(
   ctx: QueryCtx,
   args: Infer<typeof historyArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
   const run = await ctx.db.get(args.runId)
   if (!run) throw new Error("Run not found")
-  await recipeMember(ctx, run.workspaceId, principal)
+  await recipeMember(ctx, run.workspaceId, agent)
   return ctx.db
     .query("recipeStepAttempts")
     .withIndex("by_runId_and_step", (q) => q.eq("runId", args.runId))
@@ -392,9 +412,9 @@ async function enqueue(
       throw new Error("Idempotency key belongs to another recipe version")
     if (existing.retryOf !== retryOf)
       throw new Error("Idempotency key belongs to another retry")
-    return existing._id
+    return { runId: existing._id, created: false }
   }
-  return ctx.db.insert("recipeRuns", {
+  const runId = await ctx.db.insert("recipeRuns", {
     workspaceId: version.workspaceId,
     versionId: version._id,
     scheduleId: origin.kind === "schedule" ? origin.scheduleId : undefined,
@@ -406,6 +426,7 @@ async function enqueue(
     epoch: 0,
     nextStep: 0,
   })
+  return { runId, created: true }
 }
 function checkIdempotencyKey(key: string) {
   if (!key || key.length > 200)
@@ -419,15 +440,22 @@ export const triggerResult = v.id("recipeRuns")
 export async function triggerForPrincipal(
   ctx: MutationCtx,
   args: Infer<typeof triggerArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
   const version = await ctx.db.get(args.versionId)
   if (!version) throw new Error("Recipe not found")
-  await requireRecipeAccess(ctx, version, "run", principal)
+  const actor = await requireRecipeAccess(ctx, version, "run", agent)
   checkIdempotencyKey(args.idempotencyKey)
-  return enqueue(ctx, version, `manual:${args.idempotencyKey}`, {
+  const run = await enqueue(ctx, version, `manual:${args.idempotencyKey}`, {
     kind: "manual",
   })
+  if (run.created)
+    await recordAuditEvent(ctx, version.workspaceId, actor, {
+      operation: "run.trigger",
+      runId: run.runId,
+      versionId: version._id,
+    })
+  return run.runId
 }
 export const trigger = mutation({
   args: triggerArgs.fields,
@@ -447,20 +475,27 @@ export const retryResult = v.id("recipeRuns")
 export async function retryForPrincipal(
   ctx: MutationCtx,
   args: Infer<typeof retryArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
   const run = await ctx.db.get(args.runId)
   if (!run) throw new Error("Run not found")
   const version = await ctx.db.get(run.versionId)
   if (!version) throw new Error("Recipe not found")
-  await requireRecipeAccess(ctx, version, "run", principal)
+  const actor = await requireRecipeAccess(ctx, version, "run", agent)
   if (run.state !== "failed" && run.state !== "cancelled")
     throw new Error("Only a failed or cancelled run can be retried")
   checkIdempotencyKey(args.idempotencyKey)
-  return enqueue(ctx, version, `retry:${args.idempotencyKey}`, {
+  const retry = await enqueue(ctx, version, `retry:${args.idempotencyKey}`, {
     kind: "retry",
     retryOf: run._id,
   })
+  if (retry.created)
+    await recordAuditEvent(ctx, version.workspaceId, actor, {
+      operation: "run.retry",
+      runId: retry.runId,
+      retryOf: run._id,
+    })
+  return retry.runId
 }
 export const retry = mutation({
   args: retryArgs.fields,
@@ -475,20 +510,26 @@ export const scheduleResult = v.id("recipeSchedules")
 export async function scheduleForPrincipal(
   ctx: MutationCtx,
   args: Infer<typeof scheduleArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
   const version = await ctx.db.get(args.versionId)
   if (!version) throw new Error("Recipe not found")
-  await requireRecipeAccess(ctx, version, "manage", principal)
+  const actor = await requireRecipeAccess(ctx, version, "manage", agent)
   validateTiming(args.timing)
   const nextAt = nextOccurrence(args.timing, Date.now())
   if (nextAt === null) throw new Error("Schedule must be in the future")
-  return ctx.db.insert("recipeSchedules", {
+  const scheduleId = await ctx.db.insert("recipeSchedules", {
     workspaceId: version.workspaceId,
     ...args,
     enabled: true,
     nextAt,
   })
+  await recordAuditEvent(ctx, version.workspaceId, actor, {
+    operation: "schedule.create",
+    scheduleId,
+    versionId: version._id,
+  })
+  return scheduleId
 }
 export const schedule = mutation({
   args: scheduleArgs.fields,
@@ -509,9 +550,9 @@ export const schedulesResult = paginationResultValidator(
 export async function schedulesForPrincipal(
   ctx: QueryCtx,
   args: Infer<typeof schedulesArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
-  await recipeMember(ctx, args.workspaceId, principal)
+  await recipeMember(ctx, args.workspaceId, agent)
   return ctx.db
     .query("recipeSchedules")
     .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
@@ -530,13 +571,13 @@ export const setEnabledResult = v.null()
 export async function setEnabledForPrincipal(
   ctx: MutationCtx,
   args: Infer<typeof setEnabledArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
   const item = await ctx.db.get(args.scheduleId)
   if (!item) throw new Error("Schedule not found")
   const version = await ctx.db.get(item.versionId)
   if (!version) throw new Error("Recipe not found")
-  await requireRecipeAccess(ctx, version, "manage", principal)
+  const actor = await requireRecipeAccess(ctx, version, "manage", agent)
   if (args.enabled === item.enabled) return null
   const nextAt = args.enabled
     ? nextOccurrence(item.timing, Date.now())
@@ -546,6 +587,11 @@ export async function setEnabledForPrincipal(
     enabled: args.enabled,
     nextAt,
     revision: (item.revision ?? 0) + 1,
+  })
+  await recordAuditEvent(ctx, item.workspaceId, actor, {
+    operation: "schedule.setEnabled",
+    scheduleId: item._id,
+    enabled: args.enabled,
   })
   return null
 }
@@ -569,13 +615,13 @@ export const updateScheduleResult = v.object({ revision: v.number() })
 export async function updateScheduleForPrincipal(
   ctx: MutationCtx,
   args: Infer<typeof updateScheduleArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
   const item = await ctx.db.get(args.scheduleId)
   if (!item) throw new Error("Schedule not found")
   const current = await ctx.db.get(item.versionId)
   if (!current) throw new Error("Recipe not found")
-  await requireRecipeAccess(ctx, current, "manage", principal)
+  await requireRecipeAccess(ctx, current, "manage", agent)
   const revision = item.revision ?? 0
   if (args.expectedRevision !== revision)
     throw new Error(
@@ -585,7 +631,7 @@ export async function updateScheduleForPrincipal(
     args.versionId === current._id ? current : await ctx.db.get(args.versionId)
   if (!version || version.workspaceId !== item.workspaceId)
     throw new Error("Recipe not found")
-  await requireRecipeAccess(ctx, version, "manage", principal)
+  const actor = await requireRecipeAccess(ctx, version, "manage", agent)
   validateTiming(args.timing)
   const nextAt = nextOccurrence(args.timing, Date.now())
   if (nextAt === null) throw new Error("Schedule must be in the future")
@@ -593,6 +639,12 @@ export async function updateScheduleForPrincipal(
     versionId: version._id,
     timing: args.timing,
     nextAt,
+    revision: revision + 1,
+  })
+  await recordAuditEvent(ctx, item.workspaceId, actor, {
+    operation: "schedule.update",
+    scheduleId: item._id,
+    versionId: version._id,
     revision: revision + 1,
   })
   return { revision: revision + 1 }
@@ -607,24 +659,28 @@ export const cancelResult = v.null()
 export async function cancelForPrincipal(
   ctx: MutationCtx,
   args: Infer<typeof cancelArgs>,
-  principal?: string
+  agent?: AgentPrincipal
 ) {
   const run = await ctx.db.get(args.runId)
   if (!run) throw new Error("Run not found")
   const version = await ctx.db.get(run.versionId)
   if (!version) throw new Error("Recipe not found")
-  await requireRecipeAccess(ctx, version, "run", principal)
-  if (!terminal(run))
-    await ctx.db.patch(
-      run._id,
-      run.state === "pending"
-        ? {
-            cancelRequested: true,
-            state: "cancelled",
-            finishedAt: Date.now(),
-          }
-        : { cancelRequested: true }
-    )
+  const actor = await requireRecipeAccess(ctx, version, "run", agent)
+  if (terminal(run) || run.cancelRequested) return null
+  await ctx.db.patch(
+    run._id,
+    run.state === "pending"
+      ? {
+          cancelRequested: true,
+          state: "cancelled",
+          finishedAt: Date.now(),
+        }
+      : { cancelRequested: true }
+  )
+  await recordAuditEvent(ctx, run.workspaceId, actor, {
+    operation: "run.cancel",
+    runId: run._id,
+  })
   return null
 }
 export const cancel = mutation({
@@ -659,10 +715,15 @@ export const dispatch = internalMutation({
       const active = item.activeRunId
         ? await ctx.db.get(item.activeRunId)
         : null
-      const runId = await enqueue(ctx, version, occurrenceId(item._id, at), {
-        kind: "schedule",
-        scheduleId: item._id,
-      })
+      const { runId } = await enqueue(
+        ctx,
+        version,
+        occurrenceId(item._id, at),
+        {
+          kind: "schedule",
+          scheduleId: item._id,
+        }
+      )
       if (active && !terminal(active))
         await ctx.db.patch(runId, { state: "skipped", finishedAt: now })
       const next = nextOccurrence(item.timing, now)

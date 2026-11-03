@@ -26,6 +26,7 @@ export async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
   return {
     grantId: grant._id,
     owner: grant.owner,
+    registrationId: grant.registrationId ?? null,
     workspaceId: grant.workspaceId,
     scope: grant.scope,
   }

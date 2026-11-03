@@ -180,6 +180,16 @@ describe("recipe lifecycle", () => {
       await expect(
         owner.mutation(api.recipes.updateSchedule, update)
       ).rejects.toThrow("current revision is 1")
+      const events = await owner.query(api.auditEvents.list, {
+        workspaceId,
+        paginationOpts: { numItems: 1, cursor: null },
+      })
+      expect(events.page[0]?.event).toEqual({
+        operation: "schedule.update",
+        scheduleId,
+        versionId: next,
+        revision: 1,
+      })
       const updated = await t.run(async (ctx) => ctx.db.get(scheduleId))
       expect(updated).toMatchObject({
         versionId: next,
@@ -309,7 +319,7 @@ describe("recipe lifecycle", () => {
     expect(await t.mutation(internal.recipes.dispatch, {})).toHaveLength(0)
   })
   it("retries only failed or cancelled runs as new linked runs of the pinned version", async () => {
-    const { t, owner, versionId } = await setup()
+    const { t, owner, versionId, workspaceId } = await setup()
     const runId = await owner.mutation(api.recipes.trigger, {
       versionId,
       idempotencyKey: "original",
@@ -334,6 +344,14 @@ describe("recipe lifecycle", () => {
         idempotencyKey: "again",
       })
     ).toBe(retryId)
+    const events = await owner.query(api.auditEvents.list, {
+      workspaceId,
+      paginationOpts: { numItems: 2, cursor: null },
+    })
+    expect(events.page.map(({ event }) => event.operation)).toEqual([
+      "run.retry",
+      "run.cancel",
+    ])
     const retried = await t.run((ctx) => ctx.db.get(retryId))
     expect(retried).toMatchObject({
       versionId,

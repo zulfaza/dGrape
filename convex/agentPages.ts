@@ -14,6 +14,7 @@ import {
   type PageDefinition,
 } from "./lib/pageDomain"
 import { getPage, listPages, publishPage, savePageDraft } from "./pages"
+import { auditActor } from "./lib/auditEvents"
 
 /**
  * Page operations for agent credentials. convex/http.ts calls these after it
@@ -82,11 +83,16 @@ export const saveDraft = internalMutation({
           : ctx.db.normalizeId("pages", args.pageId)
       if (args.pageId !== undefined && !pageId)
         throw new Error("Page access denied")
-      return savePageDraft(ctx, grant.workspaceId, grant.owner, {
-        pageId: pageId ?? undefined,
-        expectedRevision: args.expectedRevision,
-        definition: resolvePageIds(ctx, args.definition),
-      })
+      return savePageDraft(
+        ctx,
+        grant.workspaceId,
+        auditActor(grant.owner, grant),
+        {
+          pageId: pageId ?? undefined,
+          expectedRevision: args.expectedRevision,
+          definition: resolvePageIds(ctx, args.definition),
+        }
+      )
     }),
 })
 
@@ -103,7 +109,12 @@ export const publish = internalMutation({
     withGrant(ctx, digest, Date.now(), "write", async (grant) => {
       const id = ctx.db.normalizeId("pages", pageId)
       if (!id) throw new Error("Page access denied")
-      await publishPage(ctx, grant.workspaceId, { ...args, pageId: id })
+      await publishPage(
+        ctx,
+        grant.workspaceId,
+        auditActor(grant.owner, grant),
+        { ...args, pageId: id }
+      )
       const page = await ctx.db.get(id)
       if (!page) throw new Error("Page access denied")
       return summary(page)

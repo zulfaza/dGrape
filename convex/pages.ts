@@ -19,6 +19,7 @@ import {
 import { requireMembership } from "./lib/auth"
 import { workspaceBudgets } from "./lib/budgets"
 import { firstPageWithinBudget, runSavedQuery } from "./lib/savedQueries"
+import { recordAuditEvent, type AuditActor } from "./lib/auditEvents"
 import {
   pageDefinitionValidator,
   pageValidator,
@@ -109,7 +110,7 @@ async function validateBindings(
 export async function savePageDraft(
   ctx: MutationCtx,
   workspaceId: Id<"workspaces">,
-  createdBy: string,
+  actor: AuditActor,
   args: {
     pageId?: Id<"pages">
     expectedRevision?: number
@@ -143,8 +144,13 @@ export async function savePageDraft(
     pageId,
     revision,
     definition: args.definition,
-    createdBy,
+    createdBy: actor.kind === "user" ? actor.userId : actor.owner,
     createdAt: Date.now(),
+  })
+  await recordAuditEvent(ctx, workspaceId, actor, {
+    operation: "page.save",
+    pageId,
+    revision,
   })
   return { pageId, revision }
 }
@@ -153,6 +159,7 @@ export async function savePageDraft(
 export async function publishPage(
   ctx: MutationCtx,
   workspaceId: Id<"workspaces">,
+  actor: AuditActor,
   args: {
     pageId: Id<"pages">
     revision: number
@@ -171,7 +178,13 @@ export async function publishPage(
   const version = await getVersion(ctx, page._id, args.revision)
   if (!version) throw new Error("Page version not found")
   await validateBindings(ctx, page.workspaceId, version.definition)
+  if (page.publishedRevision === version.revision) return null
   await ctx.db.patch(page._id, { publishedRevision: version.revision })
+  await recordAuditEvent(ctx, workspaceId, actor, {
+    operation: "page.publish",
+    pageId: page._id,
+    revision: version.revision,
+  })
   return null
 }
 
@@ -237,7 +250,12 @@ export const save = mutation({
   returns: v.object({ pageId: v.id("pages"), revision: v.number() }),
   handler: async (ctx, { workspaceId, ...args }) => {
     const member = await requireMembership(ctx, workspaceId)
-    return savePageDraft(ctx, workspaceId, member.userId, args)
+    return savePageDraft(
+      ctx,
+      workspaceId,
+      { kind: "user", userId: member.userId },
+      args
+    )
   },
 })
 
@@ -253,8 +271,13 @@ export const publish = mutation({
   handler: async (ctx, args) => {
     const page = await ctx.db.get(args.pageId)
     if (!page) throw new Error("Page access denied")
-    await requireMembership(ctx, page.workspaceId)
-    return publishPage(ctx, page.workspaceId, args)
+    const member = await requireMembership(ctx, page.workspaceId)
+    return publishPage(
+      ctx,
+      page.workspaceId,
+      { kind: "user", userId: member.userId },
+      args
+    )
   },
 })
 

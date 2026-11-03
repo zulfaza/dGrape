@@ -508,6 +508,16 @@ test("agent credentials draft, publish, get and list pages with clear binding er
       expectedPublishedRevision: null,
     })
   ).toMatchObject({ status: 409 })
+  const events = await t
+    .withIdentity({ tokenIdentifier: "owner" })
+    .query(api.auditEvents.list, {
+      workspaceId,
+      paginationOpts: { numItems: 2, cursor: null },
+    })
+  expect(events.page.map(({ actor, event }) => [actor.kind, event])).toEqual([
+    ["agent", { operation: "page.publish", pageId, revision: 1 }],
+    ["agent", { operation: "page.save", pageId, revision: 1 }],
+  ])
   expect(await call("get", { pageId }, reader)).toMatchObject({
     status: 200,
     body: { version: { revision: 1, definition }, bindings: [null] },

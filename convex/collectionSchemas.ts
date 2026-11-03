@@ -5,6 +5,7 @@ import {
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
 import { requireMembership } from "./lib/auth"
+import { recordAuditEvent } from "./lib/auditEvents"
 import { collectionDefinitionValidator } from "./lib/collectionDomain"
 import { publishCompatibleSchema } from "./lib/collectionSchemas"
 
@@ -76,7 +77,7 @@ export const renameField = mutation({
   handler: async (ctx, { collectionId, expectedVersion, fieldId, label }) => {
     const collection = await ctx.db.get(collectionId)
     if (!collection) throw new Error("Collection access denied")
-    await requireMembership(ctx, collection.workspaceId)
+    const member = await requireMembership(ctx, collection.workspaceId)
     if (
       !Number.isSafeInteger(expectedVersion) ||
       collection.definition.version !== expectedVersion
@@ -91,6 +92,16 @@ export const renameField = mutation({
       ),
     }
     await publishCompatibleSchema(ctx, collection, definition)
+    await recordAuditEvent(
+      ctx,
+      collection.workspaceId,
+      { kind: "user", userId: member.userId },
+      {
+        operation: "collection.renameField",
+        collectionId,
+        version: definition.version,
+      }
+    )
     return definition
   },
 })

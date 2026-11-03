@@ -9,6 +9,11 @@ import { resolveGrant } from "./lib/agentGrant"
 import { workspaceBudgets } from "./lib/budgets"
 import { recordBudgetProblem } from "./lib/recordCounts"
 import {
+  auditActor,
+  recordAuditEvent,
+  type AuditActor,
+} from "./lib/auditEvents"
+import {
   addField as addFieldToDefinition,
   checkCollection,
   checkRecordValues,
@@ -42,12 +47,18 @@ const reject = (message: string): Invalid => ({ status: "invalid", message })
 async function writableWorkspace(
   ctx: MutationCtx,
   digest: string
-): Promise<Denied | { status: "ok"; workspaceId: Id<"workspaces"> }> {
+): Promise<
+  Denied | { status: "ok"; workspaceId: Id<"workspaces">; actor: AuditActor }
+> {
   const grant = await resolveGrant(ctx, digest, Date.now())
   if (!grant) return deny("The credential is missing, expired, or revoked.")
   if (grant.scope !== "readwrite")
     return deny("This credential is read-only. Create a read-and-write one.")
-  return { status: "ok", workspaceId: grant.workspaceId }
+  return {
+    status: "ok",
+    workspaceId: grant.workspaceId,
+    actor: auditActor(grant.owner, grant),
+  }
 }
 
 /** Finds a collection in the credential's workspace. */
@@ -55,14 +66,16 @@ async function writableCollection(
   ctx: MutationCtx,
   digest: string,
   rawCollectionId: string
-): Promise<Denied | { status: "ok"; collection: Doc<"collections"> }> {
+): Promise<
+  Denied | { status: "ok"; collection: Doc<"collections">; actor: AuditActor }
+> {
   const workspace = await writableWorkspace(ctx, digest)
   if (workspace.status !== "ok") return workspace
   const collectionId = ctx.db.normalizeId("collections", rawCollectionId)
   const collection = collectionId && (await ctx.db.get(collectionId))
   if (!collection || collection.workspaceId !== workspace.workspaceId)
     return deny("The collection does not exist in this workspace.")
-  return { status: "ok", collection }
+  return { status: "ok", collection, actor: workspace.actor }
 }
 
 const createCollectionResult = v.union(
@@ -95,6 +108,10 @@ export const createCollection = internalMutation({
       workspaceId: workspace.workspaceId,
       name: checked.value.name,
       definition: { version: 1, fields: checked.value.fields },
+    })
+    await recordAuditEvent(ctx, workspace.workspaceId, workspace.actor, {
+      operation: "collection.create",
+      collectionId: id,
     })
     return { status: "created", id }
   },
@@ -129,6 +146,11 @@ export const addField = internalMutation({
     )
     if (!definition.ok) return reject(definition.message)
     await publishCompatibleSchema(ctx, collection, definition.value)
+    await recordAuditEvent(ctx, collection.workspaceId, found.actor, {
+      operation: "collection.addField",
+      collectionId: collection._id,
+      version: definition.value.version,
+    })
     return { status: "added", version: definition.value.version }
   },
 })
@@ -191,6 +213,11 @@ export const createRecord = internalMutation({
       checked.value,
       idempotencyKey
     )
+    await recordAuditEvent(ctx, collection.workspaceId, found.actor, {
+      operation: "record.create",
+      collectionId: collection._id,
+      recordId: id,
+    })
     return { status: "created", id, revision: 1 }
   },
 })
@@ -229,6 +256,12 @@ export const updateRecord = internalMutation({
       record,
       checked.value
     )
+    await recordAuditEvent(ctx, collection.workspaceId, found.actor, {
+      operation: "record.update",
+      collectionId: collection._id,
+      recordId: record._id,
+      revision,
+    })
     return { status: "updated", revision }
   },
 })
@@ -258,6 +291,11 @@ export const deleteRecord = internalMutation({
     if (record.revision !== args.expectedRevision)
       return { status: "conflict", revision: record.revision }
     await removeRecord(ctx, record._id)
+    await recordAuditEvent(ctx, found.collection.workspaceId, found.actor, {
+      operation: "record.delete",
+      collectionId: found.collection._id,
+      recordId: record._id,
+    })
     return { status: "deleted" }
   },
 })
