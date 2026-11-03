@@ -126,6 +126,7 @@ export const createCollection = mutation({
 })
 
 const collectionValidator = v.object({
+  dataRevision: v.optional(v.number()),
   _id: v.id("collections"),
   _creationTime: v.number(),
   workspaceId: v.id("workspaces"),
