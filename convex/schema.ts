@@ -96,6 +96,14 @@ export default defineSchema({
     sourceRevision: v.number(),
     builtAt: v.number(),
     result: v.union(
+      v.object({
+        kind: v.literal("building"),
+        count: v.number(),
+        cursor: v.union(v.string(), v.null()),
+        pages: v.number(),
+        schemaVersion: v.number(),
+        requestedBy: v.string(),
+      }),
       v.object({ kind: v.literal("complete"), count: v.number() }),
       v.object({ kind: v.literal("failed"), message: v.string() })
     ),
