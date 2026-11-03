@@ -8,11 +8,16 @@ import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 
 type Draft = {
-  pageId?: Id<"pages">
-  revision?: number
-  publishedRevision: number | null
   definition: PageDefinition
-}
+} & (
+  | { kind: "new"; publishedRevision: null }
+  | {
+      kind: "saved"
+      pageId: Id<"pages">
+      revision: number
+      publishedRevision: number | null
+    }
+)
 
 export function WorkspacePages({
   workspaceId,
@@ -34,7 +39,7 @@ export function WorkspacePages({
   const [dirty, setDirty] = useState(false)
   const history = usePaginatedQuery(
     api.pages.history,
-    draft?.pageId ? { pageId: draft.pageId } : "skip",
+    draft?.kind === "saved" ? { pageId: draft.pageId } : "skip",
     { initialNumItems: 20 }
   )
 
@@ -63,6 +68,7 @@ export function WorkspacePages({
       const result = await client.query(api.pages.get, { pageId, revision })
       if (!result.version) throw new Error("Page version is unavailable")
       setDraft({
+        kind: "saved",
         pageId,
         revision,
         publishedRevision: result.page.publishedRevision ?? null,
@@ -77,13 +83,13 @@ export function WorkspacePages({
     setDirty(true)
   }
   async function publishRevision(revision: number) {
-    if (!draft?.pageId || draft.revision === undefined) return
+    if (draft?.kind !== "saved") return
     const pageId = draft.pageId
     await run(async () => {
       await publish({
         pageId,
         revision,
-        expectedRevision: draft.revision ?? 0,
+        expectedRevision: draft.revision,
         expectedPublishedRevision: draft.publishedRevision,
       })
       setDraft({ ...draft, publishedRevision: revision })
@@ -102,6 +108,7 @@ export function WorkspacePages({
           onClick={() => {
             if (!canLeave()) return
             setDraft({
+              kind: "new",
               publishedRevision: null,
               definition: {
                 title: "Untitled page",
@@ -259,12 +266,14 @@ export function WorkspacePages({
                 void run(async () => {
                   const result = await save({
                     workspaceId,
-                    pageId: draft.pageId,
-                    expectedRevision: draft.revision,
+                    pageId: draft.kind === "saved" ? draft.pageId : undefined,
+                    expectedRevision:
+                      draft.kind === "saved" ? draft.revision : undefined,
                     definition: draft.definition,
                   })
                   setDraft({
                     ...draft,
+                    kind: "saved",
                     pageId: result.pageId,
                     revision: result.revision,
                   })
@@ -277,16 +286,15 @@ export function WorkspacePages({
             </Button>
             <Button
               variant="outline"
-              disabled={pending || dirty || draft.revision === undefined}
+              disabled={pending || dirty || draft.kind === "new"}
               onClick={() => {
-                if (draft.revision !== undefined)
-                  void publishRevision(draft.revision)
+                if (draft.kind === "saved") void publishRevision(draft.revision)
               }}
             >
               Publish saved revision
             </Button>
           </div>
-          {draft.pageId && (
+          {draft.kind === "saved" && (
             <div className="space-y-3">
               <h3 className="font-semibold">Publication history</h3>
               <p>Save your edits before changing the published revision.</p>
