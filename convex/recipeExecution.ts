@@ -16,6 +16,7 @@ import {
   stageSnapshotChunk,
   publishSnapshot,
 } from "./lib/recordPublication"
+import { recordSyncOutcome } from "./lib/sourceSync"
 
 export const executionArgs = {
   runId: v.id("recipeRuns"),
@@ -198,6 +199,8 @@ export const commit = internalMutation({
       run._id,
       finished ? { ...progress, state: "succeeded", finishedAt: now } : progress
     )
+    if (finished)
+      await recordSyncOutcome(ctx, run, version.recipe, "success", now)
     return null
   },
 })
@@ -216,14 +219,19 @@ export const finishFailed = internalMutation({
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId)
     if (
-      run &&
-      run.epoch === args.epoch &&
-      (run.state === "pending" || run.state === "running")
+      !run ||
+      run.epoch !== args.epoch ||
+      (run.state !== "pending" && run.state !== "running")
     )
-      await ctx.db.patch(run._id, {
-        state: run.cancelRequested ? "cancelled" : "failed",
-        finishedAt: Date.now(),
-      })
+      return null
+    const now = Date.now()
+    await ctx.db.patch(run._id, {
+      state: run.cancelRequested ? "cancelled" : "failed",
+      finishedAt: now,
+    })
+    const version = await ctx.db.get(run.versionId)
+    if (!run.cancelRequested && version)
+      await recordSyncOutcome(ctx, run, version.recipe, "failure", now)
     return null
   },
 })

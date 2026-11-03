@@ -62,6 +62,7 @@ import type * as lib_records from "../lib/records.js";
 import type * as lib_savedQueries from "../lib/savedQueries.js";
 import type * as lib_secretDomain from "../lib/secretDomain.js";
 import type * as lib_secretService from "../lib/secretService.js";
+import type * as lib_sourceSync from "../lib/sourceSync.js";
 import type * as pages from "../pages.js";
 import type * as recipeExecution from "../recipeExecution.js";
 import type * as recipeHttp from "../recipeHttp.js";
@@ -73,6 +74,7 @@ import type * as savedQueries from "../savedQueries.js";
 import type * as secretSettings from "../secretSettings.js";
 import type * as secretSettingsLookup from "../secretSettingsLookup.js";
 import type * as secrets from "../secrets.js";
+import type * as sourceSyncs from "../sourceSyncs.js";
 import type * as workspaceBudgets from "../workspaceBudgets.js";
 import type * as workspaces from "../workspaces.js";
 
@@ -137,6 +139,7 @@ declare const fullApi: ApiFromModules<{
   "lib/savedQueries": typeof lib_savedQueries;
   "lib/secretDomain": typeof lib_secretDomain;
   "lib/secretService": typeof lib_secretService;
+  "lib/sourceSync": typeof lib_sourceSync;
   pages: typeof pages;
   recipeExecution: typeof recipeExecution;
   recipeHttp: typeof recipeHttp;
@@ -148,6 +151,7 @@ declare const fullApi: ApiFromModules<{
   secretSettings: typeof secretSettings;
   secretSettingsLookup: typeof secretSettingsLookup;
   secrets: typeof secrets;
+  sourceSyncs: typeof sourceSyncs;
   workspaceBudgets: typeof workspaceBudgets;
   workspaces: typeof workspaces;
 }>;

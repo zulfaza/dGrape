@@ -36,6 +36,7 @@ import {
   recipeTimingValidator,
   validateTiming,
 } from "./lib/recipeSchedule"
+import { recordSyncOutcome } from "./lib/sourceSync"
 
 /** A bounded output token detects writes made while a recipe fetches data. */
 export async function recipeOutputToken(
@@ -841,6 +842,7 @@ export const startStep = internalMutation({
       now - run.startedAt > version.recipe.limits.durationMs
     ) {
       await ctx.db.patch(run._id, { state: "failed", finishedAt: now })
+      await recordSyncOutcome(ctx, run, version.recipe, "failure", now)
       return { state: "cancelled" }
     }
     const attempts = await ctx.db
@@ -851,6 +853,7 @@ export const startStep = internalMutation({
       .take(6)
     if (attempts.length >= version.recipe.limits.attempts) {
       await ctx.db.patch(run._id, { state: "failed", finishedAt: now })
+      await recordSyncOutcome(ctx, run, version.recipe, "failure", now)
       return { state: "cancelled" }
     }
     for (const prior of attempts)
