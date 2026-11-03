@@ -6,6 +6,7 @@ import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { AgentAccess, AgentAccessBoundary } from "@/components/agent-access"
 import { ConnectedAgents } from "@/components/connected-agents"
+import { WorkspacePages } from "@/components/workspace-pages"
 import { WorkspaceArtifacts } from "@/components/workspace-artifacts"
 import { CollectionRecords } from "@/components/collection-records"
 import { CreateCollectionDialog } from "@/components/create-collection-dialog"
@@ -164,6 +165,7 @@ function WorkspacePage() {
             </p>
           )}
         </section>
+        {workspace && <WorkspacePages workspaceId={workspace._id} />}
         {workspace && <WorkspaceArtifacts workspaceId={workspace._id} />}
         {workspace && (
           <AgentAccessBoundary key={workspace._id}>
