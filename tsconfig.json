@@ -1,4 +1,5 @@
 {
+  "exclude": ["tools/oxlint/anti-slop"],
   "include": ["**/*.ts", "**/*.tsx", "vite.config.ts"],
   "compilerOptions": {
     "target": "ES2022",

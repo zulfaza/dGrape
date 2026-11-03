@@ -7,3 +7,6 @@ allowBuilds:
   msw: false
   core-js: false
   workerd: true
+
+minimumReleaseAgeExclude:
+  - '@shadcn/lint@0.2.5'
