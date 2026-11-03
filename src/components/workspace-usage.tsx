@@ -55,7 +55,8 @@ function usedFor(key: BudgetKey, usage: Usage): Used {
       if (!largest) return null
       return {
         value: largest.records?.count ?? 0,
-        partial: largest.records?.kind !== "counted",
+        // Another collection that is still counting could be larger.
+        partial: usage.collections.some((c) => c.records?.kind !== "counted"),
         note: largest.name,
       }
     }
