@@ -14,6 +14,7 @@ import type * as agentIdentityHttp from "../agentIdentityHttp.js";
 import type * as agentRegistrations from "../agentRegistrations.js";
 import type * as agentWrites from "../agentWrites.js";
 import type * as artifacts from "../artifacts.js";
+import type * as connectors from "../connectors.js";
 import type * as http from "../http.js";
 import type * as lib_agentAuthConfig from "../lib/agentAuthConfig.js";
 import type * as lib_agentAuthCrypto from "../lib/agentAuthCrypto.js";
@@ -27,6 +28,7 @@ import type * as lib_artifactPreview from "../lib/artifactPreview.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_collectionDomain from "../lib/collectionDomain.js";
 import type * as lib_collectionTemplates from "../lib/collectionTemplates.js";
+import type * as lib_connectorFetch from "../lib/connectorFetch.js";
 import type * as lib_identityAssertion from "../lib/identityAssertion.js";
 import type * as lib_pageDomain from "../lib/pageDomain.js";
 import type * as lib_r2 from "../lib/r2.js";
@@ -41,6 +43,11 @@ import type * as pages from "../pages.js";
 import type * as recipes from "../recipes.js";
 import type * as reportCounts from "../reportCounts.js";
 import type * as savedQueries from "../savedQueries.js";
+import type * as lib_secretDomain from "../lib/secretDomain.js";
+import type * as lib_secretService from "../lib/secretService.js";
+import type * as secretSettings from "../secretSettings.js";
+import type * as secretSettingsLookup from "../secretSettingsLookup.js";
+import type * as secrets from "../secrets.js";
 import type * as workspaces from "../workspaces.js";
 
 import type {
@@ -56,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   agentRegistrations: typeof agentRegistrations;
   agentWrites: typeof agentWrites;
   artifacts: typeof artifacts;
+  connectors: typeof connectors;
   http: typeof http;
   "lib/agentAuthConfig": typeof lib_agentAuthConfig;
   "lib/agentAuthCrypto": typeof lib_agentAuthCrypto;
@@ -69,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/collectionDomain": typeof lib_collectionDomain;
   "lib/collectionTemplates": typeof lib_collectionTemplates;
+  "lib/connectorFetch": typeof lib_connectorFetch;
   "lib/identityAssertion": typeof lib_identityAssertion;
   "lib/pageDomain": typeof lib_pageDomain;
   "lib/r2": typeof lib_r2;
@@ -83,6 +92,11 @@ declare const fullApi: ApiFromModules<{
   recipes: typeof recipes;
   reportCounts: typeof reportCounts;
   savedQueries: typeof savedQueries;
+  "lib/secretDomain": typeof lib_secretDomain;
+  "lib/secretService": typeof lib_secretService;
+  secretSettings: typeof secretSettings;
+  secretSettingsLookup: typeof secretSettingsLookup;
+  secrets: typeof secrets;
   workspaces: typeof workspaces;
 }>;
 

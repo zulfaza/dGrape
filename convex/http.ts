@@ -26,6 +26,8 @@ import {
   parseUpdateRecord,
 } from "./lib/agentRequests"
 
+import { save as saveSecret, options as secretOptions } from "./secretSettings"
+
 const MAX_PAGE_SIZE = 50
 const MAX_CURSOR_BYTES = 4096
 const MAX_BODY_BYTES = 256 * 1024
@@ -112,6 +114,12 @@ const preflight = httpAction(
 )
 
 const http = httpRouter()
+http.route({ path: "/settings/secrets", method: "POST", handler: saveSecret })
+http.route({
+  path: "/settings/secrets",
+  method: "OPTIONS",
+  handler: secretOptions,
+})
 http.route({ path: "/agent/workspace", method: "OPTIONS", handler: preflight })
 http.route({
   path: "/agent/workspace",

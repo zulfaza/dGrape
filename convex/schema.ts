@@ -15,6 +15,7 @@ import {
 } from "./lib/collectionDomain"
 
 import { recipeTables } from "./lib/recipeState"
+import { secretFields, connectionFields } from "./lib/secretDomain"
 
 export default defineSchema({
   ...recipeTables,
@@ -23,6 +24,17 @@ export default defineSchema({
     "pageId",
     "revision",
   ]),
+  secretRefs: defineTable(secretFields).index("by_workspaceId", [
+    "workspaceId",
+  ]),
+  connections: defineTable(connectionFields).index("by_workspaceId", [
+    "workspaceId",
+  ]),
+  connectionUseGrants: defineTable({
+    connectionId: v.id("connections"),
+    userId: v.string(),
+    secretUse: v.boolean(),
+  }).index("by_connectionId_and_userId", ["connectionId", "userId"]),
   agentGrants: defineTable({
     workspaceId: v.id("workspaces"),
     owner: v.string(),
