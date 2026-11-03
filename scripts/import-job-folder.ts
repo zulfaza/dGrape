@@ -358,7 +358,11 @@ function stageOf(status: string): Stage | undefined {
   if (/reject|declined|closed/.test(text)) return "rejected"
   if (/offer/.test(text)) return "offer"
   if (/interview/.test(text)) return "interviewing"
-  if (/not (yet )?(submitted|sent|applied)|draft|pending|blocked/.test(text))
+  if (
+    /not (yet )?(submitted|sent|applied)|prepared|draft|pending|blocked/.test(
+      text
+    )
+  )
     return "prepared"
   if (/submitted|applied|sent/.test(text)) return "applied"
   return undefined
@@ -374,9 +378,18 @@ const SOURCE_KEYS = [
 ]
 const DATE_KEYS = ["date checked", "checked", "date"]
 
-async function readText(folder: string, name: string) {
+/**
+ * Reads a mapping input only when the scan kept it, so a skipped file (a
+ * symlink, or one with a credential) never reaches the plan values.
+ */
+async function readText(
+  roleFolder: string,
+  name: string,
+  kept: ReadonlySet<string>
+) {
+  if (!kept.has(path.join(roleFolder, name))) return undefined
   try {
-    return await readFile(path.join(folder, name), "utf8")
+    return await readFile(path.join(roleFolder, name), "utf8")
   } catch {
     return undefined
   }
@@ -390,12 +403,13 @@ type Mapped =
 async function mapFolder(
   layout: Layout,
   companyFolder: string,
-  roleFolder: string
+  roleFolder: string,
+  kept: ReadonlySet<string>
 ): Promise<Mapped> {
   const problems: string[] = []
   const notices: string[] = []
-  const description = await readText(roleFolder, layout.descriptionFile)
-  const status = await readText(roleFolder, layout.statusFile)
+  const description = await readText(roleFolder, layout.descriptionFile, kept)
+  const status = await readText(roleFolder, layout.statusFile, kept)
   if (description === undefined)
     notices.push(`No ${layout.descriptionFile}: values come from folder names.`)
 
@@ -475,8 +489,14 @@ async function buildPlan(root: string, layout: Layout): Promise<Plan> {
     }
     for (const role of roles) {
       const folder = toPosix(path.relative(root, role.absolute))
-      const mapped = await mapFolder(layout, company.absolute, role.absolute)
       const artifacts = await planTree(scan, role.absolute)
+      const kept = new Set(artifacts.map((a) => path.join(root, a.path)))
+      const mapped = await mapFolder(
+        layout,
+        company.absolute,
+        role.absolute,
+        kept
+      )
       if (mapped.kind === "blocked") {
         scan.exceptions.push({
           kind: "blocked",
