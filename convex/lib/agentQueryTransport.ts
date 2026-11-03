@@ -105,6 +105,27 @@ export const RunInput = Schema.Struct({
   cursor: Schema.optionalKey(Cursor),
 })
 
+/** Mirrors sourceFreshnessValidator in convex/lib/sourceSync.ts. */
+const SourceFreshness = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("never_synced") }),
+  Schema.Struct({
+    kind: Schema.Literal("synced"),
+    lastSuccessfulSyncAt: Schema.Number,
+    runId: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("stale"),
+    lastSuccessfulSyncAt: Schema.Number,
+    lastFailedAt: Schema.Number,
+    failedRunId: Schema.String,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("failed"),
+    lastFailedAt: Schema.Number,
+    failedRunId: Schema.String,
+  }),
+])
+
 export const RunPage = Schema.Struct({
   queryId: Schema.String,
   revision: Schema.Number,
@@ -123,6 +144,11 @@ export const RunPage = Schema.Struct({
   isDone: Schema.Boolean,
   continueCursor: Schema.String,
   completeness: Schema.Literals(["complete", "partial"]),
-  freshness: Schema.Literal("live"),
-  readAt: Schema.Number,
+  evaluatedAt: Schema.Number,
+  dataAsOf: Schema.NullOr(Schema.Number),
+  source: Schema.Struct({
+    collectionId: Schema.String,
+    name: Schema.String,
+    freshness: SourceFreshness,
+  }),
 })

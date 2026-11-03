@@ -14,6 +14,7 @@ import {
   runSavedQueryInWorkspace,
   saveQueryInWorkspace,
 } from "./lib/savedQueries"
+import { sourceStatusValidator } from "./lib/sourceSync"
 
 /**
  * Saved-query operations for agent credentials. convex/http.ts calls these
@@ -118,8 +119,9 @@ export const run = internalQuery({
     isDone: v.boolean(),
     continueCursor: v.string(),
     completeness: v.union(v.literal("complete"), v.literal("partial")),
-    freshness: v.literal("live"),
-    readAt: v.number(),
+    evaluatedAt: v.number(),
+    dataAsOf: v.union(v.number(), v.null()),
+    source: sourceStatusValidator,
   }),
   handler: (ctx, args) =>
     withGrant(ctx, args.digest, args.now, "read", async (grant) => {
@@ -149,8 +151,9 @@ export const run = internalQuery({
         isDone: result.isDone,
         continueCursor: result.continueCursor,
         completeness: result.completeness,
-        freshness: result.freshness,
-        readAt: result.readAt,
+        evaluatedAt: result.evaluatedAt,
+        dataAsOf: result.dataAsOf,
+        source: result.source,
       }
     }),
 })

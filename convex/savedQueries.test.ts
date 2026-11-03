@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
+import { Schema } from "effect"
 import schema from "./schema"
 import { api } from "./_generated/api"
 import * as Queries from "./lib/agentQueryTransport"
@@ -250,6 +251,10 @@ test("agent credentials save, list, and run queries in their own workspace", asy
     { name: "b" },
   ])
   expect(run.body.page[0]).not.toHaveProperty("collectionId")
+  expect(Schema.decodeUnknownSync(Queries.RunPage)(run.body)).toMatchObject({
+    dataAsOf: null,
+    source: { collectionId, freshness: { kind: "never_synced" } },
+  })
   expect(
     await call("run", { queryId, revision: 1, cursor: run.body.continueCursor })
   ).toMatchObject({ status: 200, body: { completeness: "complete" } })
