@@ -573,4 +573,27 @@ test("agent credentials draft, publish, get and list pages with clear binding er
   expect(await call("get", { pageId: foreignPageId })).toMatchObject({
     status: 403,
   })
+  const scatter = {
+    title: "Scatter",
+    blocks: [
+      {
+        kind: "chart" as const,
+        title: "Amounts",
+        binding: { queryId, revision: 1 },
+        chart: {
+          type: "scatter" as const,
+          labelField: "amount",
+          xField: "amount",
+          xUnit: "",
+          valueField: "amount",
+          unit: "USD",
+        },
+      },
+    ],
+  }
+  const scatterDraft = await call("saveDraft", { definition: scatter })
+  expect(scatterDraft).toMatchObject({ status: 200 })
+  expect(
+    await call("get", { pageId: scatterDraft.body.pageId, revision: 1 }, reader)
+  ).toMatchObject({ status: 200, body: { version: { definition: scatter } } })
 }, 30_000)
