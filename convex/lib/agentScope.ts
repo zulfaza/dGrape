@@ -46,7 +46,7 @@ export const SCOPE_DESCRIPTIONS: Record<AgentScope, string> = {
   "pages.read": "Read pages and their revisions.",
   "pages.write": "Save page drafts, and publish or roll back pages.",
   "jobs.read": "Read recipe versions, runs, run history, and schedules.",
-  "jobs.run": "Start and cancel recipe runs.",
+  "jobs.run": "Start, retry, and cancel recipe runs.",
   "jobs.manage": "Publish recipes and manage schedules and run access.",
   "connections.use":
     "Let recipes call connections. Never shows connection secrets.",
