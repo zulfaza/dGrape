@@ -19,6 +19,7 @@ import {
   checkCollection,
   checkRecordValues,
   collectionFieldValidator,
+  newCollectionFieldValidator,
   recordValuesValidator,
 } from "./lib/collectionDomain"
 import {
@@ -132,7 +133,7 @@ export const addField = internalMutation({
   args: {
     digest: v.string(),
     collectionId: v.string(),
-    field: collectionFieldValidator.omit("optional"),
+    field: newCollectionFieldValidator,
   },
   returns: addFieldResult,
   handler: async (

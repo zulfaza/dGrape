@@ -1,7 +1,8 @@
 import { isFieldType } from "./collectionDomain"
 import type {
   CollectionField,
-  RecordValue,
+  IndexValue,
+  NewCollectionField,
   RecordValues,
 } from "./collectionDomain"
 import type { RecordQuery } from "./recordQuery"
@@ -23,7 +24,7 @@ export type CreateRecordBody = {
 }
 export type AddFieldBody = {
   collectionId: string
-  field: Omit<CollectionField, "optional">
+  field: NewCollectionField
 }
 export type UpdateRecordBody = {
   collectionId: string
@@ -36,20 +37,28 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+}
+
+/** Select fields need `options`; other fields must not have them. */
 function parseField(value: unknown): CollectionField | null {
   if (!isObject(value)) return null
-  const { id, label, type, optional, indexed } = value
+  const { id, label, type, options, optional, indexed } = value
   if (typeof id !== "string" || typeof label !== "string") return null
   if (!isFieldType(type)) return null
   if (optional !== undefined && optional !== true) return null
   if (indexed !== undefined && indexed !== true) return null
-  return {
-    id,
-    label,
-    type,
+  const flags: Pick<CollectionField, "optional" | "indexed"> = {
     ...(optional ? { optional } : {}),
     ...(indexed ? { indexed } : {}),
   }
+  if (type === "select" || type === "multiSelect")
+    return isStringArray(options)
+      ? { id, label, type, options, ...flags }
+      : null
+  if (options !== undefined) return null
+  return { id, label, type, ...flags }
 }
 
 function parseValues(value: unknown): RecordValues | null {
@@ -59,7 +68,8 @@ function parseValues(value: unknown): RecordValues | null {
     if (
       typeof item !== "string" &&
       typeof item !== "number" &&
-      typeof item !== "boolean"
+      typeof item !== "boolean" &&
+      !isStringArray(item)
     )
       return null
     values[key] = item
@@ -143,7 +153,7 @@ export type QueryRecordsBody = {
   cursor: string | null
 }
 
-function isRecordValue(value: unknown): value is RecordValue {
+function isIndexValue(value: unknown): value is IndexValue {
   return (
     typeof value === "string" ||
     typeof value === "number" ||
@@ -151,12 +161,12 @@ function isRecordValue(value: unknown): value is RecordValue {
   )
 }
 
-type Bound = { value: RecordValue; inclusive: boolean }
+type Bound = { value: IndexValue; inclusive: boolean }
 
 /** Parses `{ value, inclusive? }`; `inclusive` is true when absent. */
 function parseBound(value: unknown): Bound | null | undefined {
   if (value === undefined) return undefined
-  if (!isObject(value) || !isRecordValue(value.value)) return null
+  if (!isObject(value) || !isIndexValue(value.value)) return null
   const { inclusive } = value
   if (inclusive !== undefined && typeof inclusive !== "boolean") return null
   return { value: value.value, inclusive: inclusive ?? true }
@@ -166,7 +176,7 @@ function parseWhere(value: unknown): RecordQuery["where"] | null {
   if (value === undefined) return undefined
   if (!isObject(value)) return null
   if ("eq" in value) {
-    if (!isRecordValue(value.eq) || Object.keys(value).length !== 1) return null
+    if (!isIndexValue(value.eq) || Object.keys(value).length !== 1) return null
     return { eq: value.eq }
   }
   const lower = parseBound(value.lower)

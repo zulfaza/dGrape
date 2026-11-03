@@ -49,3 +49,17 @@ Two field kinds keep dates exact and sortable:
   must be a real date, so `2026-02-30` is not valid.
 
 Both kinds can be indexed. Index ranges sort them in time order.
+
+## Select and multi-select
+
+A `select` or `multiSelect` field has `options`: 1 to 100 different texts of 1
+to 100 characters each. The server trims each option.
+
+- `select`: a value is one of the options.
+- `multiSelect`: a value is an array of different options, such as
+  `["remote", "senior"]`. An empty array is valid.
+
+An indexed multi-select field keeps one index entry for each chosen option. A
+query on it must use `{ eq: option }`, and returns the records that chose that
+option. A schema change may add options, but cannot remove them. CSV export
+writes a multi-select value as a JSON array.

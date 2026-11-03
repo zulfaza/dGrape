@@ -22,24 +22,47 @@ export class AgentApiError extends Schema.TaggedError<AgentApiError>()(
   { message: Schema.String }
 ) {}
 
-/** The field types; collectionDomain.ts defines what each value must be. */
-export const FieldType = Schema.Literals([
-  "text",
-  "number",
-  "boolean",
-  "integer",
-  "currency",
-  "timestamp",
-  "date",
-])
-
-export const Field = Schema.Struct({
+/**
+ * Field shapes as convex/lib/collectionDomain.ts defines them. That module
+ * also has the rules for each type's values.
+ */
+const fieldIdentity = {
   id: Schema.String,
   label: Schema.String,
-  type: FieldType,
-  optional: Schema.optionalKey(Schema.Literal(true)),
   indexed: Schema.optionalKey(Schema.Literal(true)),
-})
+}
+
+const scalarField = {
+  ...fieldIdentity,
+  type: Schema.Literals([
+    "text",
+    "number",
+    "boolean",
+    "integer",
+    "currency",
+    "timestamp",
+    "date",
+  ]),
+}
+
+const choiceField = {
+  ...fieldIdentity,
+  type: Schema.Literals(["select", "multiSelect"]),
+  options: Schema.Array(Schema.String),
+}
+
+const optional = { optional: Schema.optionalKey(Schema.Literal(true)) }
+
+/** A field to add to a collection; it is always optional. */
+export const NewField = Schema.Union([
+  Schema.Struct(scalarField),
+  Schema.Struct(choiceField),
+])
+
+export const Field = Schema.Union([
+  Schema.Struct({ ...scalarField, ...optional }),
+  Schema.Struct({ ...choiceField, ...optional }),
+])
 
 export const WorkspaceDescription = Schema.Struct({
   workspace: Schema.Struct({ id: Schema.String, name: Schema.String }),
@@ -53,17 +76,26 @@ export const WorkspaceDescription = Schema.Struct({
   collectionsTruncated: Schema.Boolean,
 })
 
-const RecordValue = Schema.Union([Schema.String, Schema.Number, Schema.Boolean])
+/** A value in an index: what filters and bounds compare with. */
+const IndexValue = Schema.Union([Schema.String, Schema.Number, Schema.Boolean])
+
+/** A field value: a scalar, or the chosen options of a multi-select field. */
+const RecordValue = Schema.Union([
+  Schema.String,
+  Schema.Number,
+  Schema.Boolean,
+  Schema.Array(Schema.String),
+])
 export const RecordValues = Schema.Record(Schema.String, RecordValue)
 
 const Bound = Schema.Struct({
-  value: RecordValue,
+  value: IndexValue,
   inclusive: Schema.optionalKey(Schema.Boolean),
 })
 
 /** Keeps records whose value equals `eq`, or lies between the bounds. */
 export const RecordWhere = Schema.Union([
-  Schema.Struct({ eq: RecordValue }),
+  Schema.Struct({ eq: IndexValue }),
   Schema.Struct({
     lower: Schema.optionalKey(Bound),
     upper: Schema.optionalKey(Bound),

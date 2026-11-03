@@ -3,11 +3,11 @@ import { v, type Infer } from "convex/values"
 import type { Doc } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
 import {
-  recordValueValidator,
+  indexValueValidator,
   checkRecordValues,
   type Checked,
   type CollectionField,
-  type RecordValue,
+  type IndexValue,
 } from "./collectionDomain"
 
 /**
@@ -18,7 +18,7 @@ import {
  */
 
 const boundValidator = v.object({
-  value: recordValueValidator,
+  value: indexValueValidator,
   inclusive: v.boolean(),
 })
 
@@ -29,7 +29,7 @@ export const recordQueryValidator = v.object({
   /** No `where` returns every record that has a value for the field. */
   where: v.optional(
     v.union(
-      v.object({ eq: recordValueValidator }),
+      v.object({ eq: indexValueValidator }),
       v.object({
         lower: v.optional(boundValidator),
         upper: v.optional(boundValidator),
@@ -56,7 +56,13 @@ export function checkQuery(
       }`
     )
   const { where } = query
-  const values: RecordValue[] =
+  // A record has one entry per chosen option, so only an equal match reads
+  // each record once.
+  if (field.type === "multiSelect" && (where === undefined || !("eq" in where)))
+    return invalid(
+      `Field "${field.id}" is a multi-select field. Filter it with { eq: option }`
+    )
+  const values: IndexValue[] =
     where === undefined
       ? []
       : "eq" in where
@@ -65,7 +71,12 @@ export function checkQuery(
             (value) => value !== undefined
           )
   for (const value of values) {
-    const checked = checkRecordValues([field], { [field.id]: value })
+    const checked = checkRecordValues([field], {
+      [field.id]:
+        field.type === "multiSelect" && typeof value === "string"
+          ? [value]
+          : value,
+    })
     if (!checked.ok) return checked
   }
   return { ok: true, value: query }

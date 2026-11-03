@@ -108,6 +108,116 @@ test("timestamps are safe integer milliseconds and dates are real YYYY-MM-DD dat
   ).toBe(false)
 })
 
+test("select values are options and multi-select values list different options", () => {
+  const chosen: CollectionField[] = [
+    {
+      id: "stage",
+      label: "Stage",
+      type: "select",
+      options: ["applied", "offer"],
+    },
+    {
+      id: "tags",
+      label: "Tags",
+      type: "multiSelect",
+      options: ["remote", "senior"],
+      indexed: true,
+    },
+  ]
+  expect(
+    parseCreateCollection({ name: "Jobs", fields: chosen })?.fields
+  ).toEqual(chosen)
+  for (const field of chosen)
+    expect(Schema.decodeUnknownSync(Field)(field)).toEqual(field)
+  expect(
+    parseCreateCollection({
+      name: "Bad",
+      fields: [{ id: "x", label: "X", type: "select" }],
+    })
+  ).toBeNull()
+  expect(
+    parseCreateCollection({
+      name: "Bad",
+      fields: [{ id: "x", label: "X", type: "text", options: ["a"] }],
+    })
+  ).toBeNull()
+  for (const tags of [[], ["remote"], ["senior", "remote"]])
+    expect(checkRecordValues(chosen, { stage: "offer", tags }).ok).toBe(true)
+  for (const tags of [["remote", "remote"], ["junior"], "remote"])
+    expect(checkRecordValues(chosen, { stage: "offer", tags }).ok).toBe(false)
+  for (const stage of ["Offer", "", ["offer"]])
+    expect(checkRecordValues(chosen, { stage, tags: [] }).ok).toBe(false)
+  expect(
+    checkQuery(chosen, {
+      fieldId: "tags",
+      order: "asc",
+      where: { eq: "remote" },
+    }).ok
+  ).toBe(true)
+  expect(checkQuery(chosen, { fieldId: "tags", order: "asc" }).ok).toBe(false)
+  expect(
+    checkQuery(chosen, {
+      fieldId: "tags",
+      order: "asc",
+      where: { eq: "junior" },
+    }).ok
+  ).toBe(false)
+})
+
+test("collections reject bad options and multi-select queries find each chosen option", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const workspaceId = await owner.mutation(api.workspaces.create, {
+    name: "Jobs",
+  })
+  for (const options of [[], ["a", " a "], ["", "b"]])
+    await expect(
+      owner.mutation(api.workspaces.createCollection, {
+        workspaceId,
+        name: "Bad",
+        fields: [{ id: "x", label: "X", type: "select", options }],
+      })
+    ).rejects.toThrow("option")
+  const collectionId = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Jobs",
+    fields: [
+      {
+        id: "tags",
+        label: "Tags",
+        type: "multiSelect",
+        options: [" remote ", "senior"],
+        indexed: true,
+      },
+    ],
+  })
+  const collection = await owner.query(api.workspaces.getCollection, {
+    collectionId,
+  })
+  expect(collection.definition.fields[0]).toMatchObject({
+    options: ["remote", "senior"],
+  })
+  const both = await owner.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { tags: ["remote", "senior"] },
+  })
+  const remote = await owner.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { tags: ["remote"] },
+  })
+  const read = (eq: string) =>
+    owner.query(api.workspaces.queryRecords, {
+      collectionId,
+      query: { fieldId: "tags", order: "asc", where: { eq } },
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+  expect((await read("remote")).page.map((row) => row._id)).toEqual([
+    both,
+    remote,
+  ])
+  expect((await read("senior")).page.map((row) => row._id)).toEqual([both])
+})
+
 test("human, agent, source upserts and snapshot staging enforce exact values and keep projections", async () => {
   const t = convexTest(schema, modules)
   const owner = t.withIdentity({ tokenIdentifier: "owner" })

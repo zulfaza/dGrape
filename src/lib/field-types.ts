@@ -1,7 +1,8 @@
 import type {
   Checked,
   CollectionField,
-  RecordValue,
+  IndexValue,
+  NewCollectionField,
 } from "../../convex/lib/collectionDomain"
 
 /**
@@ -20,6 +21,8 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   boolean: "Yes / no",
   timestamp: "Date and time",
   date: "Date",
+  select: "Select",
+  multiSelect: "Multi-select",
 }
 
 /** The field types in the order the type pickers show them. */
@@ -31,7 +34,34 @@ export const FIELD_TYPES: ReadonlyArray<FieldType> = [
   "boolean",
   "timestamp",
   "date",
+  "select",
+  "multiSelect",
 ]
+
+/** Option text with one option on each line; blank lines are ignored. */
+export function parseOptionLines(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+}
+
+/**
+ * A new field from form state. Only select and multi-select fields keep
+ * their options; the server checks the rest.
+ */
+export function buildField(
+  id: string,
+  label: string,
+  type: FieldType,
+  options: ReadonlyArray<string>,
+  indexed: boolean
+): NewCollectionField {
+  const flags: { indexed?: true } = indexed ? { indexed } : {}
+  if (type === "select" || type === "multiSelect")
+    return { id, label, type, options: [...options], ...flags }
+  return { id, label, type, ...flags }
+}
 
 /** The HTML input type for a field that is not a yes/no field. */
 export function inputType(type: FieldType): string {
@@ -69,7 +99,7 @@ export function timestampInputText(timestamp: number): string {
 export function fromInputText(
   type: FieldType,
   text: string
-): Checked<RecordValue> {
+): Checked<IndexValue> {
   if (type === "number" || type === "integer") {
     const value = Number(text)
     return text.trim() === "" || !Number.isFinite(value)

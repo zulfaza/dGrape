@@ -26,7 +26,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "@/components/ui/toast"
-import { FIELD_TYPE_LABELS, FIELD_TYPES } from "@/lib/field-types"
+import { FieldOptionsInput } from "@/components/field-options-input"
+import {
+  buildField,
+  FIELD_TYPE_LABELS,
+  FIELD_TYPES,
+  parseOptionLines,
+} from "@/lib/field-types"
 
 type Field = Doc<"collections">["definition"]["fields"][number]
 type FieldType = Field["type"]
@@ -52,7 +58,9 @@ export function AddFieldDialog({
   const [label, setLabel] = useState("")
   const [id, setId] = useState("")
   const [type, setType] = useState<FieldType>("text")
+  const [options, setOptions] = useState("")
   const [indexed, setIndexed] = useState(false)
+  const hasOptions = type === "select" || type === "multiSelect"
   const canIndex =
     fields.filter((field) => field.indexed).length < MAX_INDEXED_FIELDS
   const [saving, setSaving] = useState(false)
@@ -68,11 +76,12 @@ export function AddFieldDialog({
     try {
       await addField({
         collectionId,
-        field: indexed ? { id, label, type, indexed } : { id, label, type },
+        field: buildField(id, label, type, parseOptionLines(options), indexed),
       })
       setLabel("")
       setId("")
       setType("text")
+      setOptions("")
       setIndexed(false)
       setOpen(false)
       toast.success("Field added")
@@ -153,6 +162,14 @@ export function AddFieldDialog({
                 </SelectContent>
               </Select>
             </div>
+            {hasOptions && (
+              <FieldOptionsInput
+                id="new-field-options"
+                value={options}
+                disabled={saving}
+                onChange={setOptions}
+              />
+            )}
             <div className="flex items-center gap-2">
               <Checkbox
                 id="new-field-indexed"
