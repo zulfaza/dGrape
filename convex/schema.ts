@@ -222,6 +222,26 @@ export default defineSchema({
     publishedAt: v.number(),
     rowCount: v.number(),
   }).index("by_collectionId", ["collectionId"]),
+  /**
+   * One row per record reference value, so a delete can find the records
+   * that reference its target. convex/lib/references.ts keeps these rows in
+   * step with every record write.
+   */
+  recordReferences: defineTable({
+    recordId: v.id("collectionRecords"),
+    fieldId: v.string(),
+    targetRecordId: v.id("collectionRecords"),
+  })
+    .index("by_recordId", ["recordId"])
+    .index("by_targetRecordId", ["targetRecordId"]),
+  /** One row per artifact reference value; see recordReferences. */
+  artifactReferences: defineTable({
+    recordId: v.id("collectionRecords"),
+    fieldId: v.string(),
+    artifactId: v.id("artifacts"),
+  })
+    .index("by_recordId", ["recordId"])
+    .index("by_artifactId", ["artifactId"]),
   recordIndexEntries: defineTable({
     collectionId: v.id("collections"),
     recordId: v.id("collectionRecords"),

@@ -220,6 +220,183 @@ test("collections reject bad options and multi-select queries find each chosen o
   expect((await read("senior")).page.map((row) => row._id)).toEqual([both])
 })
 
+test("references stay in their workspace, and a referenced record or artifact cannot be deleted", async () => {
+  const reference = {
+    id: "company",
+    label: "Company",
+    type: "recordReference",
+    collectionId: "anything",
+  }
+  expect(
+    parseCreateCollection({ name: "Jobs", fields: [reference] })?.fields
+  ).toEqual([reference])
+  expect(Schema.decodeUnknownSync(Field)(reference)).toEqual(reference)
+  expect(Schema.decodeUnknownSync(Queries.Field)(reference)).toEqual(reference)
+  expect(
+    parseCreateCollection({
+      name: "Bad",
+      fields: [{ id: "x", label: "X", type: "recordReference" }],
+    })
+  ).toBeNull()
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const workspaceId = await owner.mutation(api.workspaces.create, {
+    name: "Mine",
+  })
+  const otherWorkspaceId = await owner.mutation(api.workspaces.create, {
+    name: "Other",
+  })
+  const companies = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Companies",
+    fields: [{ id: "name", label: "Name", type: "text" }],
+  })
+  const elsewhere = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId: otherWorkspaceId,
+    name: "Elsewhere",
+    fields: [{ id: "name", label: "Name", type: "text" }],
+  })
+  await expect(
+    owner.mutation(api.workspaces.createCollection, {
+      workspaceId,
+      name: "Bad",
+      fields: [
+        {
+          id: "company",
+          label: "Company",
+          type: "recordReference",
+          collectionId: elsewhere,
+        },
+      ],
+    })
+  ).rejects.toThrow("not in this workspace")
+  const jobs = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Jobs",
+    fields: [
+      {
+        id: "company",
+        label: "Company",
+        type: "recordReference",
+        collectionId: companies,
+        indexed: true,
+      },
+      {
+        id: "offer",
+        label: "Offer",
+        type: "artifactReference",
+        optional: true,
+      },
+    ],
+  })
+  const company = await owner.mutation(api.workspaces.createRecord, {
+    collectionId: companies,
+    values: { name: "Example" },
+  })
+  const foreign = await owner.mutation(api.workspaces.createRecord, {
+    collectionId: elsewhere,
+    values: { name: "Foreign" },
+  })
+  const artifact = await t.run((ctx) =>
+    ctx.db.insert("artifacts", {
+      workspaceId,
+      key: "k",
+      name: "offer.pdf",
+      contentType: "application/pdf",
+      size: 1,
+      createdBy: { kind: "user", userId: "owner" },
+    })
+  )
+  const foreignArtifact = await t.run((ctx) =>
+    ctx.db.insert("artifacts", {
+      workspaceId: otherWorkspaceId,
+      key: "f",
+      name: "other.pdf",
+      contentType: "application/pdf",
+      size: 1,
+      createdBy: { kind: "user", userId: "owner" },
+    })
+  )
+  const invalidValues: RecordValues[] = [
+    { company: foreign },
+    { company: "not-an-id" },
+    { company, offer: foreignArtifact },
+  ]
+  for (const values of invalidValues)
+    await expect(
+      owner.mutation(api.workspaces.createRecord, {
+        collectionId: jobs,
+        values,
+      })
+    ).rejects.toThrow("references")
+  const job = await owner.mutation(api.workspaces.createRecord, {
+    collectionId: jobs,
+    values: { company, offer: artifact },
+  })
+  const referencing = await owner.query(api.workspaces.queryRecords, {
+    collectionId: jobs,
+    query: { fieldId: "company", order: "asc", where: { eq: company } },
+    paginationOpts: { numItems: 10, cursor: null },
+  })
+  expect(referencing.page.map((row) => row._id)).toEqual([job])
+  expect(
+    await owner.mutation(api.workspaces.deleteRecord, {
+      collectionId: companies,
+      recordId: company,
+      expectedRevision: 1,
+    })
+  ).toBe("referenced")
+  await t.run((ctx) =>
+    ctx.db.insert("agentGrants", {
+      workspaceId,
+      owner: "owner",
+      digest: "refs",
+      scope: "readwrite",
+      state: "active",
+      expiresAt: Date.now() + 60_000,
+    })
+  )
+  expect(
+    await t.mutation(internal.agentWrites.createCollection, {
+      digest: "refs",
+      name: "Bad",
+      fields: [
+        {
+          id: "company",
+          label: "Company",
+          type: "recordReference",
+          collectionId: "bogus",
+        },
+      ],
+    })
+  ).toMatchObject({ status: "invalid" })
+  expect(
+    await t.mutation(internal.agentWrites.deleteRecord, {
+      digest: "refs",
+      collectionId: companies,
+      recordId: company,
+      expectedRevision: 1,
+    })
+  ).toEqual({ status: "referenced", recordId: job })
+  expect(
+    await owner.mutation(api.artifacts.remove, { artifactId: artifact })
+  ).toBe("referenced")
+  expect(
+    await owner.mutation(api.workspaces.deleteRecord, {
+      collectionId: jobs,
+      recordId: job,
+      expectedRevision: 1,
+    })
+  ).toBe("deleted")
+  expect(
+    await owner.mutation(api.workspaces.deleteRecord, {
+      collectionId: companies,
+      recordId: company,
+      expectedRevision: 1,
+    })
+  ).toBe("deleted")
+})
+
 test("human, agent, source upserts and snapshot staging enforce exact values and keep projections", async () => {
   const t = convexTest(schema, modules)
   const owner = t.withIdentity({ tokenIdentifier: "owner" })
@@ -471,4 +648,43 @@ test("audit events name the actor and objects but never record values", async ()
         paginationOpts: { numItems: 10, cursor: null },
       })
   ).rejects.toThrow("Workspace access denied")
+})
+
+test("self references do not hide another record's reference", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const workspaceId = await owner.mutation(api.workspaces.create, {
+    name: "People",
+  })
+  const people = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "People",
+    fields: [{ id: "name", label: "Name", type: "text" }],
+  })
+  for (const id of ["manager", "mentor"])
+    await owner.mutation(api.workspaces.addField, {
+      collectionId: people,
+      field: { id, label: id, type: "recordReference", collectionId: people },
+    })
+  const lead = await owner.mutation(api.workspaces.createRecord, {
+    collectionId: people,
+    values: { name: "Lead" },
+  })
+  await owner.mutation(api.workspaces.updateRecord, {
+    collectionId: people,
+    recordId: lead,
+    expectedRevision: 1,
+    values: { name: "Lead", manager: lead, mentor: lead },
+  })
+  await owner.mutation(api.workspaces.createRecord, {
+    collectionId: people,
+    values: { name: "Report", manager: lead },
+  })
+  expect(
+    await owner.mutation(api.workspaces.deleteRecord, {
+      collectionId: people,
+      recordId: lead,
+      expectedRevision: 2,
+    })
+  ).toBe("referenced")
 })

@@ -141,7 +141,7 @@ const CompleteArtifactUpload = Tool.make("artifacts_complete_upload", {
 }).annotate(Tool.Destructive, false)
 
 const FieldsDescription =
-  'Use integer for exact money in minor units (safe integers only), with a separate currency field (three uppercase letters, e.g. USD). Keep totals separate by currency. Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), "date" (a calendar date as YYYY-MM-DD), "select" (one of the `options`), or "multiSelect" (a list of different `options`). A select or multiSelect field needs `options`: 1 to 100 different texts. Set `optional` to true when a record may leave the field out. Set `indexed` to true for fields you will filter or sort by (at most 5; indexed text is at most 200 characters; filter an indexed multiSelect field with `{ eq: option }`).'
+  'Use integer for exact money in minor units (safe integers only), with a separate currency field (three uppercase letters, e.g. USD). Keep totals separate by currency. Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), "date" (a calendar date as YYYY-MM-DD), "select" (one of the `options`), "multiSelect" (a list of different `options`), "recordReference" (the ID of a record in the collection `collectionId`, in this workspace), or "artifactReference" (the ID of an artifact in this workspace). A select or multiSelect field needs `options`: 1 to 100 different texts. A recordReference field needs `collectionId`. A referenced record or artifact cannot be deleted. Set `optional` to true when a record may leave the field out. Set `indexed` to true for fields you will filter or sort by (at most 5; indexed text is at most 200 characters; filter an indexed multiSelect field with `{ eq: option }`).'
 
 const CreateCollection = Tool.make("collections_create", {
   description: `Create a collection in the workspace. Needs the data.write scope. ${FieldsDescription} Give 1 to 50 fields.`,
@@ -156,7 +156,7 @@ const CreateCollection = Tool.make("collections_create", {
 
 const AddField = Tool.make("collections_add_field", {
   description:
-    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), "date" (a calendar date as YYYY-MM-DD), "select" (one of the `options`), or "multiSelect" (a list of different `options`). Set `indexed: true` when you will filter or sort by it. A select or multiSelect field needs `options`: 1 to 100 different texts. Returns the new schema version. Needs the data.write scope.',
+    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), "date" (a calendar date as YYYY-MM-DD), "select" (one of the `options`), "multiSelect" (a list of different `options`), "recordReference" (the ID of a record in the collection `collectionId`, in this workspace), or "artifactReference" (the ID of an artifact in this workspace). Set `indexed: true` when you will filter or sort by it. A select or multiSelect field needs `options`: 1 to 100 different texts. A recordReference field needs `collectionId`. A referenced record or artifact cannot be deleted. Returns the new schema version. Needs the data.write scope.',
   parameters: Schema.Struct({
     collectionId: Schema.String,
     field: AgentApi.NewField,
@@ -195,7 +195,7 @@ const UpdateRecord = Tool.make("records_update", {
 
 const DeleteRecord = Tool.make("records_delete", {
   description:
-    "Delete a record. You cannot undo this. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you decide to delete it. Needs the data.write scope.",
+    "Delete a record. You cannot undo this. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you decide to delete it. If another record references it, the call fails with that record ID. Needs the data.write scope.",
   parameters: Schema.Struct({
     collectionId: Schema.String,
     recordId: Schema.String,

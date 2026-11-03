@@ -326,6 +326,11 @@ http.route({
           error: `The record changed. Its revision is now ${result.revision}. Read it again before you delete it.`,
           revision: result.revision,
         })
+      if (result.status === "referenced")
+        return replyJson(409, {
+          error: `Record ${result.recordId} references this record. Change or delete that record first.`,
+          recordId: result.recordId,
+        })
       return replyJson(200, result)
     } catch {
       return reply(503, "Service unavailable")
@@ -385,7 +390,7 @@ http.route({
     if (!body)
       return replyJson(400, {
         error:
-          'Send JSON: { name, fields: [{ id, label, type }] }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", or "multiSelect". Select and multiSelect fields need options: an array of 1 to 100 texts.',
+          'Send JSON: { name, fields: [{ id, label, type }] }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", "multiSelect", "recordReference", or "artifactReference". Select and multiSelect fields need options: an array of 1 to 100 texts. A recordReference field needs collectionId.',
       })
     try {
       const result = await ctx.runMutation(
@@ -414,7 +419,7 @@ http.route({
     if (!body)
       return replyJson(400, {
         error:
-          'Send JSON: { collectionId, field: { id, label, type } }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", or "multiSelect". Select and multiSelect fields need options: an array of 1 to 100 texts.',
+          'Send JSON: { collectionId, field: { id, label, type } }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", "multiSelect", "recordReference", or "artifactReference". Select and multiSelect fields need options: an array of 1 to 100 texts. A recordReference field needs collectionId.',
       })
     try {
       const result = await ctx.runMutation(internal.agentWrites.addField, {

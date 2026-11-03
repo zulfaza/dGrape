@@ -4,6 +4,7 @@ import type {
   IndexValue,
   NewCollectionField,
 } from "../../convex/lib/collectionDomain"
+import type { Id } from "../../convex/_generated/dataModel"
 
 /**
  * Form rules for each field type: the label people see, and how a stored
@@ -23,6 +24,8 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   date: "Date",
   select: "Select",
   multiSelect: "Multi-select",
+  recordReference: "Record reference",
+  artifactReference: "Artifact reference",
 }
 
 /** The field types in the order the type pickers show them. */
@@ -36,6 +39,8 @@ export const FIELD_TYPES: ReadonlyArray<FieldType> = [
   "date",
   "select",
   "multiSelect",
+  "recordReference",
+  "artifactReference",
 ]
 
 /** Option text with one option on each line; blank lines are ignored. */
@@ -48,18 +53,25 @@ export function parseOptionLines(text: string): string[] {
 
 /**
  * A new field from form state. Only select and multi-select fields keep
- * their options; the server checks the rest.
+ * their options, and only record reference fields keep their target
+ * collection; the server checks the rest. Returns null for a record
+ * reference with no target.
  */
 export function buildField(
   id: string,
   label: string,
   type: FieldType,
   options: ReadonlyArray<string>,
+  target: Id<"collections"> | null,
   indexed: boolean
-): NewCollectionField {
+): NewCollectionField | null {
   const flags: { indexed?: true } = indexed ? { indexed } : {}
   if (type === "select" || type === "multiSelect")
     return { id, label, type, options: [...options], ...flags }
+  if (type === "recordReference")
+    return target === null
+      ? null
+      : { id, label, type, collectionId: target, ...flags }
   return { id, label, type, ...flags }
 }
 

@@ -1,8 +1,8 @@
 import { isFieldType } from "./collectionDomain"
 import type {
-  CollectionField,
+  AgentField,
+  AgentNewField,
   IndexValue,
-  NewCollectionField,
   RecordValues,
 } from "./collectionDomain"
 import type { RecordQuery } from "./recordQuery"
@@ -15,7 +15,7 @@ import type { RecordQuery } from "./recordQuery"
 
 export type CreateCollectionBody = {
   name: string
-  fields: CollectionField[]
+  fields: AgentField[]
 }
 export type CreateRecordBody = {
   collectionId: string
@@ -24,7 +24,7 @@ export type CreateRecordBody = {
 }
 export type AddFieldBody = {
   collectionId: string
-  field: NewCollectionField
+  field: AgentNewField
 }
 export type UpdateRecordBody = {
   collectionId: string
@@ -41,23 +41,30 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string")
 }
 
-/** Select fields need `options`; other fields must not have them. */
-function parseField(value: unknown): CollectionField | null {
+/**
+ * Select fields need `options` and record reference fields need the target
+ * `collectionId`; other fields must not have them.
+ */
+function parseField(value: unknown): AgentField | null {
   if (!isObject(value)) return null
-  const { id, label, type, options, optional, indexed } = value
+  const { id, label, type, options, collectionId, optional, indexed } = value
   if (typeof id !== "string" || typeof label !== "string") return null
   if (!isFieldType(type)) return null
   if (optional !== undefined && optional !== true) return null
   if (indexed !== undefined && indexed !== true) return null
-  const flags: Pick<CollectionField, "optional" | "indexed"> = {
+  const flags: Pick<AgentField, "optional" | "indexed"> = {
     ...(optional ? { optional } : {}),
     ...(indexed ? { indexed } : {}),
   }
   if (type === "select" || type === "multiSelect")
-    return isStringArray(options)
+    return isStringArray(options) && collectionId === undefined
       ? { id, label, type, options, ...flags }
       : null
-  if (options !== undefined) return null
+  if (type === "recordReference")
+    return typeof collectionId === "string" && options === undefined
+      ? { id, label, type, collectionId, ...flags }
+      : null
+  if (options !== undefined || collectionId !== undefined) return null
   return { id, label, type, ...flags }
 }
 
@@ -82,7 +89,7 @@ export function parseCreateCollection(
 ): CreateCollectionBody | null {
   if (!isObject(body) || typeof body.name !== "string") return null
   if (!Array.isArray(body.fields)) return null
-  const fields: CollectionField[] = []
+  const fields: AgentField[] = []
   for (const item of body.fields) {
     const field = parseField(item)
     if (!field) return null

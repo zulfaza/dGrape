@@ -16,12 +16,12 @@ import {
 } from "./lib/auditEvents"
 import {
   addField as addFieldToDefinition,
+  agentFieldValidator,
+  agentNewFieldValidator,
   checkCollection,
-  checkRecordValues,
-  collectionFieldValidator,
-  newCollectionFieldValidator,
   recordValuesValidator,
 } from "./lib/collectionDomain"
+import { checkRecord, resolveFields, resolveNewField } from "./lib/references"
 import {
   deleteRecord as removeRecord,
   insertRecord,
@@ -93,7 +93,7 @@ export const createCollection = internalMutation({
   args: {
     digest: v.string(),
     name: v.string(),
-    fields: v.array(collectionFieldValidator),
+    fields: v.array(agentFieldValidator),
   },
   returns: createCollectionResult,
   handler: async (
@@ -102,10 +102,12 @@ export const createCollection = internalMutation({
   ): Promise<Infer<typeof createCollectionResult>> => {
     const workspace = await writableWorkspace(ctx, digest)
     if (workspace.status !== "ok") return workspace
+    const resolved = await resolveFields(ctx, workspace.workspaceId, fields)
+    if (!resolved.ok) return reject(resolved.message)
     const budgets = await workspaceBudgets(ctx, workspace.workspaceId)
     const checked = checkCollection(
       name,
-      fields,
+      resolved.value,
       budgets.indexedFieldsPerCollection
     )
     if (!checked.ok) return reject(checked.message)
@@ -133,7 +135,7 @@ export const addField = internalMutation({
   args: {
     digest: v.string(),
     collectionId: v.string(),
-    field: newCollectionFieldValidator,
+    field: agentNewFieldValidator,
   },
   returns: addFieldResult,
   handler: async (
@@ -143,10 +145,12 @@ export const addField = internalMutation({
     const found = await writableCollection(ctx, digest, collectionId)
     if (found.status !== "ok") return found
     const { collection } = found
+    const resolved = await resolveNewField(ctx, collection.workspaceId, field)
+    if (!resolved.ok) return reject(resolved.message)
     const budgets = await workspaceBudgets(ctx, collection.workspaceId)
     const definition = addFieldToDefinition(
       collection.definition,
-      field,
+      resolved.value,
       budgets.indexedFieldsPerCollection
     )
     if (!definition.ok) return reject(definition.message)
@@ -208,7 +212,7 @@ export const createRecord = internalMutation({
           revision: existing.revision,
         }
     }
-    const checked = checkRecordValues(collection.definition.fields, values)
+    const checked = await checkRecord(ctx, collection, values)
     if (!checked.ok) return reject(checked.message)
     const overBudget = await recordBudgetProblem(ctx, collection)
     if (overBudget) return reject(overBudget)
@@ -253,7 +257,7 @@ export const updateRecord = internalMutation({
       return deny("The record does not exist in this collection.")
     if (record.revision !== args.expectedRevision)
       return { status: "conflict", revision: record.revision }
-    const checked = checkRecordValues(collection.definition.fields, args.values)
+    const checked = await checkRecord(ctx, collection, args.values)
     if (!checked.ok) return reject(checked.message)
     const revision = await replaceRecordValues(
       ctx,
@@ -274,6 +278,10 @@ export const updateRecord = internalMutation({
 const deleteRecordResult = v.union(
   denied,
   v.object({ status: v.literal("conflict"), revision: v.number() }),
+  v.object({
+    status: v.literal("referenced"),
+    recordId: v.id("collectionRecords"),
+  }),
   v.object({ status: v.literal("deleted") })
 )
 
@@ -295,7 +303,8 @@ export const deleteRecord = internalMutation({
       return deny("The record does not exist in this collection.")
     if (record.revision !== args.expectedRevision)
       return { status: "conflict", revision: record.revision }
-    await removeRecord(ctx, record._id)
+    const referencedBy = await removeRecord(ctx, record._id)
+    if (referencedBy) return { status: "referenced", recordId: referencedBy }
     await recordAuditEvent(ctx, found.collection.workspaceId, found.actor, {
       operation: "record.delete",
       collectionId: found.collection._id,

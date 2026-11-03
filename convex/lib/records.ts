@@ -8,11 +8,18 @@ import {
   startRecordCount,
   type RecordCount,
 } from "./recordCounts"
+import {
+  referencingRecord,
+  removeReferences,
+  replaceReferences,
+} from "./references"
 
 /**
  * The only write path for records. Each function keeps the record's index
- * entries (the recordIndexEntries table) and the collection's record count
- * in step with its values. Callers check access and validate `values` first.
+ * entries (the recordIndexEntries table), references (see
+ * convex/lib/references.ts), and the collection's record count in step with
+ * its values. Callers check access and validate `values` with `checkRecord`
+ * first.
  */
 
 async function replaceIndexEntries(
@@ -65,6 +72,7 @@ export async function insertRecord(
     countAfterInsert(state, record)
   )
   await replaceIndexEntries(ctx, collection, recordId, values)
+  await replaceReferences(ctx, collection, recordId, values)
   return recordId
 }
 
@@ -83,26 +91,35 @@ export async function replaceRecordValues(
     schemaVersion: collection.definition.version,
   })
   await replaceIndexEntries(ctx, collection, record._id, values)
+  await replaceReferences(ctx, collection, record._id, values)
   return revision
 }
 
+/**
+ * Deletes a record, unless another record references it. Returns the ID of
+ * such a record, or null when the record is deleted.
+ */
 export async function deleteRecord(
   ctx: MutationCtx,
   recordId: Id<"collectionRecords">
-) {
+): Promise<Id<"collectionRecords"> | null> {
   const record = await ctx.db.get(recordId)
   if (!record) throw new Error("Record missing")
   const collection = await ctx.db.get(record.collectionId)
   if (!collection) throw new Error("Collection missing")
+  const referencedBy = await referencingRecord(ctx, recordId)
+  if (referencedBy) return referencedBy
   await advanceDataRevision(ctx, collection._id, (state) =>
     countAfterDelete(state, record)
   )
   await removeIndexEntries(ctx, recordId)
+  await removeReferences(ctx, recordId)
   for await (const identity of ctx.db
     .query("recordIdentities")
     .withIndex("by_recordId", (q) => q.eq("recordId", recordId)))
     await ctx.db.delete(identity._id)
   await ctx.db.delete(recordId)
+  return null
 }
 
 /**

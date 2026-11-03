@@ -42,6 +42,7 @@ const scalarField = {
     "currency",
     "timestamp",
     "date",
+    "artifactReference",
   ]),
 }
 
@@ -51,17 +52,25 @@ const choiceField = {
   options: Schema.Array(Schema.String),
 }
 
+const recordReferenceField = {
+  ...fieldIdentity,
+  type: Schema.Literal("recordReference"),
+  collectionId: Schema.String,
+}
+
 const optional = { optional: Schema.optionalKey(Schema.Literal(true)) }
 
 /** A field to add to a collection; it is always optional. */
 export const NewField = Schema.Union([
   Schema.Struct(scalarField),
   Schema.Struct(choiceField),
+  Schema.Struct(recordReferenceField),
 ])
 
 export const Field = Schema.Union([
   Schema.Struct({ ...scalarField, ...optional }),
   Schema.Struct({ ...choiceField, ...optional }),
+  Schema.Struct({ ...recordReferenceField, ...optional }),
 ])
 
 export const WorkspaceDescription = Schema.Struct({

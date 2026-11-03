@@ -82,8 +82,9 @@ export function WorkspaceArtifacts({
     if (!window.confirm(`Delete ${name}? You cannot undo this.`)) return
     setBusy(true)
     try {
-      await remove({ artifactId })
-      toast.success("File deleted")
+      if ((await remove({ artifactId })) === "referenced")
+        toast.error("A record references this file. Change that record first.")
+      else toast.success("File deleted")
     } catch {
       toast.error("Could not delete the file")
     } finally {

@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
-import { checkRecordValues, type RecordValues } from "./collectionDomain"
+import type { RecordValues } from "./collectionDomain"
+import { checkRecord } from "./references"
 import { insertRecord, replaceRecordValues } from "./records"
 
 function key(value: string) {
@@ -25,10 +26,7 @@ export async function upsertSourceRecord(
 }> {
   key(args.source)
   key(args.key)
-  const checked = checkRecordValues(
-    args.collection.definition.fields,
-    args.values
-  )
+  const checked = await checkRecord(ctx, args.collection, args.values)
   if (!checked.ok) throw new Error(checked.message)
   const identity = await ctx.db
     .query("recordIdentities")
@@ -123,7 +121,7 @@ export async function stageSnapshotChunk(
   if (args.values.length > 10)
     throw new Error("A snapshot chunk permits at most 10 records")
   for (const values of args.values) {
-    const checked = checkRecordValues(args.collection.definition.fields, values)
+    const checked = await checkRecord(ctx, args.collection, values)
     if (!checked.ok) throw new Error(checked.message)
   }
   const canonical = JSON.stringify(

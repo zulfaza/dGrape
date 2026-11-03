@@ -29,7 +29,9 @@ const scalarFieldValidator = v.object({
     /** Integer milliseconds since 1970-01-01T00:00:00Z. */
     v.literal("timestamp"),
     /** A calendar date with no time zone, as "YYYY-MM-DD". */
-    v.literal("date")
+    v.literal("date"),
+    /** The ID of an artifact in the same workspace. */
+    v.literal("artifactReference")
   ),
 })
 
@@ -43,10 +45,21 @@ const choiceFieldValidator = v.object({
   options: v.array(v.string()),
 })
 
+/**
+ * A field whose value is the ID of a record in the collection `collectionId`,
+ * which is in the same workspace. A referenced record cannot be deleted.
+ */
+const recordReferenceFieldValidator = v.object({
+  ...fieldIdentity,
+  type: v.literal("recordReference"),
+  collectionId: v.id("collections"),
+})
+
 /** A field before it is in a collection; `addField` makes it optional. */
 export const newCollectionFieldValidator = v.union(
   scalarFieldValidator,
-  choiceFieldValidator
+  choiceFieldValidator,
+  recordReferenceFieldValidator
 )
 
 /**
@@ -58,7 +71,28 @@ const requiredness = { optional: v.optional(v.literal(true)) }
 
 export const collectionFieldValidator = v.union(
   scalarFieldValidator.extend(requiredness),
-  choiceFieldValidator.extend(requiredness)
+  choiceFieldValidator.extend(requiredness),
+  recordReferenceFieldValidator.extend(requiredness)
+)
+
+/**
+ * Field shapes as agents send them. The target collection of a record
+ * reference is any string until convex/lib/references.ts resolves it.
+ */
+const agentRecordReferenceFieldValidator = recordReferenceFieldValidator
+  .omit("collectionId")
+  .extend({ collectionId: v.string() })
+
+export const agentNewFieldValidator = v.union(
+  scalarFieldValidator,
+  choiceFieldValidator,
+  agentRecordReferenceFieldValidator
+)
+
+export const agentFieldValidator = v.union(
+  scalarFieldValidator.extend(requiredness),
+  choiceFieldValidator.extend(requiredness),
+  agentRecordReferenceFieldValidator.extend(requiredness)
 )
 
 /**
@@ -106,6 +140,8 @@ const FIELD_TYPES: Record<CollectionField["type"], true> = {
   date: true,
   select: true,
   multiSelect: true,
+  recordReference: true,
+  artifactReference: true,
 }
 
 /** Shared by HTTP parsers and human forms; field kinds keep scalar wire values. */
@@ -126,6 +162,8 @@ export function isNumericField(type: CollectionField["type"]): boolean {
 
 export type CollectionField = Infer<typeof collectionFieldValidator>
 export type NewCollectionField = Infer<typeof newCollectionFieldValidator>
+export type AgentNewField = Infer<typeof agentNewFieldValidator>
+export type AgentField = Infer<typeof agentFieldValidator>
 export type IndexValue = Infer<typeof indexValueValidator>
 export type CollectionDefinition = Infer<typeof collectionDefinitionValidator>
 export type RecordValue = Infer<typeof recordValueValidator>
@@ -137,6 +175,8 @@ export const MAX_INDEXED_FIELDS = 5
 export const MAX_INDEXED_TEXT_LENGTH = 200
 const MAX_TEXT_LENGTH = 10_000
 const MAX_RECORD_TEXT = 50_000
+/** Longer than any Convex document ID. */
+const MAX_REFERENCE_LENGTH = 100
 export const MAX_OPTIONS = 100
 export const MAX_OPTION_LENGTH = 100
 const FIELD_ID = /^[a-z][a-z0-9_]{0,63}$/
@@ -356,6 +396,17 @@ export function checkRecordValues(
           `Field "${field.id}" must be a calendar date as YYYY-MM-DD`
         )
       textLength += value.length
+    } else if (field.type === "recordReference") {
+      // convex/lib/references.ts checks that the record exists.
+      if (typeof value !== "string" || value.length > MAX_REFERENCE_LENGTH)
+        return invalid(
+          `Field "${field.id}" must be the ID of a record in collection ${field.collectionId}`
+        )
+    } else if (field.type === "artifactReference") {
+      if (typeof value !== "string" || value.length > MAX_REFERENCE_LENGTH)
+        return invalid(
+          `Field "${field.id}" must be the ID of an artifact in this workspace`
+        )
     } else if (field.type === "number") {
       if (typeof value !== "number" || !Number.isFinite(value))
         return invalid(`Field "${field.id}" must be a finite number`)
