@@ -219,7 +219,7 @@ const DeleteRecord = Tool.make("records_delete", {
 
 const ListTemplates = Tool.make("collections_templates", {
   description:
-    "List reusable job and transaction schemas. Pass a template name and fields to collections_create. Dates use YYYY-MM-DD. Money uses signed minor units; keep currencies separate.",
+    "List reusable job, transaction and GitHub activity schemas. Pass a template name and fields to collections_create. Dates use YYYY-MM-DD. Money uses signed minor units; keep currencies separate. A template with a github source needs a GitHub connection ID from the user: publish a recipe that fetches `read` with maxPages 1, maps each template field to itself, and upserts with source 'github' and the template's identityField.",
   parameters: Tool.EmptyParams,
   success: Schema.Array(
     Schema.Struct({
@@ -227,6 +227,14 @@ const ListTemplates = Tool.make("collections_templates", {
       name: Schema.String,
       description: Schema.String,
       fields: Schema.Array(AgentApi.Field),
+      source: Schema.Union([
+        Schema.Struct({ kind: Schema.Literal("manual") }),
+        Schema.Struct({
+          kind: Schema.Literal("github"),
+          read: Schema.Literal("recent_authored_pull_requests"),
+          identityField: Schema.Literal("id"),
+        }),
+      ]),
     })
   ),
 }).annotate(Tool.Readonly, true)
