@@ -3,6 +3,7 @@ import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
 import { requireMembership } from "./auth"
 import { workspaceBudgets, type Budgets } from "./budgets"
+import { recordAuditEvent, type AuditActor } from "./auditEvents"
 import { checkQuery, queryRecords, type RecordQuery } from "./recordQuery"
 
 type SaveQueryArgs = {
@@ -20,17 +21,24 @@ export async function saveQuery(
 ): Promise<{ queryId: Id<"queryDefinitions">; revision: number }> {
   const collection = await ctx.db.get(args.collectionId)
   if (!collection) throw new Error("Collection access denied")
-  await requireMembership(ctx, collection.workspaceId)
-  return saveQueryInWorkspace(ctx, collection.workspaceId, args)
+  const member = await requireMembership(ctx, collection.workspaceId)
+  return saveQueryInWorkspace(
+    ctx,
+    collection.workspaceId,
+    { kind: "user", userId: member.userId },
+    args
+  )
 }
 
 /**
  * Saves a query of a collection in `workspaceId`. The caller has already
- * proved access to the workspace (membership or an agent credential).
+ * proved access to the workspace (membership or an agent credential), and
+ * `actor` names it in the audit event.
  */
 export async function saveQueryInWorkspace(
   ctx: MutationCtx,
   workspaceId: Id<"workspaces">,
+  actor: AuditActor,
   args: SaveQueryArgs
 ): Promise<{ queryId: Id<"queryDefinitions">; revision: number }> {
   const collection = await ctx.db.get(args.collectionId)
@@ -73,6 +81,11 @@ export async function saveQueryInWorkspace(
     schemaVersion: collection.definition.version,
     resultSchema: collection.definition,
     query: checked.value,
+  })
+  await recordAuditEvent(ctx, collection.workspaceId, actor, {
+    operation: "query.save",
+    queryId,
+    revision,
   })
   return { queryId, revision }
 }

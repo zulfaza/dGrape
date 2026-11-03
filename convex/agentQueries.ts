@@ -2,6 +2,7 @@ import { v } from "convex/values"
 import { internalMutation, internalQuery } from "./_generated/server"
 import { withGrant } from "./lib/agentGrant"
 import { workspaceBudgets } from "./lib/budgets"
+import { auditActor } from "./lib/auditEvents"
 import {
   collectionDefinitionValidator,
   collectionFieldValidator,
@@ -43,13 +44,18 @@ export const save = internalMutation({
           : ctx.db.normalizeId("queryDefinitions", args.queryId)
       if (args.queryId !== undefined && !queryId)
         throw new Error("Query access denied")
-      return saveQueryInWorkspace(ctx, grant.workspaceId, {
-        collectionId,
-        name: args.name,
-        query: args.query,
-        queryId: queryId ?? undefined,
-        expectedRevision: args.expectedRevision,
-      })
+      return saveQueryInWorkspace(
+        ctx,
+        grant.workspaceId,
+        auditActor(grant.owner, grant),
+        {
+          collectionId,
+          name: args.name,
+          query: args.query,
+          queryId: queryId ?? undefined,
+          expectedRevision: args.expectedRevision,
+        }
+      )
     }),
 })
 

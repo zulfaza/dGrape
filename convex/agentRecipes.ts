@@ -26,7 +26,7 @@ export const publish = internalMutation({
       return recipes.publishForPrincipal(
         ctx,
         { ...input, workspaceId: grant.workspaceId },
-        grant.owner
+        grant
       )
     }),
 })
@@ -42,7 +42,7 @@ export const validate = internalQuery({
       recipes.validateForPrincipal(
         ctx,
         { recipe: args.recipe, workspaceId: grant.workspaceId },
-        grant.owner
+        grant
       )
     ),
 })
@@ -62,7 +62,7 @@ export const preview = internalQuery({
           sample: args.sample,
           workspaceId: grant.workspaceId,
         },
-        grant.owner
+        grant
       )
     ),
 })
@@ -80,7 +80,7 @@ export const versions = internalMutation({
       return recipes.versionsForPrincipal(
         ctx,
         { ...input, workspaceId: grant.workspaceId },
-        grant.owner
+        grant
       )
     }),
 })
@@ -95,7 +95,7 @@ export const runs = internalMutation({
       return recipes.runsForPrincipal(
         ctx,
         { ...input, workspaceId: grant.workspaceId },
-        grant.owner
+        grant
       )
     }),
 })
@@ -118,7 +118,7 @@ export const history = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
-      return recipes.historyForPrincipal(ctx, { ...input, runId }, grant.owner)
+      return recipes.historyForPrincipal(ctx, { ...input, runId }, grant)
     }),
 })
 export const trigger = internalMutation({
@@ -139,11 +139,7 @@ export const trigger = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
-      return recipes.triggerForPrincipal(
-        ctx,
-        { ...input, versionId },
-        grant.owner
-      )
+      return recipes.triggerForPrincipal(ctx, { ...input, versionId }, grant)
     }),
 })
 export const schedule = internalMutation({
@@ -164,11 +160,7 @@ export const schedule = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
-      return recipes.scheduleForPrincipal(
-        ctx,
-        { ...input, versionId },
-        grant.owner
-      )
+      return recipes.scheduleForPrincipal(ctx, { ...input, versionId }, grant)
     }),
 })
 export const schedules = internalMutation({
@@ -185,7 +177,7 @@ export const schedules = internalMutation({
       return recipes.schedulesForPrincipal(
         ctx,
         { ...input, workspaceId: grant.workspaceId },
-        grant.owner
+        grant
       )
     }),
 })
@@ -214,7 +206,7 @@ export const setEnabled = internalMutation({
       return recipes.setEnabledForPrincipal(
         ctx,
         { ...input, scheduleId },
-        grant.owner
+        grant
       )
     }),
 })
@@ -249,7 +241,7 @@ export const updateSchedule = internalMutation({
       return recipes.updateScheduleForPrincipal(
         ctx,
         { ...input, scheduleId, versionId },
-        grant.owner
+        grant
       )
     }),
 })
@@ -267,7 +259,7 @@ export const cancel = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
-      return recipes.cancelForPrincipal(ctx, { ...input, runId }, grant.owner)
+      return recipes.cancelForPrincipal(ctx, { ...input, runId }, grant)
     }),
 })
 export const retry = internalMutation({
@@ -284,7 +276,7 @@ export const retry = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
-      return recipes.retryForPrincipal(ctx, { ...input, runId }, grant.owner)
+      return recipes.retryForPrincipal(ctx, { ...input, runId }, grant)
     }),
 })
 export const setRunAccess = internalMutation({
@@ -308,7 +300,7 @@ export const setRunAccess = internalMutation({
       return recipes.setRunAccessForPrincipal(
         ctx,
         { ...input, versionId },
-        grant.owner
+        grant
       )
     }),
 })

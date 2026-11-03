@@ -13,6 +13,7 @@ import { mutation, query } from "./_generated/server"
 import { requireMembership, requireUserId } from "./lib/auth"
 import { workspaceBudgets } from "./lib/budgets"
 import { recordCountValidator } from "./lib/recordCounts"
+import { recordAuditEvent } from "./lib/auditEvents"
 import {
   addField as addFieldToDefinition,
   checkCollection,
@@ -72,6 +73,12 @@ export const create = mutation({
       userId,
       role: "owner",
     })
+    await recordAuditEvent(
+      ctx,
+      workspaceId,
+      { kind: "user", userId },
+      { operation: "workspace.create" }
+    )
     return workspaceId
   },
 })
@@ -116,7 +123,7 @@ export const createCollection = mutation({
   handler: async (ctx, { workspaceId: rawId, name, fields }) => {
     const workspaceId = ctx.db.normalizeId("workspaces", rawId)
     if (!workspaceId) throw new Error("Workspace access denied")
-    await requireMembership(ctx, workspaceId)
+    const member = await requireMembership(ctx, workspaceId)
     const budgets = await workspaceBudgets(ctx, workspaceId)
     const checked = checkCollection(
       name,
@@ -124,11 +131,18 @@ export const createCollection = mutation({
       budgets.indexedFieldsPerCollection
     )
     if (!checked.ok) throw new Error(checked.message)
-    return createVersionedCollection(ctx, {
+    const collectionId = await createVersionedCollection(ctx, {
       workspaceId,
       name: checked.value.name,
       definition: { version: 1, fields: checked.value.fields },
     })
+    await recordAuditEvent(
+      ctx,
+      workspaceId,
+      { kind: "user", userId: member.userId },
+      { operation: "collection.create", collectionId }
+    )
+    return collectionId
   },
 })
 
@@ -231,7 +245,14 @@ export const createRecord = mutation({
   handler: async (ctx, { collectionId, values }) => {
     const collection = await collectionForRecords(ctx, collectionId)
     validateRecord(collection.definition.fields, values)
-    return insertRecord(ctx, collection, values)
+    const recordId = await insertRecord(ctx, collection, values)
+    await recordAuditEvent(
+      ctx,
+      collection.workspaceId,
+      { kind: "user", userId: await requireUserId(ctx) },
+      { operation: "record.create", collectionId, recordId }
+    )
+    return recordId
   },
 })
 
@@ -255,7 +276,13 @@ export const updateRecord = mutation({
       throw new Error("Invalid revision")
     if (record.revision !== expectedRevision) return "conflict"
     validateRecord(collection.definition.fields, values)
-    await replaceRecordValues(ctx, collection, record, values)
+    const revision = await replaceRecordValues(ctx, collection, record, values)
+    await recordAuditEvent(
+      ctx,
+      collection.workspaceId,
+      { kind: "user", userId: await requireUserId(ctx) },
+      { operation: "record.update", collectionId, recordId, revision }
+    )
     return "updated"
   },
 })
@@ -272,12 +299,18 @@ export const deleteRecord = mutation({
     expectedRevision: v.number(),
   },
   handler: async (ctx, { collectionId, recordId, expectedRevision }) => {
-    await collectionForRecords(ctx, collectionId)
+    const collection = await collectionForRecords(ctx, collectionId)
     const record = await ctx.db.get(recordId)
     if (!record || record.collectionId !== collectionId)
       throw new Error("Record not found")
     if (record.revision !== expectedRevision) return "conflict"
     await removeRecord(ctx, recordId)
+    await recordAuditEvent(
+      ctx,
+      collection.workspaceId,
+      { kind: "user", userId: await requireUserId(ctx) },
+      { operation: "record.delete", collectionId, recordId }
+    )
     return "deleted"
   },
 })
@@ -302,6 +335,16 @@ export const addField = mutation({
     )
     if (!definition.ok) throw new Error(definition.message)
     await publishCompatibleSchema(ctx, collection, definition.value)
+    await recordAuditEvent(
+      ctx,
+      collection.workspaceId,
+      { kind: "user", userId: await requireUserId(ctx) },
+      {
+        operation: "collection.addField",
+        collectionId,
+        version: definition.value.version,
+      }
+    )
     return null
   },
 })

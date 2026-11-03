@@ -239,3 +239,77 @@ test("templates create valid collections through HTTP and MCP contracts", async 
   }
   expect(collectionTemplates()[0]?.fields[0]?.label).toBe("Company")
 })
+
+test("audit events name the actor and objects but never record values", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const workspaceId = await owner.mutation(api.workspaces.create, {
+    name: "Audited",
+  })
+  const collectionId = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Transactions",
+    fields,
+  })
+  const recordId = await owner.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { amount_minor: 4242, currency: "USD" },
+  })
+  const grantId = await t.run((ctx) =>
+    ctx.db.insert("agentGrants", {
+      workspaceId,
+      owner: "owner",
+      digest: "digest-x9",
+      scope: "readwrite",
+      state: "active",
+      expiresAt: Date.now() + 60_000,
+    })
+  )
+  const created = await t.mutation(internal.agentWrites.createRecord, {
+    digest: "digest-x9",
+    collectionId,
+    values: { amount_minor: 7, currency: "EUR" },
+    idempotencyKey: "once",
+  })
+  if (created.status !== "created") throw new Error("Agent write failed")
+  // A retry and a rejected write change nothing, so they add no event.
+  await t.mutation(internal.agentWrites.createRecord, {
+    digest: "digest-x9",
+    collectionId,
+    values: { amount_minor: 7, currency: "EUR" },
+    idempotencyKey: "once",
+  })
+  await t.mutation(internal.agentWrites.createRecord, {
+    digest: "digest-x9",
+    collectionId,
+    values: { amount_minor: 0.5, currency: "EUR" },
+  })
+  const events = await owner.query(api.auditEvents.list, {
+    workspaceId,
+    paginationOpts: { numItems: 10, cursor: null },
+  })
+  const user = { kind: "user", userId: "owner" }
+  expect(events.page.map(({ actor, event }) => ({ actor, event }))).toEqual([
+    {
+      actor: { kind: "agent", grantId, registrationId: null, owner: "owner" },
+      event: { operation: "record.create", collectionId, recordId: created.id },
+    },
+    {
+      actor: user,
+      event: { operation: "record.create", collectionId, recordId },
+    },
+    { actor: user, event: { operation: "collection.create", collectionId } },
+    { actor: user, event: { operation: "workspace.create" } },
+  ])
+  const stored = JSON.stringify(events.page)
+  for (const secret of ["4242", "EUR", "USD", "digest-x9", "Transactions"])
+    expect(stored).not.toContain(secret)
+  await expect(
+    t
+      .withIdentity({ tokenIdentifier: "stranger" })
+      .query(api.auditEvents.list, {
+        workspaceId,
+        paginationOpts: { numItems: 10, cursor: null },
+      })
+  ).rejects.toThrow("Workspace access denied")
+})

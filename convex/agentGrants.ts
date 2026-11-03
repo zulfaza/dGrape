@@ -13,6 +13,7 @@ import { agentScopeValidator } from "./lib/agentScope"
 import { capabilitiesFor, capabilityValidator } from "./lib/agentCapabilities"
 import { resolveGrant } from "./lib/agentGrant"
 import { requireMembership } from "./lib/auth"
+import { recordAuditEvent } from "./lib/auditEvents"
 import {
   collectionFieldValidator,
   collectionRecordValidator,
@@ -69,7 +70,7 @@ export const insert = internalMutation({
       .take(MAX_ACTIVE_GRANTS)
     if (active.length >= MAX_ACTIVE_GRANTS)
       throw new Error("Grant limit reached")
-    await ctx.db.insert("agentGrants", {
+    const grantId = await ctx.db.insert("agentGrants", {
       workspaceId: args.workspaceId,
       owner: args.owner,
       digest: args.digest,
@@ -77,6 +78,12 @@ export const insert = internalMutation({
       state: "active",
       expiresAt: now + args.days * DAY_MS,
     })
+    await recordAuditEvent(
+      ctx,
+      args.workspaceId,
+      { kind: "user", userId: args.owner },
+      { operation: "agentGrant.create", grantId, scope: args.scope }
+    )
     return null
   },
 })
@@ -129,6 +136,12 @@ export const revoke = mutation({
     )
       throw new Error("Access denied")
     await ctx.db.patch(grantId, { state: "revoked" })
+    await recordAuditEvent(
+      ctx,
+      workspaceId,
+      { kind: "user", userId: member.userId },
+      { operation: "agentGrant.revoke", grantId }
+    )
     return null
   },
 })

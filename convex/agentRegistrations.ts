@@ -11,6 +11,7 @@ import { keyedDigest, sha256 } from "./lib/agentAuthCrypto"
 import { codeKey, workosApiKey } from "./lib/agentAuthConfig"
 import { agentScopeValidator } from "./lib/agentScope"
 import { requireMembership, requireUserId } from "./lib/auth"
+import { recordAuditEvent } from "./lib/auditEvents"
 import {
   ACCESS_TOKEN_LIFETIME_MS,
   CLAIM_ATTEMPT_MS,
@@ -194,6 +195,16 @@ export const completeClaim = internalMutation({
       scope: args.scope,
       claimedAt: args.now,
     })
+    await recordAuditEvent(
+      ctx,
+      args.workspaceId,
+      { kind: "user", userId: args.owner },
+      {
+        operation: "agentRegistration.claim",
+        registrationId: registration._id,
+        scope: args.scope,
+      }
+    )
     return "claimed"
   },
 })
@@ -542,6 +553,12 @@ export const revokeRegistration = mutation({
       workspaceId: registration.workspaceId,
       revokedAt: Date.now(),
     })
+    await recordAuditEvent(
+      ctx,
+      workspaceId,
+      { kind: "user", userId: member.userId },
+      { operation: "agentRegistration.revoke", registrationId }
+    )
     return null
   },
 })

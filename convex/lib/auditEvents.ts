@@ -75,6 +75,11 @@ export const auditEventValidator = v.union(
     scheduleId: v.id("recipeSchedules"),
     versionId: v.id("recipeVersions"),
   }),
+  op("schedule.update", {
+    scheduleId: v.id("recipeSchedules"),
+    versionId: v.id("recipeVersions"),
+    revision: v.number(),
+  }),
   op("schedule.setEnabled", {
     scheduleId: v.id("recipeSchedules"),
     enabled: v.boolean(),
@@ -82,6 +87,10 @@ export const auditEventValidator = v.union(
   op("run.trigger", {
     runId: v.id("recipeRuns"),
     versionId: v.id("recipeVersions"),
+  }),
+  op("run.retry", {
+    runId: v.id("recipeRuns"),
+    retryOf: v.id("recipeRuns"),
   }),
   op("run.cancel", { runId: v.id("recipeRuns") }),
   op("connection.create", { connectionId: v.id("connections") }),

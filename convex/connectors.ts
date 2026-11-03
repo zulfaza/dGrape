@@ -16,6 +16,7 @@ import {
 } from "./_generated/server"
 import { resolveGrant } from "./lib/agentGrant"
 import { requireMembership, requireUserId } from "./lib/auth"
+import { recordAuditEvent } from "./lib/auditEvents"
 import {
   checkOrigin,
   checkRoute,
@@ -417,12 +418,19 @@ export const create = mutation({
     if (!origins.includes(args.origin))
       throw new Error("This origin is not approved")
     args.routes.forEach(checkRoute)
-    return ctx.db.insert("connections", {
+    const connectionId = await ctx.db.insert("connections", {
       ...args,
       kind: "http",
       label: safeLabel(args.label),
       createdBy: member.userId,
     })
+    await recordAuditEvent(
+      ctx,
+      args.workspaceId,
+      { kind: "user", userId: member.userId },
+      { operation: "connection.create", connectionId }
+    )
+    return connectionId
   },
 })
 /** The credential must be a GitHub token with read access only; no route is configurable. */
@@ -435,12 +443,19 @@ export const createGithub = mutation({
   returns: v.id("connections"),
   handler: async (ctx, args) => {
     const member = await requireOwnSecret(ctx, args.workspaceId, args.secretRef)
-    return ctx.db.insert("connections", {
+    const connectionId = await ctx.db.insert("connections", {
       ...args,
       kind: "github",
       label: safeLabel(args.label),
       createdBy: member.userId,
     })
+    await recordAuditEvent(
+      ctx,
+      args.workspaceId,
+      { kind: "user", userId: member.userId },
+      { operation: "connection.create", connectionId }
+    )
+    return connectionId
   },
 })
 export const grantUse = mutation({
@@ -470,6 +485,18 @@ export const grantUse = mutation({
         userId: args.userId,
         secretUse: args.secretUse,
       })
+    await recordAuditEvent(
+      ctx,
+      connection.workspaceId,
+      { kind: "user", userId: connection.createdBy },
+      {
+        operation: "connection.grantUse",
+        connectionId: connection._id,
+        userId: args.userId,
+        allowed: args.allowed,
+        secretUse: args.secretUse,
+      }
+    )
     return null
   },
 })
@@ -483,6 +510,12 @@ export const remove = mutation({
     if (connection.createdBy !== (await requireUserId(ctx)))
       throw new Error("Connection access denied")
     await ctx.db.delete(connection._id)
+    await recordAuditEvent(
+      ctx,
+      connection.workspaceId,
+      { kind: "user", userId: connection.createdBy },
+      { operation: "connection.remove", connectionId: connection._id }
+    )
     return null
   },
 })

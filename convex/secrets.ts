@@ -10,6 +10,7 @@ import {
   mutation,
 } from "./_generated/server"
 import { requireMembership, requireUserId } from "./lib/auth"
+import { recordAuditEvent } from "./lib/auditEvents"
 import { safeLabel, secretOwner, secretState } from "./lib/secretDomain"
 import type { Doc } from "./_generated/dataModel"
 import type { QueryCtx } from "./_generated/server"
@@ -97,6 +98,12 @@ export const prepare = mutation({
         previousName: null,
       },
     })
+    await recordAuditEvent(
+      ctx,
+      args.workspaceId,
+      { kind: "user", userId: member.userId },
+      { operation: "secret.prepare", secretId: id }
+    )
     return id
   },
 })
@@ -118,6 +125,16 @@ export const rotate = mutation({
         previousName: secret.state.name,
       },
     })
+    await recordAuditEvent(
+      ctx,
+      secret.workspaceId,
+      { kind: "user", userId: secret.createdBy },
+      {
+        operation: "secret.rotate",
+        secretId: secret._id,
+        revision: secret.revision + 1,
+      }
+    )
     return null
   },
 })
@@ -190,6 +207,13 @@ export const beginDelete = mutation({
       await ctx.db.patch(secret._id, {
         state: { kind: "deleting", names: [secret.state.name] },
       })
+    if (secret.state.kind === "pending" || secret.state.kind === "ready")
+      await recordAuditEvent(
+        ctx,
+        secret.workspaceId,
+        { kind: "user", userId: secret.createdBy },
+        { operation: "secret.delete", secretId: secret._id }
+      )
     return null
   },
 })
