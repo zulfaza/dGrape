@@ -21,6 +21,33 @@ import {
   validateTiming,
 } from "./lib/recipeSchedule"
 
+/** A bounded output token detects writes made while a recipe fetches data. */
+export async function recipeOutputToken(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">,
+  collectionId: string
+) {
+  const id = ctx.db.normalizeId("collections", collectionId)
+  const collection = id ? await ctx.db.get(id) : null
+  if (!collection || collection.workspaceId !== workspaceId)
+    throw new Error("Output collection access denied")
+  const records = await ctx.db
+    .query("collectionRecords")
+    .withIndex("by_collection", (q) => q.eq("collectionId", collection._id))
+    .take(101)
+  if (records.length > 100)
+    throw new Error("Recipe output permits at most 100 existing rows")
+  const publication = await ctx.db
+    .query("snapshotPublications")
+    .withIndex("by_collectionId", (q) => q.eq("collectionId", collection._id))
+    .unique()
+  return JSON.stringify({
+    definition: collection.definition,
+    records: records.map((r) => [r._id, r.revision]),
+    generation: publication?.generation ?? null,
+  })
+}
+
 const LEASE_MS = 120_000
 const ACTIVE_LIMIT = 4
 const terminal = (run: Doc<"recipeRuns">) =>
@@ -315,7 +342,15 @@ export const begin = internalMutation({
       return null
     }
     if (run.state === "running") return run
+    const version = await ctx.db.get(run.versionId)
+    if (!version) throw new Error("Recipe missing")
+    const output = version.recipe.steps.at(-1)
+    const outputToken =
+      output && (output.kind === "upsert" || output.kind === "snapshot")
+        ? await recipeOutputToken(ctx, run.workspaceId, output.collectionId)
+        : undefined
     const patch = {
+      outputToken,
       state: "running",
       startedAt: now,
       leaseUntil: now + LEASE_MS,
@@ -324,7 +359,7 @@ export const begin = internalMutation({
     return { ...run, ...patch }
   },
 })
-async function runningRun(
+export async function runningRun(
   ctx: MutationCtx,
   runId: Id<"recipeRuns">,
   epoch: number

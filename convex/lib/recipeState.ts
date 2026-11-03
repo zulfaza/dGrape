@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server"
 import { v } from "convex/values"
+import { recordValuesValidator } from "./collectionDomain"
 import { recipeValidator } from "./recipeDomain"
 import { recipeTimingValidator } from "./recipeSchedule"
 
@@ -12,6 +13,12 @@ export const runStateValidator = v.union(
   v.literal("skipped")
 )
 export const recipeTables = {
+  recipeCheckpoints: defineTable({
+    runId: v.id("recipeRuns"),
+    step: v.number(),
+    rows: v.array(recordValuesValidator),
+    sourceCursor: v.optional(v.union(v.string(), v.null())),
+  }).index("by_runId_and_step", ["runId", "step"]),
   recipeVersions: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),
@@ -38,6 +45,7 @@ export const recipeTables = {
     leaseUntil: v.number(),
     epoch: v.number(),
     nextStep: v.number(),
+    outputToken: v.optional(v.string()),
     startedAt: v.optional(v.number()),
     finishedAt: v.optional(v.number()),
   })

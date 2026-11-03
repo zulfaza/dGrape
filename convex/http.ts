@@ -1,4 +1,5 @@
 import { collectionTemplates } from "./lib/collectionTemplates"
+import { registerRecipeRoutes } from "./recipeHttp"
 import { httpRouter } from "convex/server"
 import type { Id } from "./_generated/dataModel"
 import { httpAction, type ActionCtx } from "./_generated/server"
@@ -134,6 +135,7 @@ http.route({
     Response.json(collectionTemplates(), { headers: corsHeaders })
   ),
 })
+registerRecipeRoutes(http)
 http.route({ path: "/agent/workspace", method: "OPTIONS", handler: preflight })
 http.route({
   path: "/agent/workspace",

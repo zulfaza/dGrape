@@ -117,6 +117,9 @@ importers:
       '@cloudflare/vite-plugin':
         specifier: 2.0.0-beta.v.9
         version: 2.0.0-beta.v.9(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.27.0)(jiti@2.7.0))(workerd@1.20261023.1)
+      '@cloudflare/workers-types':
+        specifier: ^5.20261102.1
+        version: 5.20261102.1
       '@edge-runtime/vm':
         specifier: ^5.0.0
         version: 5.0.0
@@ -523,6 +526,9 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
+
+  '@cloudflare/workers-types@5.20261102.1':
+    resolution: {integrity: sha512-rRNznLGla+8vRdToTN/5M+AzlopILSLLZ3qo2L5Ku/dY792iOlX/K9ZLkLnLYji1jycv7+FB12hiE+fFjVgMrw==}
 
   '@convex-dev/action-retrier@0.3.1':
     resolution: {integrity: sha512-uji7ZV4GYN24fgnV9FrXABbq2mWCpcMohkEa2ie1zmD5S7ioSxNNBE0lNPB1jlMzICqWCTrbSTr68bgJPag6Ww==}
@@ -5643,6 +5649,8 @@ snapshots:
 
   '@cloudflare/workerd-windows-64@1.20261101.1':
     optional: true
+
+  '@cloudflare/workers-types@5.20261102.1': {}
 
   '@convex-dev/action-retrier@0.3.1(convex@1.49.0(react@19.3.1))':
     dependencies:
