@@ -14,7 +14,11 @@ export const collectionFieldValidator = v.object({
     v.literal("number"),
     v.literal("integer"),
     v.literal("currency"),
-    v.literal("boolean")
+    v.literal("boolean"),
+    /** Integer milliseconds since 1970-01-01T00:00:00Z. */
+    v.literal("timestamp"),
+    /** A calendar date with no time zone, as "YYYY-MM-DD". */
+    v.literal("date")
   ),
   /**
    * When true, a record may leave this field out. When absent, every record
@@ -55,15 +59,20 @@ export const collectionRecordValidator = v.object({
   idempotencyKey: v.optional(v.string()),
 })
 
+/** Every field type; the `Record` type makes the list complete. */
+const FIELD_TYPES: Record<CollectionField["type"], true> = {
+  text: true,
+  number: true,
+  boolean: true,
+  integer: true,
+  currency: true,
+  timestamp: true,
+  date: true,
+}
+
 /** Shared by HTTP parsers and human forms; field kinds keep scalar wire values. */
 export function isFieldType(value: unknown): value is CollectionField["type"] {
-  return (
-    value === "text" ||
-    value === "number" ||
-    value === "boolean" ||
-    value === "integer" ||
-    value === "currency"
-  )
+  return typeof value === "string" && Object.hasOwn(FIELD_TYPES, value)
 }
 
 export function isNumericField(type: CollectionField["type"]): boolean {
@@ -82,6 +91,21 @@ export const MAX_INDEXED_TEXT_LENGTH = 200
 const MAX_TEXT_LENGTH = 10_000
 const MAX_RECORD_TEXT = 50_000
 const FIELD_ID = /^[a-z][a-z0-9_]{0,63}$/
+/** The range of a JavaScript `Date`, in milliseconds from the epoch. */
+const MAX_TIMESTAMP = 8_640_000_000_000_000
+
+/** True for a real calendar date written as "YYYY-MM-DD". */
+export function isDateOnly(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return false
+  const [year, month, day] = [match[1], match[2], match[3]].map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  )
+}
 
 /** A checked value, or a message that says what to fix. */
 export type Checked<A> =
@@ -208,6 +232,21 @@ export function checkRecordValues(
         return invalid(
           `Field "${field.id}" must be a safe integer (minor units for money)`
         )
+    } else if (field.type === "timestamp") {
+      if (
+        typeof value !== "number" ||
+        !Number.isSafeInteger(value) ||
+        Math.abs(value) > MAX_TIMESTAMP
+      )
+        return invalid(
+          `Field "${field.id}" must be a timestamp: integer milliseconds since 1970-01-01T00:00:00Z`
+        )
+    } else if (field.type === "date") {
+      if (typeof value !== "string" || !isDateOnly(value))
+        return invalid(
+          `Field "${field.id}" must be a calendar date as YYYY-MM-DD`
+        )
+      textLength += value.length
     } else if (field.type === "number") {
       if (typeof value !== "number" || !Number.isFinite(value))
         return invalid(`Field "${field.id}" must be a finite number`)

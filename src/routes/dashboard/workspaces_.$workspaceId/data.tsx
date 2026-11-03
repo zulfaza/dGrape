@@ -6,6 +6,7 @@ import type { Id } from "../../../../convex/_generated/dataModel"
 import { CollectionRecords } from "@/components/collection-records"
 import { CreateCollectionDialog } from "@/components/create-collection-dialog"
 import { Mascot } from "@/components/mascot"
+import { FIELD_TYPE_LABELS } from "@/lib/field-types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,14 +21,6 @@ import {
 export const Route = createFileRoute(
   "/dashboard/workspaces_/$workspaceId/data"
 )({ component: DataSection })
-
-const FIELD_TYPE_LABELS = {
-  text: "Text",
-  number: "Number",
-  integer: "Integer / minor units",
-  currency: "Currency code",
-  boolean: "Yes / no",
-}
 
 function DataSection() {
   const { workspaceId } = Route.useParams()

@@ -1,5 +1,4 @@
 import { RecordArtifacts } from "./record-artifacts"
-import { Match } from "effect"
 import {
   isNumericField,
   checkRecordValues,
@@ -51,6 +50,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/toast"
+import {
+  fromInputText,
+  inputStep,
+  inputType,
+  timestampInputText,
+} from "@/lib/field-types"
 
 type Values = Doc<"collectionRecords">["values"]
 type Field = Doc<"collections">["definition"]["fields"][number]
@@ -72,12 +77,22 @@ function initialValues(fields: Field[]): Draft["values"] {
   )
 }
 
-function editValues(values: Values): Draft["values"] {
+function editValues(fields: Field[], values: Values): Draft["values"] {
   return Object.fromEntries(
-    Object.entries(values).map(([key, value]) => [
-      key,
-      typeof value === "number" ? String(value) : value,
-    ])
+    fields.flatMap((field) => {
+      const value = values[field.id]
+      if (value === undefined) return []
+      return [
+        [
+          field.id,
+          field.type === "timestamp" && typeof value === "number"
+            ? timestampInputText(value)
+            : typeof value === "boolean"
+              ? value
+              : String(value),
+        ],
+      ]
+    })
   )
 }
 
@@ -126,16 +141,13 @@ export function CollectionRecords({
       const value = draft.values[field.id]
       // An empty optional field has no value, so the record leaves it out.
       if (field.optional && (value === undefined || value === "")) continue
-      if (isNumericField(field.type)) {
-        if (
-          typeof value !== "string" ||
-          value.trim() === "" ||
-          !Number.isFinite(Number(value))
-        ) {
-          toast.error("Enter a valid number")
+      if (typeof value === "string") {
+        const parsed = fromInputText(field.type, value)
+        if (!parsed.ok) {
+          toast.error(parsed.message)
           return
         }
-        values[field.id] = Number(value)
+        values[field.id] = parsed.value
       } else if (value !== undefined) values[field.id] = value
     }
     const checked = checkRecordValues(
@@ -322,7 +334,10 @@ export function CollectionRecords({
                       size="sm"
                       disabled={saving}
                       onClick={() =>
-                        openDraft({ record, values: editValues(record.values) })
+                        openDraft({
+                          record,
+                          values: editValues(fields, record.values),
+                        })
                       }
                     >
                       Edit
@@ -442,14 +457,12 @@ export function CollectionRecords({
                       <Input
                         disabled={saving}
                         id={`record-${field.id}`}
-                        type={isNumericField(field.type) ? "number" : "text"}
-                        step={Match.value(field.type).pipe(
-                          Match.when("integer", () => 1),
-                          Match.when("number", () => "any"),
-                          Match.orElse(() => undefined)
-                        )}
+                        type={inputType(field.type)}
+                        step={inputStep(field.type)}
                         maxLength={field.type === "text" ? 10000 : undefined}
-                        required={isNumericField(field.type) && !field.optional}
+                        required={
+                          !field.optional && inputType(field.type) !== "text"
+                        }
                         value={String(draft.values[field.id] ?? "")}
                         onChange={(e) =>
                           setDraft({
@@ -482,7 +495,7 @@ export function CollectionRecords({
                         if (latest)
                           openDraft({
                             record: latest,
-                            values: editValues(latest.values),
+                            values: editValues(fields, latest.values),
                           })
                       }}
                     >
@@ -551,10 +564,15 @@ export function CollectionRecords({
   )
 }
 
-/** Shows a stored value as text; booleans read as Yes or No. */
+/**
+ * Shows a stored value as text: booleans read as Yes or No, and timestamps
+ * in local time.
+ */
 function formatValue(field: Field, value: Values[string] | undefined) {
   if (value === undefined) return ""
   if (field.type === "boolean") return value === true ? "Yes" : "No"
+  if (field.type === "timestamp" && typeof value === "number")
+    return new Date(value).toLocaleString()
   if (typeof value === "number") return value.toLocaleString()
   return String(value)
 }

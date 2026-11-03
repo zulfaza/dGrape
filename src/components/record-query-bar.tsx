@@ -1,8 +1,4 @@
-import { Match } from "effect"
-import {
-  isNumericField,
-  checkRecordValues,
-} from "../../convex/lib/collectionDomain"
+import { checkRecordValues } from "../../convex/lib/collectionDomain"
 import { useState, type FormEvent } from "react"
 import type { Doc } from "../../convex/_generated/dataModel"
 import type { RecordQuery } from "../../convex/lib/recordQuery"
@@ -18,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "@/components/ui/toast"
+import { fromInputText, inputStep, inputType } from "@/lib/field-types"
 
 type Field = Doc<"collections">["definition"]["fields"][number]
 type Order = RecordQuery["order"]
@@ -62,26 +59,17 @@ export function RecordQueryBar({
       onChange({ fieldId: query.fieldId, order: query.order })
       return
     }
-    if (isNumericField(field.type)) {
-      const value = Number(filterText)
-      if (filterText.trim() === "" || !Number.isFinite(value)) {
-        toast.error("Enter a valid number")
-        return
-      }
-      const checked = checkRecordValues([field], { [field.id]: value })
-      if (!checked.ok) {
-        toast.error(checked.message)
-        return
-      }
-      onChange({ ...query, where: { eq: value } })
-    } else {
-      const checked = checkRecordValues([field], { [field.id]: filterText })
-      if (!checked.ok) {
-        toast.error(checked.message)
-        return
-      }
-      onChange({ ...query, where: { eq: filterText } })
+    const parsed = fromInputText(field.type, filterText)
+    if (!parsed.ok) {
+      toast.error(parsed.message)
+      return
     }
+    const checked = checkRecordValues([field], { [field.id]: parsed.value })
+    if (!checked.ok) {
+      toast.error(checked.message)
+      return
+    }
+    onChange({ ...query, where: { eq: parsed.value } })
   }
 
   return (
@@ -161,12 +149,8 @@ export function RecordQueryBar({
                 <Input
                   id="query-equals"
                   className="w-44"
-                  type={isNumericField(field.type) ? "number" : "text"}
-                  step={Match.value(field.type).pipe(
-                    Match.when("integer", () => 1),
-                    Match.when("number", () => "any"),
-                    Match.orElse(() => undefined)
-                  )}
+                  type={inputType(field.type)}
+                  step={inputStep(field.type)}
                   maxLength={200}
                   placeholder="Any value"
                   value={filterText}
