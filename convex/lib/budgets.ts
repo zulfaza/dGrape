@@ -1,6 +1,7 @@
 import { v, type Infer } from "convex/values"
 import type { Id } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
+import { MAX_ARTIFACT_BYTES } from "./artifactDomain"
 import { MAX_INDEXED_FIELDS, type Checked } from "./collectionDomain"
 
 /**
@@ -19,6 +20,8 @@ export const budgetsValidator = v.object({
   indexedFieldsPerCollection: v.number(),
   queryRowsRead: v.number(),
   queryBytesRead: v.number(),
+  artifactFileBytes: v.number(),
+  artifactTotalBytes: v.number(),
 })
 export const budgetOverridesValidator = budgetsValidator.partial()
 
@@ -63,6 +66,20 @@ export const BUDGET_SPECS = {
     default: 1_000_000,
     max: 1_000_000,
   },
+  artifactFileBytes: {
+    label: "Bytes per artifact file",
+    unit: "bytes",
+    min: 1,
+    default: MAX_ARTIFACT_BYTES,
+    max: MAX_ARTIFACT_BYTES,
+  },
+  artifactTotalBytes: {
+    label: "Artifact bytes per workspace",
+    unit: "bytes",
+    min: 0,
+    default: 1024 ** 3,
+    max: 10 * 1024 ** 3,
+  },
 } satisfies { readonly [K in BudgetKey]: BudgetSpec }
 
 const isBudgetKey = (key: string): key is BudgetKey =>
@@ -85,6 +102,8 @@ export function effectiveBudgets(
     indexedFieldsPerCollection: budget(overrides, "indexedFieldsPerCollection"),
     queryRowsRead: budget(overrides, "queryRowsRead"),
     queryBytesRead: budget(overrides, "queryBytesRead"),
+    artifactFileBytes: budget(overrides, "artifactFileBytes"),
+    artifactTotalBytes: budget(overrides, "artifactTotalBytes"),
   }
 }
 

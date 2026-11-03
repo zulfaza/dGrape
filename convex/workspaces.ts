@@ -11,6 +11,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import type { QueryCtx } from "./_generated/server"
 import { mutation, query } from "./_generated/server"
 import { requireMembership, requireUserId } from "./lib/auth"
+import { EMPTY_ARTIFACT_USAGE } from "./lib/artifactUsage"
 import { workspaceBudgets } from "./lib/budgets"
 import { recordCountValidator } from "./lib/recordCounts"
 import { recordAuditEvent } from "./lib/auditEvents"
@@ -68,6 +69,10 @@ export const create = mutation({
     if (trimmed.length === 0 || trimmed.length > 100)
       throw new Error("Name must be between 1 and 100 characters")
     const workspaceId = await ctx.db.insert("workspaces", { name: trimmed })
+    await ctx.db.insert("workspaceUsage", {
+      workspaceId,
+      artifacts: EMPTY_ARTIFACT_USAGE,
+    })
     await ctx.db.insert("workspaceMembers", {
       workspaceId,
       userId,
