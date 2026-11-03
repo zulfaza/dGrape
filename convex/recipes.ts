@@ -185,6 +185,26 @@ export const versions = query({
   returns: versionsResult,
   handler: (ctx, args) => versionsForPrincipal(ctx, args),
 })
+/** Permissions use the verified caller, separate from recipe run grants. */
+export const permissions = query({
+  args: { versionId: v.id("recipeVersions") },
+  returns: v.object({ canManage: v.boolean(), canRun: v.boolean() }),
+  handler: async (ctx, { versionId }) => {
+    const version = await ctx.db.get(versionId)
+    if (!version) throw new Error("Recipe not found")
+    const member = await requireMembership(ctx, version.workspaceId)
+    const canManage = member.userId === version.createdBy
+    const grant = canManage
+      ? null
+      : await ctx.db
+          .query("recipeRunGrants")
+          .withIndex("by_versionId_and_userId", (q) =>
+            q.eq("versionId", versionId).eq("userId", member.userId)
+          )
+          .unique()
+    return { canManage, canRun: canManage || grant !== null }
+  },
+})
 export const runsArgs = v.object({
   workspaceId: v.id("workspaces"),
   paginationOpts: paginationOptsValidator,

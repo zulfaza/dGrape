@@ -9,6 +9,7 @@ import { ConnectedAgents } from "@/components/connected-agents"
 import { WorkspacePages } from "@/components/workspace-pages"
 import { WorkspaceConnections } from "@/components/workspace-connections"
 import { WorkspaceArtifacts } from "@/components/workspace-artifacts"
+import { WorkspaceRecipes } from "@/components/workspace-recipes"
 import { CollectionRecords } from "@/components/collection-records"
 import { CreateCollectionDialog } from "@/components/create-collection-dialog"
 import { Mascot } from "@/components/mascot"
@@ -173,6 +174,7 @@ function WorkspacePage() {
         )}
         {workspace && <WorkspaceConnections workspaceId={workspace._id} />}
         {workspace && <WorkspaceArtifacts workspaceId={workspace._id} />}
+        {workspace && <WorkspaceRecipes workspaceId={workspace._id} />}
         {workspace && (
           <AgentAccessBoundary key={workspace._id}>
             <AgentAccess workspaceId={workspace._id} />
