@@ -231,6 +231,7 @@ test("references stay in their workspace, and a referenced record or artifact ca
     parseCreateCollection({ name: "Jobs", fields: [reference] })?.fields
   ).toEqual([reference])
   expect(Schema.decodeUnknownSync(Field)(reference)).toEqual(reference)
+  expect(Schema.decodeUnknownSync(Queries.Field)(reference)).toEqual(reference)
   expect(
     parseCreateCollection({
       name: "Bad",

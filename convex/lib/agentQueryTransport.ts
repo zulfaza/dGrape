@@ -40,12 +40,18 @@ export const Field = Schema.Union([
       "currency",
       "timestamp",
       "date",
+      "artifactReference",
     ]),
   }),
   Schema.Struct({
     ...fieldIdentity,
     type: Schema.Literals(["select", "multiSelect"]),
     options: Schema.Array(Schema.String),
+  }),
+  Schema.Struct({
+    ...fieldIdentity,
+    type: Schema.Literal("recordReference"),
+    collectionId: Schema.String,
   }),
 ])
 const Limit = Schema.Int.check(
