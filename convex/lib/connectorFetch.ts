@@ -33,8 +33,13 @@ function at(body: Schema.Json, path: readonly string[]) {
   return value
 }
 /** A Link cursor must stay on the route: same origin and path, no credentials. */
-function onRoute(raw: string, config: ConnectorConfig, route: ConnectorRoute) {
-  const url = new URL(raw, config.origin)
+function onRoute(
+  raw: string,
+  base: URL | string,
+  config: ConnectorConfig,
+  route: ConnectorRoute
+) {
+  const url = new URL(raw, base)
   if (
     url.origin !== config.origin ||
     url.pathname !== route.path ||
@@ -86,7 +91,7 @@ function requestUrl(
       url.searchParams.set(mapping.next.param, input.cursor)
       return url
     case "link": {
-      const next = onRoute(input.cursor, config, route)
+      const next = onRoute(input.cursor, config.origin, config, route)
       if ([...next.searchParams.keys()].length > 20) throw denied()
       for (const [key, value] of next.searchParams) {
         if (!route.queryKeys.includes(key) || value.length > 2048)
@@ -190,7 +195,8 @@ export function fetchConnectorPage(
         if (mapping.next.kind === "link") {
           const link = nextLink(response.headers.get("link"))
           if (link !== null)
-            nextCursor = parseCursor(onRoute(link, config, route).href) ?? null
+            nextCursor =
+              parseCursor(onRoute(link, url, config, route).href) ?? null
         }
         const parseValue = Schema.decodeUnknownSync(
           Schema.Union([

@@ -506,6 +506,8 @@ describe("connector response mapping and pagination", () => {
     })
     expect(second.page.nextCursor).toBeNull()
     expect(second.urls[0]?.searchParams.get("page")).toBe("2")
+    const relative = await fetchWith(link, linked("?page=3"))
+    expect(relative.page.nextCursor).toBe(`${config.origin}/items?page=3`)
     for (const next of [
       "https://evil.example/items?page=2",
       `${config.origin}/other?page=2`,
