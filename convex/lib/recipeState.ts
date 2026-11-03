@@ -13,6 +13,10 @@ export const runStateValidator = v.union(
   v.literal("skipped")
 )
 export const recipeTables = {
+  recipeRunGrants: defineTable({
+    versionId: v.id("recipeVersions"),
+    userId: v.string(),
+  }).index("by_versionId_and_userId", ["versionId", "userId"]),
   recipeCheckpoints: defineTable({
     runId: v.id("recipeRuns"),
     step: v.number(),

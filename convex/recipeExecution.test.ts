@@ -142,6 +142,52 @@ describe("durable recipe checkpoints", () => {
       expect((await t.run((ctx) => ctx.db.get(args.runId)))?.nextStep).toBe(1)
     }
   })
+  it("keeps run grants separate from recipe management", async () => {
+    const { t, owner, args } = await setup()
+    const versionId = await t.run(async (ctx) => {
+      const run = await ctx.db.get(args.runId)
+      if (!run) throw new Error("Run missing")
+      await ctx.db.insert("workspaceMembers", {
+        workspaceId: run.workspaceId,
+        userId: "proof|runner",
+        role: "owner",
+      })
+      return run.versionId
+    })
+    const runner = t.withIdentity({ tokenIdentifier: "proof|runner" })
+    await expect(
+      runner.mutation(api.recipes.trigger, {
+        versionId,
+        idempotencyKey: "denied",
+      })
+    ).rejects.toThrow("Recipe permission denied")
+    await owner.mutation(api.recipes.setRunAccess, {
+      versionId,
+      userId: "proof|runner",
+      allowed: true,
+    })
+    await runner.mutation(api.recipes.trigger, {
+      versionId,
+      idempotencyKey: "allowed",
+    })
+    await expect(
+      runner.mutation(api.recipes.schedule, {
+        versionId,
+        timing: { kind: "once", at: Date.now() + 60000 },
+      })
+    ).rejects.toThrow("Recipe permission denied")
+    await owner.mutation(api.recipes.setRunAccess, {
+      versionId,
+      userId: "proof|runner",
+      allowed: false,
+    })
+    await expect(
+      runner.mutation(api.recipes.trigger, {
+        versionId,
+        idempotencyKey: "revoked",
+      })
+    ).rejects.toThrow("Recipe permission denied")
+  })
   it("does not commit incomplete pagination", async () => {
     const { t, args } = await setup("upsert", 1)
     await expect(

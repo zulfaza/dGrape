@@ -48,6 +48,59 @@ export async function recipeOutputToken(
   })
 }
 
+async function requireRecipeAccess(
+  ctx: MutationCtx,
+  version: Doc<"recipeVersions">,
+  operation: "run" | "manage"
+) {
+  const member = await requireMembership(ctx, version.workspaceId)
+  if (member.userId === version.createdBy) return
+  if (operation === "run") {
+    const grant = await ctx.db
+      .query("recipeRunGrants")
+      .withIndex("by_versionId_and_userId", (q) =>
+        q.eq("versionId", version._id).eq("userId", member.userId)
+      )
+      .unique()
+    if (grant) return
+  }
+  throw new Error("Recipe permission denied")
+}
+
+export const setRunAccess = mutation({
+  args: {
+    versionId: v.id("recipeVersions"),
+    userId: v.string(),
+    allowed: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const version = await ctx.db.get(args.versionId)
+    if (!version) throw new Error("Recipe not found")
+    await requireRecipeAccess(ctx, version, "manage")
+    const member = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", version.workspaceId).eq("userId", args.userId)
+      )
+      .unique()
+    if (!member) throw new Error("Workspace member not found")
+    const grant = await ctx.db
+      .query("recipeRunGrants")
+      .withIndex("by_versionId_and_userId", (q) =>
+        q.eq("versionId", version._id).eq("userId", args.userId)
+      )
+      .unique()
+    if (args.allowed && !grant)
+      await ctx.db.insert("recipeRunGrants", {
+        versionId: version._id,
+        userId: args.userId,
+      })
+    if (!args.allowed && grant) await ctx.db.delete(grant._id)
+    return null
+  },
+})
+
 const LEASE_MS = 120_000
 const ACTIVE_LIMIT = 4
 const terminal = (run: Doc<"recipeRuns">) =>
@@ -169,7 +222,7 @@ export const trigger = mutation({
   handler: async (ctx, args) => {
     const version = await ctx.db.get(args.versionId)
     if (!version) throw new Error("Recipe not found")
-    await requireMembership(ctx, version.workspaceId)
+    await requireRecipeAccess(ctx, version, "run")
     if (!args.idempotencyKey || args.idempotencyKey.length > 200)
       throw new Error("Idempotency key must be 1 to 200 characters")
     return enqueue(ctx, version, `manual:${args.idempotencyKey}`)
@@ -181,7 +234,7 @@ export const schedule = mutation({
   handler: async (ctx, args) => {
     const version = await ctx.db.get(args.versionId)
     if (!version) throw new Error("Recipe not found")
-    await requireMembership(ctx, version.workspaceId)
+    await requireRecipeAccess(ctx, version, "manage")
     validateTiming(args.timing)
     const nextAt = nextOccurrence(args.timing, Date.now())
     if (nextAt === null) throw new Error("Schedule must be in the future")
@@ -219,7 +272,9 @@ export const setEnabled = mutation({
   handler: async (ctx, args) => {
     const item = await ctx.db.get(args.scheduleId)
     if (!item) throw new Error("Schedule not found")
-    await requireMembership(ctx, item.workspaceId)
+    const version = await ctx.db.get(item.versionId)
+    if (!version) throw new Error("Recipe not found")
+    await requireRecipeAccess(ctx, version, "manage")
     if (args.enabled === item.enabled) return null
     const nextAt = args.enabled
       ? nextOccurrence(item.timing, Date.now())
@@ -235,7 +290,9 @@ export const cancel = mutation({
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId)
     if (!run) throw new Error("Run not found")
-    await requireMembership(ctx, run.workspaceId)
+    const version = await ctx.db.get(run.versionId)
+    if (!version) throw new Error("Recipe not found")
+    await requireRecipeAccess(ctx, version, "run")
     if (!terminal(run))
       await ctx.db.patch(
         run._id,
