@@ -1,3 +1,4 @@
+import { collectionTemplates } from "../../convex/lib/collectionTemplates"
 import { Effect, Layer, Schema } from "effect"
 import { McpProtocol, McpServer, Tool, Toolkit } from "effect/ai"
 import {
@@ -173,7 +174,22 @@ const DeleteRecord = Tool.make("records_delete", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Destructive, true)
 
+const ListTemplates = Tool.make("collections_templates", {
+  description:
+    "List reusable job and transaction schemas. Pass a template name and fields to collections_create. Dates use YYYY-MM-DD. Money uses signed minor units; keep currencies separate.",
+  parameters: Schema.Struct({}),
+  success: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      description: Schema.String,
+      fields: Schema.Array(AgentApi.Field),
+    })
+  ),
+}).annotate(Tool.Readonly, true)
+
 const DfeToolkit = Toolkit.make(
+  ListTemplates,
   DescribeWorkspace,
   ListRecords,
   QueryRecords,
@@ -192,6 +208,7 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
   Effect.gen(function* () {
     const api = yield* AgentApi.AgentApi
     return {
+      collections_templates: () => Effect.succeed(collectionTemplates()),
       workspace_describe: () => api.describeWorkspace,
       records_list: (input) => api.listRecords(input),
       records_query: (input) => api.queryRecords(input),
