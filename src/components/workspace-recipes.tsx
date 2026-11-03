@@ -31,6 +31,7 @@ import {
 } from "./ui/select"
 import { Separator } from "./ui/separator"
 import { Skeleton } from "./ui/skeleton"
+import { SourceFreshness } from "./source-freshness"
 
 const sample: typeof Recipe.Type = {
   steps: [{ kind: "artifact", name: "report.json", format: "json" }],
@@ -382,6 +383,9 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
         ))}
       </ul>
       <PageMore {...schedules} label="schedules" />
+      <Separator />
+      <h3>Source freshness</h3>
+      <SourceFreshnessList workspaceId={workspaceId} />
       <Separator />
       <h3>Runs</h3>
       {runs.status === "Exhausted" && runs.results.length === 0 && (
@@ -819,6 +823,25 @@ function ScheduleRow({
       )}
       <Feedback message={message} />
     </li>
+  )
+}
+
+function SourceFreshnessList({
+  workspaceId,
+}: {
+  workspaceId: Id<"workspaces">
+}) {
+  const sources = useQuery(api.sourceSyncs.list, { workspaceId })
+  if (sources === undefined) return <Skeleton className="h-5 w-64" />
+  if (sources.length === 0) return <NoItems label="No collections yet." />
+  return (
+    <ul className="flex flex-col gap-2">
+      {sources.map((source) => (
+        <li key={source.collectionId}>
+          <SourceFreshness source={source} />
+        </li>
+      ))}
+    </ul>
   )
 }
 
