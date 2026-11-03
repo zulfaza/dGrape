@@ -77,6 +77,7 @@ export function ArtifactLink({
         <ArtifactPreview
           artifactId={artifactId}
           name={metadata.name}
+          contentType={metadata.contentType}
           onClose={() => setPreview(false)}
           onReturnFocus={() => trigger.current?.focus()}
         />
