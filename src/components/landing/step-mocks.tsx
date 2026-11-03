@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
+import { LayoutDashboard, FolderOpen, Plus } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Mascot, type MascotPose } from "@/components/mascot"
 import { cn } from "@/lib/utils"
 
@@ -46,7 +48,7 @@ function useSequence(length: number, active: boolean) {
   const [reduced, setReduced] = useState(false)
   useEffect(() => setReduced(prefersReducedMotion()), [])
   useEffect(() => {
-    if (!active || reduced) return
+    if (!active || reduced || length === 0) return
     const timer = window.setTimeout(
       () => setStep((current) => (current >= length ? 0 : current + 1)),
       step >= length ? HOLD_MS : STEP_MS
@@ -97,127 +99,80 @@ function MockWindow({
   )
 }
 
-const NEW_FIELDS = [
-  { label: "Company", id: "company", type: "Text" },
-  { label: "Salary", id: "salary", type: "Number" },
-  { label: "Applied", id: "applied", type: "Yes / no" },
-]
-
-/** A create-collection dialog that fills itself in. 6 steps. */
-function CollectionMock({ step }: { step: number }) {
+/** A sample workspace opening in the dashboard. */
+function DashboardMock({ step }: { step: number }) {
   return (
-    <MockWindow title="Create collection">
-      <div className="flex min-h-[19rem] flex-col gap-3 p-5">
-        <p className="text-xs font-medium text-muted-foreground">Name</p>
-        <div className="flex h-9 items-center rounded-md border px-3 text-sm">
-          {step >= 1 && (
-            <span className="dfe-anim dfe-type-line font-medium">
-              Job applications
-            </span>
-          )}
-          {step < 2 && (
-            <span className="dfe-caret ml-px h-4 w-px bg-foreground" />
-          )}
+    <MockWindow title="DFE / Your dashboard">
+      <div className="flex min-h-[19rem] flex-col gap-5 p-5">
+        <div className="flex items-center gap-2 border-b pb-4">
+          <LayoutDashboard aria-hidden className="size-4 text-primary" />
+          <p className="text-sm font-semibold">Your workspaces</p>
+          <span className="ml-auto text-xs text-muted-foreground">Example</span>
         </div>
-        <p className="mt-1 text-xs font-medium text-muted-foreground">Fields</p>
-        <ul className="flex flex-col gap-2">
-          {NEW_FIELDS.map((field, i) =>
-            step >= i + 2 ? (
-              <li
-                key={field.id}
-                className="dfe-anim dfe-row-in grid grid-cols-[1fr_1fr_5.5rem] gap-2 text-sm"
-              >
-                <span className="rounded-md border px-3 py-1.5">
-                  {field.label}
-                </span>
-                <span className="rounded-md border px-3 py-1.5 font-mono text-xs leading-5">
-                  {field.id}
-                </span>
-                <span className="rounded-md border px-3 py-1.5 text-muted-foreground">
-                  {field.type}
-                </span>
-              </li>
-            ) : null
-          )}
-        </ul>
-        <div className="mt-auto flex items-center justify-between gap-3 pt-2">
-          {step >= 6 ? (
-            <span className="dfe-anim dfe-row-in rounded-md bg-success-surface px-2.5 py-1 text-xs font-medium text-success">
-              Collection created
-            </span>
-          ) : (
-            <span />
-          )}
-          <span
-            className={cn(
-              "rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-transform duration-200",
-              step === 5 && "scale-95"
-            )}
-          >
-            Create collection
-          </span>
+        <div>
+          <p className="text-lg font-semibold">A place for your next project</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Keep your data and agents together in one workspace.
+          </p>
         </div>
+        {step >= 1 && (
+          <div className="dfe-anim dfe-row-in flex items-center gap-3 rounded-lg border p-4">
+            <FolderOpen aria-hidden className="size-5 text-primary" />
+            <div>
+              <p className="text-sm font-medium">Job search</p>
+              <p className="text-xs text-muted-foreground">
+                Your new workspace
+              </p>
+            </div>
+          </div>
+        )}
+        <span className="mt-auto flex w-fit items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
+          <Plus aria-hidden className="size-4" />
+          Create workspace
+        </span>
       </div>
     </MockWindow>
   )
 }
 
-const TERMINAL_LINES: ReadonlyArray<{
-  text: string
-  tone: "command" | "ok" | "prompt" | "tool" | "plain"
-  typed?: boolean
-}> = [
-  {
-    text: "$ claude mcp add --transport http dfe https://dfe.makarima.dev/mcp",
-    tone: "command",
-    typed: true,
-  },
-  { text: "Added HTTP MCP server dfe", tone: "ok" },
-  {
-    text: "> Track my Linear application: product engineer, $165k",
-    tone: "prompt",
-    typed: true,
-  },
-  { text: "dfe records_create (Job applications)", tone: "tool" },
-  { text: "  created, revision 1", tone: "plain" },
-  { text: "Added Linear to Job applications.", tone: "plain" },
+const AGENTS = [
+  { id: "claude", name: "Claude", chat: "Claude Code" },
+  { id: "codex", name: "Codex", chat: "Codex" },
+  { id: "cursor", name: "Cursor", chat: "Cursor's agent chat" },
 ]
 
-const TONE: Record<(typeof TERMINAL_LINES)[number]["tone"], string> = {
-  command: "text-[#e9eaec]",
-  ok: "text-[#8cc9a7]",
-  prompt: "text-[#e6bd5b]",
-  tool: "text-[#a1b6c4]",
-  plain: "text-[#b5b8be]",
-}
-
-/** A terminal that connects the agent and runs one tool call. 6 steps. */
-function AgentMock({ step }: { step: number }) {
+/** Agent choices show a sample connection prompt, without making a connection. */
+function AgentMock() {
   return (
-    <MockWindow title="Terminal" dark>
-      <div className="flex min-h-[19rem] flex-col gap-2 p-5 font-mono text-[13px] leading-5">
-        {TERMINAL_LINES.map((line, i) =>
-          step >= i + 1 ? (
-            <p
-              key={line.text}
-              className={cn(
-                "dfe-anim min-w-0 whitespace-pre-wrap",
-                line.typed ? "dfe-type-line" : "dfe-row-in",
-                TONE[line.tone]
-              )}
-            >
-              {line.tone === "tool" && (
-                <span aria-hidden className="mr-2 text-[#8cc9a7]">
-                  ●
+    <MockWindow title="Connect your agent">
+      <div className="flex min-h-[19rem] flex-col gap-4 p-5">
+        <p className="text-sm font-semibold">Use the agent you already know</p>
+        <Tabs defaultValue="claude">
+          <TabsList aria-label="Choose an agent" className="w-full">
+            {AGENTS.map((agent) => (
+              <TabsTrigger key={agent.id} value={agent.id}>
+                {agent.name}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {AGENTS.map((agent) => (
+            <TabsContent key={agent.id} value={agent.id}>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Start in {agent.chat} with a prompt like this:
+              </p>
+              <blockquote className="rounded-lg border bg-secondary p-4 text-sm leading-relaxed">
+                Connect to my DFE workspace through{" "}
+                <span className="font-medium break-all">
+                  https://dfe.makarima.dev/mcp
                 </span>
-              )}
-              {line.text}
-            </p>
-          ) : null
-        )}
-        {step < TERMINAL_LINES.length && (
-          <span className="dfe-caret h-4 w-2 bg-[#e9eaec]" />
-        )}
+                . Ask me to approve access before you make changes.
+              </blockquote>
+            </TabsContent>
+          ))}
+        </Tabs>
+        <p className="mt-auto text-xs text-muted-foreground">
+          You choose the workspace and approve your agent's access in DFE.
+        </p>
       </div>
     </MockWindow>
   )
@@ -314,20 +269,20 @@ const STEPS: ReadonlyArray<{
   Mock: (props: { step: number }) => ReactNode
 }> = [
   {
-    title: "Make a collection",
-    body: "Name the fields you care about, such as company, salary, and applied. There is no database to set up, and you can add fields later.",
-    length: 6,
-    Mock: CollectionMock,
+    title: "Open your dashboard",
+    body: "Sign in to DFE and create a workspace. Start with a project, a question, or something you want to track.",
+    length: 1,
+    Mock: DashboardMock,
   },
   {
     title: "Connect your agent",
-    body: "Create a credential and add DFE to your agent over MCP with one command. Choose read only, or read and write.",
-    length: TERMINAL_LINES.length,
+    body: "Choose Claude, Codex, or Cursor. Connect it to DFE, then approve access to the workspace you want it to use.",
+    length: 0,
     Mock: AgentMock,
   },
   {
-    title: "Let it fill the table",
-    body: "Your agent adds and updates records while it works. You see each change here, and retries never make duplicates.",
+    title: "Set up your dashboard",
+    body: "Tell your agent what you want to track. It creates the collections and fields, then adds your data. You see the results in your dashboard.",
     length: NEW_RECORDS.length,
     Mock: RecordsMock,
   },
