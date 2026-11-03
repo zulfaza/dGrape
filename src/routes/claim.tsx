@@ -4,7 +4,9 @@ import { useAction, usePaginatedQuery, useQuery } from "convex/react"
 import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
+import { SCOPE_PRESETS, type AgentScope } from "../../convex/lib/agentScope"
 import { Mascot } from "@/components/mascot"
+import { ScopePicker } from "@/components/scope-picker"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,7 +23,7 @@ import {
 /**
  * The auth.md claim page. An agent sends the user here with a claim link
  * and a 6-digit code. The user signs in with the email the agent named,
- * chooses one workspace and the access level, and types the code. Only
+ * chooses one workspace and the scopes, and types the code. Only
  * then can the agent get a token.
  */
 export const Route = createFileRoute("/claim")({
@@ -46,7 +48,6 @@ export const Route = createFileRoute("/claim")({
   component: ClaimPage,
 })
 
-type Scope = "readonly" | "readwrite"
 type Outcome = "claimed" | null
 
 const FAILURES = {
@@ -57,11 +58,8 @@ const FAILURES = {
   wrong_code: "The code is not correct. Check the code your agent showed.",
   locked: "Too many wrong codes. Ask your agent to start again for a new code.",
   no_workspace_access: "You do not own this workspace.",
+  invalid_scopes: "Choose at least one scope.",
   unverified_email: "Verify your email address, then try again.",
-}
-
-function isScope(value: string): value is Scope {
-  return value === "readonly" || value === "readwrite"
 }
 
 function ClaimPage() {
@@ -78,7 +76,10 @@ function ClaimPage() {
   )
   const confirm = useAction(api.agentRegistrations.confirmClaim)
   const [workspaceId, setWorkspaceId] = useState<Id<"workspaces"> | null>(null)
-  const [scope, setScope] = useState<Scope>("readonly")
+  // Read-only is the default; the user must choose more.
+  const [scopes, setScopes] = useState<Array<AgentScope>>([
+    ...SCOPE_PRESETS.readonly,
+  ])
   const [code, setCode] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -86,7 +87,7 @@ function ClaimPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (saving || !workspaceId) return
+    if (saving || !workspaceId || scopes.length === 0) return
     setSaving(true)
     setError(null)
     try {
@@ -94,7 +95,7 @@ function ClaimPage() {
         attemptToken,
         userCode: code,
         workspaceId,
-        scope,
+        scopes,
       })
       if (result === "claimed") setOutcome("claimed")
       else setError(FAILURES[result])
@@ -185,29 +186,11 @@ function ClaimPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="claim-scope">Access</Label>
-                <Select
-                  value={scope}
-                  onValueChange={(value) => {
-                    if (isScope(value)) setScope(value)
-                  }}
-                >
-                  <SelectTrigger id="claim-scope" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="readonly">
-                        Read collections and records
-                      </SelectItem>
-                      <SelectItem value="readwrite">
-                        Read, create, and change data
-                      </SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
+              <ScopePicker
+                id="claim-scope"
+                value={scopes}
+                onChange={setScopes}
+              />
               <div className="grid gap-2">
                 <Label htmlFor="claim-code">Code from your agent</Label>
                 <Input
@@ -230,7 +213,9 @@ function ClaimPage() {
             )}
             <Button
               type="submit"
-              disabled={saving || !sameAccount || !workspaceId}
+              disabled={
+                saving || !sameAccount || !workspaceId || scopes.length === 0
+              }
             >
               {saving ? "Connecting…" : "Connect agent"}
             </Button>

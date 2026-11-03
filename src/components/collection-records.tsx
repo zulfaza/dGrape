@@ -277,7 +277,7 @@ export function CollectionRecords({
               <EmptyTitle>Add your first record</EmptyTitle>
               <EmptyDescription>
                 Fill in a record here, or let your agent add records with a
-                read-and-write credential.
+                credential that has the data.write scope.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>{newRecordButton}</EmptyContent>

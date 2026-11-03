@@ -1,7 +1,9 @@
 import { usePaginatedQuery } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
+import { grantedScopes } from "../../convex/lib/agentScope"
 import type { AuditActor, AuditEvent } from "../../convex/lib/auditEvents"
+import { scopeSummary } from "@/components/scope-picker"
 import { Button } from "@/components/ui/button"
 
 const PAGE_SIZE = 20
@@ -73,9 +75,7 @@ function describe(event: AuditEvent): string {
     case "secret.delete":
       return "deleted a credential"
     case "agentGrant.create":
-      return event.scope === "readwrite"
-        ? "created a read-and-write agent token"
-        : "created a read-only agent token"
+      return `created an agent token (${scopeSummary(grantedScopes(event.scope))})`
     case "agentGrant.revoke":
       return "revoked an agent token"
     case "agentRegistration.claim":

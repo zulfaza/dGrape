@@ -20,7 +20,7 @@ export const create = action({
   args: {
     workspaceId: v.id("workspaces"),
     days: v.number(),
-    scope: agentScopeValidator,
+    scopes: v.array(agentScopeValidator),
   },
   returns: v.string(),
   handler: async (ctx, args): Promise<string> => {

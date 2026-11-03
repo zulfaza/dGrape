@@ -1,8 +1,14 @@
 import { ConvexError } from "convex/values"
 import type { QueryCtx } from "../_generated/server"
+import {
+  grantedScopes,
+  missingScopeMessage,
+  missingScopes,
+  type AgentScope,
+} from "./agentScope"
 
 /**
- * Returns the workspace and scope of a credential, or null when the credential
+ * Returns the workspace and scopes of a credential, or null when the credential
  * is unknown, revoked, expired, or its owner has lost the workspace.
  */
 export async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
@@ -28,18 +34,40 @@ export async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
     owner: grant.owner,
     registrationId: grant.registrationId ?? null,
     workspaceId: grant.workspaceId,
-    scope: grant.scope,
+    scopes: grantedScopes(grant.scope),
   }
 }
 
 export type Grant = NonNullable<Awaited<ReturnType<typeof resolveGrant>>>
 
+export type ScopedGrant =
+  | { status: "ok"; grant: Grant }
+  | { status: "denied" }
+  | { status: "missing_scope"; missing: Array<AgentScope> }
+
+/**
+ * Resolves a credential and checks that it holds every scope in `needs`.
+ * "denied": the credential is unknown, revoked, or expired.
+ */
+export async function resolveScopedGrant(
+  ctx: QueryCtx,
+  digest: string,
+  now: number,
+  needs: ReadonlyArray<AgentScope>
+): Promise<ScopedGrant> {
+  const grant = await resolveGrant(ctx, digest, now)
+  if (!grant) return { status: "denied" }
+  const missing = missingScopes(grant.scopes, needs)
+  if (missing.length > 0) return { status: "missing_scope", missing }
+  return { status: "ok", grant }
+}
+
 /** Status that convex/lib/agentRoute.ts sends for a refused operation. */
 export type AgentFailureStatus = 400 | 403 | 409
 
 /**
- * Runs `operate` for a valid credential, in the caller's transaction. It needs
- * a "readwrite" credential when `access` is "write". A plain Error from the
+ * Runs `operate` for a valid credential that holds every scope in `needs`, in
+ * the caller's transaction. A plain Error from the
  * operation becomes a ConvexError that agentRoute maps to a status: 403 when
  * the message says "denied", 409 when it says "conflict", otherwise 400.
  */
@@ -47,12 +75,18 @@ export async function withGrant<A>(
   ctx: QueryCtx,
   digest: string,
   now: number,
-  access: "read" | "write",
+  needs: ReadonlyArray<AgentScope>,
   operate: (grant: Grant) => Promise<A>
 ): Promise<A> {
-  const grant = await resolveGrant(ctx, digest, now)
-  if (!grant || (access === "write" && grant.scope !== "readwrite"))
+  const scoped = await resolveScopedGrant(ctx, digest, now, needs)
+  if (scoped.status === "denied")
     throw new ConvexError({ status: 403, message: "Credential access denied" })
+  if (scoped.status === "missing_scope")
+    throw new ConvexError({
+      status: 403,
+      message: missingScopeMessage(scoped.missing),
+    })
+  const grant = scoped.grant
   try {
     return await operate(grant)
   } catch (error) {

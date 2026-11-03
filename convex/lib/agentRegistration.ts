@@ -1,5 +1,5 @@
 import { v, type Infer } from "convex/values"
-import { agentScopeValidator } from "./agentScope"
+import { storedScopesValidator } from "./agentScope"
 
 /**
  * The auth.md user-claimed (service_auth) registration model. A
@@ -42,7 +42,7 @@ export const agentRegistrationValidator = v.union(
     status: v.literal("claimed"),
     owner: v.string(),
     workspaceId: v.id("workspaces"),
-    scope: agentScopeValidator,
+    scope: storedScopesValidator,
     claimedAt: v.number(),
     /** Set when the claim grant has returned the first tokens. */
     claimTokenUsedAt: v.optional(v.number()),
@@ -73,12 +73,6 @@ export const agentClaimAttemptValidator = v.object({
     v.literal("replaced")
   ),
 })
-
-/** Scope names that auth.md documents advertise, mapped to credential scopes. */
-export const SCOPES = {
-  readonly: ["data.read"],
-  readwrite: ["data.read", "data.write"],
-} satisfies Record<Infer<typeof agentScopeValidator>, ReadonlyArray<string>>
 
 /**
  * Parses a `login_hint` as an email address. auth.md lets the service

@@ -3,6 +3,7 @@ import { convexTest } from "convex-test"
 import { describe, expect, it, vi } from "vitest"
 import schema from "./schema"
 import { api, internal } from "./_generated/api"
+import type { AgentScope } from "./lib/agentScope"
 import type { Recipe } from "./lib/recipeDomain"
 import type { RecipeTiming } from "./lib/recipeSchedule"
 
@@ -254,7 +255,7 @@ describe("recipe lifecycle", () => {
           expectedRevision: 2,
           digest: "reader",
         })
-      ).rejects.toThrow("denied")
+      ).rejects.toThrow("does not have the scope jobs.manage")
     } finally {
       vi.useRealTimers()
     }
@@ -423,10 +424,13 @@ describe("recipe credentials", () => {
         .query(api.recipes.permissions, { versionId })
     ).rejects.toThrow("access denied")
     const input = { versionId, idempotencyKey: "credential" }
-    for (const digest of ["missing", "reader", "runner"])
+    for (const digest of ["missing", "runner"])
       await expect(
         t.mutation(internal.agentRecipes.trigger, { ...input, digest })
       ).rejects.toThrow("denied")
+    await expect(
+      t.mutation(internal.agentRecipes.trigger, { ...input, digest: "reader" })
+    ).rejects.toThrow("does not have the scope jobs.run")
     await owner.mutation(api.recipes.setRunAccess, {
       versionId,
       userId: "test|runner",
@@ -482,7 +486,7 @@ describe("recipe credentials", () => {
         scheduleId,
         enabled: false,
       })
-    ).rejects.toThrow("denied")
+    ).rejects.toThrow("does not have the scope jobs.manage")
     await t.mutation(internal.agentRecipes.setEnabled, {
       digest: "owner",
       scheduleId,
@@ -514,6 +518,133 @@ describe("recipe credentials", () => {
       t.mutation(internal.agentRecipes.trigger, { ...input, digest: "runner" })
     ).rejects.toThrow("denied")
   })
+
+  // The first HTTP call loads the router, which can be slow on a busy runner.
+  it("checks each fine-grained scope separately", async () => {
+    const { t, versionId } = await setup()
+    await t.run(async (ctx) => {
+      const version = await ctx.db.get(versionId)
+      if (!version) throw new Error("Missing version")
+      for (const [digest, scopes] of [
+        ["jobsRead", ["jobs.read"]],
+        ["jobsRun", ["jobs.run"]],
+        ["jobsManage", ["jobs.manage"]],
+      ] satisfies Array<[string, Array<AgentScope>]>)
+        await ctx.db.insert("agentGrants", {
+          workspaceId: version.workspaceId,
+          owner: "test|owner",
+          digest,
+          scope: scopes,
+          state: "active",
+          expiresAt: Date.now() + 60000,
+        })
+    })
+    const page = { paginationOpts: { numItems: 10, cursor: null } }
+    const input = { versionId, idempotencyKey: "scoped" }
+    expect(
+      (
+        await t.mutation(internal.agentRecipes.versions, {
+          ...page,
+          digest: "jobsRead",
+        })
+      ).page
+    ).toHaveLength(1)
+    await expect(
+      t.mutation(internal.agentRecipes.versions, { ...page, digest: "jobsRun" })
+    ).rejects.toThrow("does not have the scope jobs.read")
+    await expect(
+      t.mutation(internal.agentRecipes.trigger, {
+        ...input,
+        digest: "jobsRead",
+      })
+    ).rejects.toThrow("does not have the scope jobs.run")
+    // The recipe has no fetch step, so it does not need connections.use.
+    await t.mutation(internal.agentRecipes.trigger, {
+      ...input,
+      digest: "jobsRun",
+    })
+    await expect(
+      t.mutation(internal.agentRecipes.schedule, {
+        digest: "jobsRun",
+        versionId,
+        timing: { kind: "once", at: Date.now() + 60000 },
+      })
+    ).rejects.toThrow("does not have the scope jobs.manage")
+    await expect(
+      t.mutation(internal.agentRecipes.publish, {
+        digest: "jobsManage",
+        name: "Fetches",
+        recipe: {
+          ...recipe,
+          steps: [
+            {
+              kind: "fetch",
+              connectionId: "missing",
+              route: "/data",
+              maxPages: 1,
+            },
+            ...recipe.steps,
+          ],
+        },
+      })
+    ).rejects.toThrow("does not have the scope connections.use")
+    const { digestToken } = await import("./agentAccess")
+    const jobsOnly = "c".repeat(64)
+    const jobsOnlyDigest = await digestToken(jobsOnly)
+    await t.run(async (ctx) => {
+      const version = await ctx.db.get(versionId)
+      if (!version) throw new Error("Missing version")
+      await ctx.db.insert("agentGrants", {
+        workspaceId: version.workspaceId,
+        owner: "test|owner",
+        digest: jobsOnlyDigest,
+        scope: ["jobs.read"],
+        state: "active",
+        expiresAt: Date.now() + 60000,
+      })
+    })
+    const headers = { Authorization: `Bearer ${jobsOnly}` }
+    const artifacts = await t.fetch("/agent/artifacts", { headers })
+    expect(artifacts.status).toBe(403)
+    expect(await artifacts.json()).toEqual({
+      error: expect.stringContaining("artifacts.read"),
+    })
+    const upload = await t.fetch("/agent/artifacts/uploads", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "a.json" }),
+    })
+    expect(await upload.json()).toEqual({
+      error: expect.stringContaining("artifacts.write"),
+    })
+    expect((await t.fetch("/agent/workspace", { headers })).status).toBe(403)
+    expect(
+      (await t.fetch("/agent/collections/describe?collectionId=x", { headers }))
+        .status
+    ).toBe(403)
+    expect((await t.fetch("/agent/connections", { headers })).status).toBe(200)
+    const capabilities = await (
+      await t.fetch("/agent/capabilities", { headers })
+    ).json()
+    expect(capabilities.scopes).toEqual(["jobs.read"])
+    expect(
+      capabilities.capabilities
+        .filter((capability: { allowed: boolean }) => capability.allowed)
+        .map((capability: { id: string }) => capability.id)
+    ).toEqual(["connections.read", "recipes.read"])
+    const write = await t.fetch("/agent/collections", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Jobs",
+        fields: [{ id: "f_name", label: "Name", type: "text" }],
+      }),
+    })
+    expect(write.status).toBe(403)
+    expect(await write.json()).toEqual({
+      error: expect.stringContaining("data.write"),
+    })
+  }, 20_000)
 
   it("scopes IDs and pages and checks HTTP credentials and bodies", async () => {
     const { t, owner, workspaceId, versionId } = await setup()

@@ -76,7 +76,7 @@ export const saveDraft = internalMutation({
   },
   returns: v.object({ pageId: v.id("pages"), revision: v.number() }),
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["pages.write"], async (grant) => {
       const pageId =
         args.pageId === undefined
           ? undefined
@@ -106,7 +106,7 @@ export const publish = internalMutation({
   },
   returns: pageSummary,
   handler: (ctx, { digest, pageId, ...args }) =>
-    withGrant(ctx, digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, digest, Date.now(), ["pages.write"], async (grant) => {
       const id = ctx.db.normalizeId("pages", pageId)
       if (!id) throw new Error("Page access denied")
       await publishPage(
@@ -142,7 +142,7 @@ export const get = internalQuery({
     bindings: v.array(v.union(v.string(), v.null())),
   }),
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, args.now, "read", async (grant) => {
+    withGrant(ctx, args.digest, args.now, ["pages.read"], async (grant) => {
       const pageId = ctx.db.normalizeId("pages", args.pageId)
       if (!pageId) throw new Error("Page access denied")
       const { page, version, bindings } = await getPage(
@@ -176,7 +176,7 @@ export const list = internalQuery({
     continueCursor: v.string(),
   }),
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, args.now, "read", async (grant) => {
+    withGrant(ctx, args.digest, args.now, ["pages.read"], async (grant) => {
       const result = await listPages(ctx, grant.workspaceId, {
         numItems: args.numItems,
         cursor: args.cursor,

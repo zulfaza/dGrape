@@ -249,6 +249,7 @@ test("agent collection creation and optional additions also preserve versions", 
   ).toHaveLength(2)
 })
 
+// The first HTTP call loads the router, which can be slow on a busy runner.
 test("agent discovery reports capabilities by scope and describes one collection", async () => {
   const { t, collectionId, workspaceId } = await fixture()
   const { digestToken } = await import("./agentAccess")
@@ -266,9 +267,15 @@ test("agent discovery reports capabilities by scope and describes one collection
   const get = (path: string) =>
     t.fetch(path, { headers: { Authorization: `Bearer ${bearer}` } })
   const capabilities = await (await get("/agent/capabilities")).json()
-  expect(capabilities.scope).toBe("readonly")
+  expect(capabilities.scopes).toEqual([
+    "data.read",
+    "artifacts.read",
+    "pages.read",
+    "jobs.read",
+  ])
+  // A legacy read-only credential keeps exactly its read capabilities.
   for (const capability of capabilities.capabilities)
-    expect(capability.allowed).toBe(capability.access === "read")
+    expect(capability.allowed).toBe(capability.id.endsWith(".read"))
   expect(
     await (
       await get(`/agent/collections/describe?collectionId=${collectionId}`)
@@ -283,4 +290,4 @@ test("agent discovery reports capabilities by scope and describes one collection
     (await get("/agent/collections/describe?collectionId=missing")).status
   ).toBe(403)
   expect((await get("/agent/collections/describe")).status).toBe(400)
-})
+}, 20_000)

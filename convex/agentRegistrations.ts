@@ -9,7 +9,11 @@ import type { MutationCtx, QueryCtx } from "./_generated/server"
 import { action, internalMutation, mutation, query } from "./_generated/server"
 import { keyedDigest, sha256 } from "./lib/agentAuthCrypto"
 import { codeKey, workosApiKey } from "./lib/agentAuthConfig"
-import { agentScopeValidator } from "./lib/agentScope"
+import {
+  agentScopeValidator,
+  grantedScopes,
+  parseRequestedScopes,
+} from "./lib/agentScope"
 import { requireMembership, requireUserId } from "./lib/auth"
 import { recordAuditEvent } from "./lib/auditEvents"
 import {
@@ -159,11 +163,16 @@ export const completeClaim = internalMutation({
     owner: v.string(),
     email: v.string(),
     workspaceId: v.id("workspaces"),
-    scope: agentScopeValidator,
+    scopes: v.array(agentScopeValidator),
     now: v.number(),
   },
-  returns: completeResult,
-  handler: async (ctx, args): Promise<Infer<typeof completeResult>> => {
+  returns: v.union(completeResult, v.literal("invalid_scopes")),
+  handler: async (
+    ctx,
+    args
+  ): Promise<Infer<typeof completeResult> | "invalid_scopes"> => {
+    const scopes = parseRequestedScopes(args.scopes)
+    if (!scopes) return "invalid_scopes"
     const claim = await openClaim(ctx, args.attemptTokenDigest, args.now)
     if (!claim) return "unavailable"
     const { attempt, registration } = claim
@@ -192,7 +201,7 @@ export const completeClaim = internalMutation({
       claimExpiresAt: registration.claimExpiresAt,
       owner: args.owner,
       workspaceId: args.workspaceId,
-      scope: args.scope,
+      scope: scopes,
       claimedAt: args.now,
     })
     await recordAuditEvent(
@@ -202,7 +211,7 @@ export const completeClaim = internalMutation({
       {
         operation: "agentRegistration.claim",
         registrationId: registration._id,
-        scope: args.scope,
+        scope: scopes,
       }
     )
     return "claimed"
@@ -228,20 +237,26 @@ async function verifiedEmail(userId: string): Promise<string | null> {
 /**
  * Confirms a claim on the claim page. The signed-in user must own the email
  * the agent named and type the code the agent showed. The agent then gets
- * `scope` access to `workspaceId` and nothing else.
+ * `scopes` access to `workspaceId` and nothing else.
  */
 export const confirmClaim = action({
   args: {
     attemptToken: v.string(),
     userCode: v.string(),
     workspaceId: v.id("workspaces"),
-    scope: agentScopeValidator,
+    scopes: v.array(agentScopeValidator),
   },
-  returns: v.union(completeResult, v.literal("unverified_email")),
+  returns: v.union(
+    completeResult,
+    v.literal("invalid_scopes"),
+    v.literal("unverified_email")
+  ),
   handler: async (
     ctx,
     args
-  ): Promise<Infer<typeof completeResult> | "unverified_email"> => {
+  ): Promise<
+    Infer<typeof completeResult> | "invalid_scopes" | "unverified_email"
+  > => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Unauthenticated")
     const email = await verifiedEmail(identity.subject)
@@ -252,7 +267,7 @@ export const confirmClaim = action({
       owner: identity.tokenIdentifier,
       email,
       workspaceId: args.workspaceId,
-      scope: args.scope,
+      scopes: args.scopes,
       now: Date.now(),
     })
   },
@@ -287,7 +302,7 @@ const pollResult = v.union(
     status: v.literal("issued"),
     registrationId: v.id("agentRegistrations"),
     email: v.string(),
-    scope: agentScopeValidator,
+    scopes: v.array(agentScopeValidator),
     expiresAt: v.number(),
   })
 )
@@ -326,7 +341,7 @@ export const pollClaim = internalMutation({
         status: "issued",
         registrationId: registration._id,
         email: registration.loginHint,
-        scope: registration.scope,
+        scopes: [...grantedScopes(registration.scope)],
         expiresAt,
       }
     }
@@ -351,7 +366,7 @@ const exchangeResult = v.union(
   v.object({ status: v.literal("invalid") }),
   v.object({
     status: v.literal("issued"),
-    scope: agentScopeValidator,
+    scopes: v.array(agentScopeValidator),
     expiresAt: v.number(),
   })
 )
@@ -375,7 +390,11 @@ export const exchangeAssertion = internalMutation({
       args.accessTokenDigest,
       args.now
     )
-    return { status: "issued", scope: registration.scope, expiresAt }
+    return {
+      status: "issued",
+      scopes: [...grantedScopes(registration.scope)],
+      expiresAt,
+    }
   },
 })
 
@@ -467,7 +486,7 @@ const connectedAgentValidator = v.object({
   _id: v.id("agentRegistrations"),
   email: v.string(),
   status: v.union(v.literal("claimed"), v.literal("revoked")),
-  scope: v.optional(agentScopeValidator),
+  scopes: v.optional(v.array(agentScopeValidator)),
   claimedAt: v.optional(v.number()),
   revokedAt: v.optional(v.number()),
 })
@@ -504,7 +523,7 @@ export const listForWorkspace = query({
                 _id: r._id,
                 email: r.loginHint,
                 status: "claimed",
-                scope: r.scope,
+                scopes: [...grantedScopes(r.scope)],
                 claimedAt: r.claimedAt,
               },
             ]

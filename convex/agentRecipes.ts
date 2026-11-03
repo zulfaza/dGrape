@@ -1,7 +1,23 @@
 import { ConvexError, v } from "convex/values"
 import { internalMutation, internalQuery } from "./_generated/server"
-import { withGrant } from "./lib/agentGrant"
+import { withGrant, type Grant } from "./lib/agentGrant"
+import { missingScopeMessage, missingScopes } from "./lib/agentScope"
+import type { Recipe } from "./lib/recipeDomain"
 import * as recipes from "./recipes"
+
+/**
+ * A recipe with a fetch step calls a connection. Binding it to a recipe, or
+ * starting or scheduling its runs, also needs `connections.use`.
+ */
+function requireConnectionUse(grant: Grant, recipe: Recipe) {
+  if (!recipe.steps.some((step) => step.kind === "fetch")) return
+  const missing = missingScopes(grant.scopes, ["connections.use"])
+  if (missing.length > 0)
+    throw new ConvexError({
+      status: 403,
+      message: missingScopeMessage(missing),
+    })
+}
 
 function checkPage(input: { numItems: number; cursor: string | null }) {
   if (
@@ -19,7 +35,8 @@ export const publish = internalMutation({
   },
   returns: recipes.publishResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.manage"], async (grant) => {
+      requireConnectionUse(grant, args.recipe)
       await recipes.checkRecipe(ctx, grant.workspaceId, args.recipe)
       const { digest, ...input } = args
       void digest
@@ -38,7 +55,7 @@ export const validate = internalQuery({
   },
   returns: recipes.validateResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, args.now, "read", async (grant) =>
+    withGrant(ctx, args.digest, args.now, ["jobs.read"], async (grant) =>
       recipes.validateForPrincipal(
         ctx,
         { recipe: args.recipe, workspaceId: grant.workspaceId },
@@ -54,7 +71,7 @@ export const preview = internalQuery({
   },
   returns: recipes.previewResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, args.now, "read", async (grant) =>
+    withGrant(ctx, args.digest, args.now, ["jobs.read"], async (grant) =>
       recipes.previewForPrincipal(
         ctx,
         {
@@ -73,7 +90,7 @@ export const versions = internalMutation({
   },
   returns: recipes.versionsResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "read", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.read"], async (grant) => {
       const { digest, ...input } = args
       void digest
       checkPage(input.paginationOpts)
@@ -88,7 +105,7 @@ export const runs = internalMutation({
   args: { digest: v.string(), ...recipes.runsArgs.omit("workspaceId").fields },
   returns: recipes.runsResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "read", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.read"], async (grant) => {
       const { digest, ...input } = args
       void digest
       checkPage(input.paginationOpts)
@@ -107,7 +124,7 @@ export const history = internalMutation({
   },
   returns: recipes.historyResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "read", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.read"], async (grant) => {
       const { digest, ...input } = args
       void digest
       checkPage(input.paginationOpts)
@@ -129,7 +146,7 @@ export const trigger = internalMutation({
   },
   returns: recipes.triggerResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.run"], async (grant) => {
       const { digest, ...input } = args
       void digest
       const versionId = ctx.db.normalizeId("recipeVersions", input.versionId)
@@ -139,6 +156,7 @@ export const trigger = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
+      requireConnectionUse(grant, document.recipe)
       return recipes.triggerForPrincipal(ctx, { ...input, versionId }, grant)
     }),
 })
@@ -150,7 +168,7 @@ export const schedule = internalMutation({
   },
   returns: recipes.scheduleResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.manage"], async (grant) => {
       const { digest, ...input } = args
       void digest
       const versionId = ctx.db.normalizeId("recipeVersions", input.versionId)
@@ -160,6 +178,7 @@ export const schedule = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
+      requireConnectionUse(grant, document.recipe)
       return recipes.scheduleForPrincipal(ctx, { ...input, versionId }, grant)
     }),
 })
@@ -170,7 +189,7 @@ export const schedules = internalMutation({
   },
   returns: recipes.schedulesResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "read", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.read"], async (grant) => {
       const { digest, ...input } = args
       void digest
       checkPage(input.paginationOpts)
@@ -189,7 +208,7 @@ export const setEnabled = internalMutation({
   },
   returns: recipes.setEnabledResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.manage"], async (grant) => {
       const { digest, ...input } = args
       void digest
       const scheduleId = ctx.db.normalizeId("recipeSchedules", input.scheduleId)
@@ -203,6 +222,10 @@ export const setEnabled = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
+      if (input.enabled) {
+        const version = await ctx.db.get(document.versionId)
+        if (version) requireConnectionUse(grant, version.recipe)
+      }
       return recipes.setEnabledForPrincipal(
         ctx,
         { ...input, scheduleId },
@@ -219,7 +242,7 @@ export const updateSchedule = internalMutation({
   },
   returns: recipes.updateScheduleResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.manage"], async (grant) => {
       const { digest, ...input } = args
       void digest
       const scheduleId = ctx.db.normalizeId("recipeSchedules", input.scheduleId)
@@ -238,6 +261,7 @@ export const updateSchedule = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
+      requireConnectionUse(grant, version.recipe)
       return recipes.updateScheduleForPrincipal(
         ctx,
         { ...input, scheduleId, versionId },
@@ -249,7 +273,7 @@ export const cancel = internalMutation({
   args: { digest: v.string(), ...recipes.cancelArgs.fields, runId: v.string() },
   returns: recipes.cancelResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.run"], async (grant) => {
       const { digest, ...input } = args
       void digest
       const runId = ctx.db.normalizeId("recipeRuns", input.runId)
@@ -266,7 +290,7 @@ export const retry = internalMutation({
   args: { digest: v.string(), ...recipes.retryArgs.fields, runId: v.string() },
   returns: recipes.retryResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.run"], async (grant) => {
       const { digest, ...input } = args
       void digest
       const runId = ctx.db.normalizeId("recipeRuns", input.runId)
@@ -276,6 +300,8 @@ export const retry = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
+      const version = await ctx.db.get(document.versionId)
+      if (version) requireConnectionUse(grant, version.recipe)
       return recipes.retryForPrincipal(ctx, { ...input, runId }, grant)
     }),
 })
@@ -287,7 +313,7 @@ export const setRunAccess = internalMutation({
   },
   returns: recipes.setRunAccessResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), "write", async (grant) => {
+    withGrant(ctx, args.digest, Date.now(), ["jobs.manage"], async (grant) => {
       const { digest, ...input } = args
       void digest
       const versionId = ctx.db.normalizeId("recipeVersions", input.versionId)

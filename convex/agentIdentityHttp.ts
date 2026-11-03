@@ -25,9 +25,9 @@ import {
 import {
   CLAIM_ATTEMPT_MS,
   POLL_INTERVAL_SECONDS,
-  SCOPES,
   parseLoginHint,
 } from "./lib/agentRegistration"
+import { OFFERED_SCOPES } from "./lib/agentScope"
 
 /**
  * auth.md registration endpoint (`POST /agent/identity`). This service
@@ -109,7 +109,7 @@ export const register = httpAction(async (ctx, request) => {
         claim_url: `${siteUrl}/agent/identity/claim`,
         claim_token: claimToken,
         claim_token_expires: new Date(result.claimExpiresAt).toISOString(),
-        post_claim_scopes: SCOPES.readwrite,
+        post_claim_scopes: OFFERED_SCOPES,
         claim: claimBlock(attemptToken, userCode),
       },
       { headers: noStore }
@@ -264,7 +264,7 @@ export const token = httpAction(async (ctx, request) => {
         access_token: accessToken,
         token_type: "Bearer",
         expires_in: Math.round((result.expiresAt - now) / 1000),
-        scope: SCOPES[result.scope].join(" "),
+        scope: result.scopes.join(" "),
         identity_assertion: assertion.assertion,
         assertion_expires: new Date(assertion.expiresAt).toISOString(),
       })
@@ -299,7 +299,7 @@ export const token = httpAction(async (ctx, request) => {
         access_token: accessToken,
         token_type: "Bearer",
         expires_in: Math.round((result.expiresAt - now) / 1000),
-        scope: SCOPES[result.scope].join(" "),
+        scope: result.scopes.join(" "),
       })
     }
     return oauthError(

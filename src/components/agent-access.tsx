@@ -2,20 +2,13 @@ import { useAction, useMutation, usePaginatedQuery } from "convex/react"
 import { Component, useState, type FormEvent, type ReactNode } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
-import type { AgentScope } from "../../convex/lib/agentScope"
+import { SCOPE_PRESETS, type AgentScope } from "../../convex/lib/agentScope"
 import { Mascot } from "@/components/mascot"
+import { ScopePicker, scopeSummary } from "@/components/scope-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { toast } from "@/components/ui/toast"
 
 export class AgentAccessBoundary extends Component<
@@ -48,11 +41,6 @@ export class AgentAccessBoundary extends Component<
   }
 }
 
-const SCOPE_LABELS: Record<AgentScope, string> = {
-  readonly: "Read only",
-  readwrite: "Read and write",
-}
-
 /** The Claude Code command that connects this app's `/mcp` endpoint. */
 function mcpCommand(token: string) {
   return `claude mcp add --transport http dfe ${window.location.origin}/mcp --header "Authorization: Bearer ${token}"`
@@ -71,7 +59,9 @@ export function AgentAccess({
     { initialNumItems: 20 }
   )
   const [days, setDays] = useState("30")
-  const [scope, setScope] = useState<AgentScope>("readonly")
+  const [scopes, setScopes] = useState<Array<AgentScope>>([
+    ...SCOPE_PRESETS.readonly,
+  ])
   const [token, setToken] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -87,10 +77,14 @@ export function AgentAccess({
       toast.error("Enter 1 to 30 days")
       return
     }
+    if (scopes.length === 0) {
+      toast.error("Choose at least one scope")
+      return
+    }
     if (saving) return
     setSaving(true)
     try {
-      setToken(await create({ workspaceId, days: duration, scope }))
+      setToken(await create({ workspaceId, days: duration, scopes }))
     } catch {
       toast.error("Could not create credential")
     } finally {
@@ -173,32 +167,13 @@ export function AgentAccess({
           onSubmit={submit}
           className="flex flex-col gap-4 rounded-lg border bg-card p-4"
         >
-          <div className="grid grid-cols-[1fr_7rem] gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="grant-scope">Access</Label>
-              <Select
-                value={scope}
-                disabled={saving}
-                onValueChange={(value) => {
-                  if (value === "readonly" || value === "readwrite")
-                    setScope(value)
-                }}
-              >
-                <SelectTrigger id="grant-scope" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="readonly">
-                      {SCOPE_LABELS.readonly}
-                    </SelectItem>
-                    <SelectItem value="readwrite">
-                      {SCOPE_LABELS.readwrite}
-                    </SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
+          <ScopePicker
+            id="grant-scope"
+            value={scopes}
+            onChange={setScopes}
+            disabled={saving}
+          />
+          <div className="grid grid-cols-[7rem] gap-3">
             <div className="grid gap-2">
               <Label htmlFor="grant-days">Days</Label>
               <Input
@@ -243,7 +218,7 @@ export function AgentAccess({
                 >
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <span className="text-sm font-medium">
-                      {SCOPE_LABELS[grant.scope]}
+                      {scopeSummary(grant.scopes)}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {active

@@ -123,11 +123,11 @@ export const ArtifactDownload = Schema.Struct({
 
 export const Capabilities = Schema.Struct({
   workspace: Schema.Struct({ id: Schema.String, name: Schema.String }),
-  scope: Schema.Literals(["readonly", "readwrite"]),
+  scopes: Schema.Array(Schema.String),
   capabilities: Schema.Array(
     Schema.Struct({
       id: Schema.String,
-      access: Schema.Literals(["read", "write"]),
+      scopes: Schema.Array(Schema.String),
       allowed: Schema.Boolean,
       description: Schema.String,
     })

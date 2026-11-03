@@ -9,7 +9,11 @@ import { httpRouter } from "convex/server"
 import type { Id } from "./_generated/dataModel"
 import { httpAction, type ActionCtx } from "./_generated/server"
 import { downloadUrl } from "./artifacts"
-import type { AgentScope } from "./lib/agentScope"
+import {
+  missingScopeMessage,
+  missingScopes,
+  type AgentScope,
+} from "./lib/agentScope"
 import { DOWNLOAD_URL_SECONDS } from "./lib/artifactDomain"
 import { internal } from "./_generated/api"
 import { digestToken } from "./agentAccess"
@@ -459,14 +463,13 @@ http.route({ path: "/auth.md", method: "GET", handler: skill })
 type Credential = {
   grantId: Id<"agentGrants">
   workspaceId: Id<"workspaces">
-  scope: AgentScope
 }
 
 /** Resolves the Bearer credential, or returns the 401/403 response. */
 async function credential(
   ctx: ActionCtx,
   request: Request,
-  needs: AgentScope
+  needs: ReadonlyArray<AgentScope>
 ): Promise<Credential | Response> {
   const token = bearerToken(request)
   if (!token) return unauthorized()
@@ -475,11 +478,10 @@ async function credential(
     now: Date.now(),
   })
   if (!grant) return reply(403, "Forbidden")
-  if (needs === "readwrite" && grant.scope !== "readwrite")
-    return replyJson(403, {
-      error: "This credential is read-only. Use a read-and-write one.",
-    })
-  return grant
+  const missing = missingScopes(grant.scopes, needs)
+  if (missing.length > 0)
+    return replyJson(403, { error: missingScopeMessage(missing) })
+  return { grantId: grant.grantId, workspaceId: grant.workspaceId }
 }
 
 /** Public artifact fields; the R2 key stays internal. */
@@ -511,7 +513,7 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     try {
-      const grant = await credential(ctx, request, "readwrite")
+      const grant = await credential(ctx, request, ["artifacts.write"])
       if (grant instanceof Response) return grant
       const body = await readJson(request)
       if (
@@ -546,7 +548,7 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     try {
-      const grant = await credential(ctx, request, "readwrite")
+      const grant = await credential(ctx, request, ["artifacts.write"])
       if (grant instanceof Response) return grant
       const body = await readJson(request)
       if (
@@ -574,7 +576,7 @@ http.route({
   method: "GET",
   handler: httpAction(async (ctx, request) => {
     try {
-      const grant = await credential(ctx, request, "readonly")
+      const grant = await credential(ctx, request, ["artifacts.read"])
       if (grant instanceof Response) return grant
       const params = new URL(request.url).searchParams
       const cursor = params.get("cursor")
@@ -608,7 +610,7 @@ http.route({
   method: "GET",
   handler: httpAction(async (ctx, request) => {
     try {
-      const grant = await credential(ctx, request, "readonly")
+      const grant = await credential(ctx, request, ["artifacts.read"])
       if (grant instanceof Response) return grant
       const artifactId = new URL(request.url).searchParams.get("artifactId")
       if (!artifactId) return reply(400, "Invalid request")

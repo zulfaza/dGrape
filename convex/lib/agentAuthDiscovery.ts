@@ -4,8 +4,8 @@ import {
   CLAIM_ATTEMPT_MS,
   CLAIM_WINDOW_MS,
   POLL_INTERVAL_SECONDS,
-  SCOPES,
 } from "./agentRegistration"
+import { OFFERED_SCOPES, SCOPE_DESCRIPTIONS } from "./agentScope"
 import { ASSERTION_LIFETIME_SECONDS } from "./identityAssertion"
 
 /**
@@ -18,11 +18,6 @@ import { ASSERTION_LIFETIME_SECONDS } from "./identityAssertion"
 
 export const CLAIM_GRANT = "urn:workos:agent-auth:grant-type:claim"
 export const JWT_BEARER_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer"
-
-const SCOPE_DESCRIPTIONS: Record<string, string> = {
-  "data.read": "Read collections and records of one workspace.",
-  "data.write": "Create collections, and create, change, and delete records.",
-}
 
 /** The protected resource of the agent HTTP API on this deployment. */
 export function apiResource() {
@@ -48,7 +43,7 @@ export function protectedResourceMetadata(resource: string) {
     resource,
     resource_name: "DFE",
     authorization_servers: [issuer()],
-    scopes_supported: SCOPES.readwrite,
+    scopes_supported: OFFERED_SCOPES,
     bearer_methods_supported: ["header"],
   }
 }
@@ -62,7 +57,7 @@ export function authorizationServerMetadata() {
     revocation_endpoint: e.revoke,
     jwks_uri: e.jwks,
     grant_types_supported: [JWT_BEARER_GRANT, CLAIM_GRANT],
-    scopes_supported: SCOPES.readwrite,
+    scopes_supported: OFFERED_SCOPES,
     agent_auth: {
       skill: e.skill,
       identity_endpoint: e.identity,
@@ -80,9 +75,9 @@ export function authMd() {
   const hours = CLAIM_WINDOW_MS / 3_600_000
   const tokenSeconds = ACCESS_TOKEN_LIFETIME_MS / 1000
   const assertionDays = ASSERTION_LIFETIME_SECONDS / 86_400
-  const scopes = Object.entries(SCOPE_DESCRIPTIONS)
-    .map(([scope, text]) => `- \`${scope}\`: ${text}`)
-    .join("\n")
+  const scopes = OFFERED_SCOPES.map(
+    (scope) => `- \`${scope}\`: ${SCOPE_DESCRIPTIONS[scope]}`
+  ).join("\n")
   return `# auth.md
 
 DFE (${app}) is a workspace for collections of typed records that agents
@@ -125,7 +120,7 @@ Content-Type: application/json
   "claim_url": "${e.claim}",
   "claim_token": "clm_…",
   "claim_token_expires": "…",
-  "post_claim_scopes": ${JSON.stringify(SCOPES.readwrite)},
+  "post_claim_scopes": ${JSON.stringify(OFFERED_SCOPES)},
   "claim": {
     "user_code": "123456",
     "expires_in": ${CLAIM_ATTEMPT_MS / 1000},
@@ -143,7 +138,9 @@ waiting at a time.
 Show your user one message: "Open this link, sign in, and enter this
 6-digit code: 123456", with \`verification_uri\`. Never ask the user to send
 you the code. On the claim page the user signs in with the same email,
-chooses a workspace and an access level, and types the code.
+chooses a workspace and the scopes to grant, and types the code. The user
+can grant fewer scopes than \`post_claim_scopes\`; the token response
+names the granted scopes.
 
 The code and link expire after ${minutes} minutes. For a new code, call:
 
@@ -202,7 +199,9 @@ There is no refresh token.
 
 Send \`Authorization: Bearer <access_token>\` to the MCP server
 (${app}/mcp) or the HTTP API. The token works only in the workspace the user
-chose, with the access the user chose:
+chose, with the scopes the user chose. No scope includes another. A request
+that needs a scope the token does not have gets \`403\`. Write, artifact,
+and recipe requests also name the missing scope.
 
 ${scopes}
 
