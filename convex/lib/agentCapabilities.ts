@@ -60,6 +60,17 @@ const CAPABILITIES = [
       "Publish and start recipes, and cancel runs. Starting or cancelling needs run permission on the recipe.",
   },
   {
+    id: "queries.read",
+    access: "read",
+    description:
+      "List saved queries with their result fields, and run a saved query revision.",
+  },
+  {
+    id: "queries.write",
+    access: "write",
+    description: "Save records queries as new immutable revisions.",
+  },
+  {
     id: "pages.read",
     access: "read",
     description:
