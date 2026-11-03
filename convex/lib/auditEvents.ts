@@ -65,6 +65,7 @@ export const auditEventValidator = v.union(
   op("query.save", { queryId: v.id("queryDefinitions"), revision: v.number() }),
   op("page.save", { pageId: v.id("pages"), revision: v.number() }),
   op("page.publish", { pageId: v.id("pages"), revision: v.number() }),
+  op("page.rollback", { pageId: v.id("pages"), revision: v.number() }),
   op("recipe.publish", { versionId: v.id("recipeVersions") }),
   op("recipe.setRunAccess", {
     versionId: v.id("recipeVersions"),

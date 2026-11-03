@@ -81,7 +81,21 @@ test("page drafts, publish, rollback and history preserve immutable definitions 
     (await owner.query(api.pages.get, { pageId: first.pageId })).version
       ?.definition.title
   ).toBe("Second")
-  await owner.mutation(api.pages.publish, {
+  await expect(
+    owner.mutation(api.pages.rollback, {
+      ...second,
+      expectedRevision: 2,
+      expectedPublishedRevision: 2,
+    })
+  ).rejects.toThrow("Rollback requires a revision older")
+  await expect(
+    owner.mutation(api.pages.publish, {
+      ...first,
+      expectedRevision: 2,
+      expectedPublishedRevision: 2,
+    })
+  ).rejects.toThrow("use rollback")
+  await owner.mutation(api.pages.rollback, {
     ...first,
     expectedRevision: 2,
     expectedPublishedRevision: 2,
@@ -90,6 +104,13 @@ test("page drafts, publish, rollback and history preserve immutable definitions 
     (await owner.query(api.pages.get, { pageId: first.pageId })).version
       ?.definition.title
   ).toBe("First")
+  const events = await owner.query(api.auditEvents.list, {
+    workspaceId,
+    paginationOpts: { numItems: 1, cursor: null },
+  })
+  expect(events.page.map(({ event }) => event)).toEqual([
+    { operation: "page.rollback", pageId: first.pageId, revision: 1 },
+  ])
   const history = await owner.query(api.pages.history, {
     pageId: first.pageId,
     paginationOpts: { numItems: 20, cursor: null },
@@ -316,6 +337,13 @@ test("page bindings pin query revisions, validate result fields and expose schem
       },
     })
   ).rejects.toThrow("Query is unavailable in this workspace")
+  const published = await owner.query(api.pages.get, { pageId: page.pageId })
+  const next = await owner.mutation(api.pages.save, {
+    workspaceId,
+    pageId: page.pageId,
+    expectedRevision: 1,
+    definition: published.version?.definition ?? { title: "", blocks: [] },
+  })
   await t.run((ctx) =>
     ctx.db.patch(collectionId, { definition: { version: 2, fields: [] } })
   )
@@ -323,8 +351,8 @@ test("page bindings pin query revisions, validate result fields and expose schem
   expect(invalid.bindings[0]).toContain("schema is stale")
   await expect(
     owner.mutation(api.pages.publish, {
-      ...page,
-      expectedRevision: 1,
+      ...next,
+      expectedRevision: 2,
       expectedPublishedRevision: 1,
     })
   ).rejects.toThrow("schema is stale")
