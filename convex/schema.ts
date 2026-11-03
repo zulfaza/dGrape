@@ -17,11 +17,16 @@ import {
 
 import { budgetOverridesValidator } from "./lib/budgets"
 import { recordCountValidator } from "./lib/recordCounts"
+import { auditEventFields } from "./lib/auditEvents"
 import { recipeTables } from "./lib/recipeState"
 import { secretFields, connectionFields } from "./lib/secretDomain"
 
 export default defineSchema({
   ...recipeTables,
+  /** Redacted change history; see convex/lib/auditEvents.ts. */
+  auditEvents: defineTable(auditEventFields).index("by_workspaceId", [
+    "workspaceId",
+  ]),
   artifactBindings: defineTable(bindingFields).index("by_recordId", [
     "recordId",
   ]),
