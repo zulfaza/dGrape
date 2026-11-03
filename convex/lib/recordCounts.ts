@@ -12,8 +12,9 @@ import { workspaceBudgets } from "./budgets"
  * - "counted": `count` is exact. Each insert adds one, each delete removes one.
  * - "counting": convex/recordCounts.ts scans the records in `_creationTime`
  *   order. `count` holds the records up to `after` (null: none scanned yet).
- *   An insert changes nothing, because the scan will reach the new record. A
- *   delete removes one only if the scan already counted that record.
+ *   An insert or a delete changes `count` only if the record is at or before
+ *   `after`; the scan counts the later records. `_creationTime` does not
+ *   follow commit order, so an insert can land before `after`.
  *
  * A collection made before counts existed has no value. Its first record
  * write, or `recordCounts.startAll`, starts the scan.
@@ -30,18 +31,26 @@ export type RecordCount = Infer<typeof recordCountValidator>
 
 export const EMPTY_RECORD_COUNT: RecordCount = { kind: "counted", count: 0 }
 
-export function countAfterInsert(state: RecordCount): RecordCount {
-  return state.kind === "counted" ? { ...state, count: state.count + 1 } : state
+/** True if `count` already includes (or must include) `record`. */
+function isCounted(state: RecordCount, record: Doc<"collectionRecords">) {
+  return (
+    state.kind === "counted" ||
+    (state.after !== null && record._creationTime <= state.after)
+  )
+}
+
+export function countAfterInsert(
+  state: RecordCount,
+  record: Doc<"collectionRecords">
+): RecordCount {
+  return isCounted(state, record) ? { ...state, count: state.count + 1 } : state
 }
 
 export function countAfterDelete(
   state: RecordCount,
   record: Doc<"collectionRecords">
 ): RecordCount {
-  const counted =
-    state.kind === "counted" ||
-    (state.after !== null && record._creationTime <= state.after)
-  return counted ? { ...state, count: state.count - 1 } : state
+  return isCounted(state, record) ? { ...state, count: state.count - 1 } : state
 }
 
 /** Starts the scan for a collection that has no count, and returns its state. */

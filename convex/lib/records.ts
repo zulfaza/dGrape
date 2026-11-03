@@ -59,7 +59,11 @@ export async function insertRecord(
     values,
     idempotencyKey,
   })
-  await advanceDataRevision(ctx, collection._id, countAfterInsert)
+  const record = await ctx.db.get(recordId)
+  if (!record) throw new Error("Record missing")
+  await advanceDataRevision(ctx, collection._id, (state) =>
+    countAfterInsert(state, record)
+  )
   await replaceIndexEntries(ctx, collection, recordId, values)
   return recordId
 }
@@ -101,16 +105,20 @@ export async function deleteRecord(
   await ctx.db.delete(recordId)
 }
 
-/** `count` is given when the write adds or removes a record. */
+/**
+ * Each record write starts the count if the collection has none. `count` is
+ * given when the write adds or removes a record.
+ */
 async function advanceDataRevision(
   ctx: MutationCtx,
   id: Id<"collections">,
-  count?: (state: RecordCount) => RecordCount
+  count: (state: RecordCount) => RecordCount = (state) => state
 ) {
   const collection = await ctx.db.get(id)
   if (!collection) throw new Error("Collection missing")
-  const dataRevision = (collection.dataRevision ?? 0) + 1
-  if (!count) return ctx.db.patch(id, { dataRevision })
   const state = collection.recordCount ?? (await startRecordCount(ctx, id))
-  await ctx.db.patch(id, { dataRevision, recordCount: count(state) })
+  await ctx.db.patch(id, {
+    dataRevision: (collection.dataRevision ?? 0) + 1,
+    recordCount: count(state),
+  })
 }
