@@ -1,6 +1,10 @@
 import { Effect, Redacted, Schema } from "effect"
 import { SecretService, type SecretScope } from "./secretService"
-import type { ConnectorRoute } from "./secretDomain"
+import {
+  defaultResponse,
+  type ConnectorRoute,
+  type ResponseMapping,
+} from "./secretDomain"
 
 export type PageRequest = {
   route: string
@@ -17,6 +21,82 @@ export type ConnectorConfig = {
 }
 export type Row = Record<string, string | number | boolean>
 const denied = () => new Error("Connector request failed")
+const isObject = Schema.is(Schema.Record(Schema.String, Schema.Json))
+/** Follow own keys only, so a path cannot reach prototype members. */
+function at(body: Schema.Json, path: readonly string[]) {
+  let value: Schema.Json | undefined = body
+  for (const key of path) {
+    if (!isObject(value) || Array.isArray(value) || !Object.hasOwn(value, key))
+      return undefined
+    value = value[key]
+  }
+  return value
+}
+/** A Link cursor must stay on the route: same origin and path, no credentials. */
+function onRoute(raw: string, config: ConnectorConfig, route: ConnectorRoute) {
+  const url = new URL(raw, config.origin)
+  if (
+    url.origin !== config.origin ||
+    url.pathname !== route.path ||
+    url.username ||
+    url.password ||
+    url.hash
+  )
+    throw denied()
+  return url
+}
+/** Returns the `rel="next"` target of an RFC 8288 Link header, if any. */
+function nextLink(header: string | null) {
+  if (header === null) return null
+  if (header.length > 8192) throw denied()
+  for (const [, target, params] of header.matchAll(/<([^>]*)>([^,]*)/g)) {
+    const rel = /;\s*rel\s*=\s*"?([^";]*)"?/i.exec(params ?? "")?.[1]
+    if (
+      target !== undefined &&
+      rel?.toLowerCase().split(/\s+/).includes("next")
+    )
+      return target
+  }
+  return null
+}
+function requestUrl(
+  config: ConnectorConfig,
+  route: ConnectorRoute,
+  mapping: ResponseMapping,
+  input: PageRequest
+) {
+  const url = new URL(route.path, config.origin)
+  const cursorParam = mapping.next.kind === "body" ? mapping.next.param : null
+  for (const [key, value] of Object.entries(input.query)) {
+    if (
+      !route.queryKeys.includes(key) ||
+      key === cursorParam ||
+      value.length > 2048
+    )
+      throw denied()
+    url.searchParams.set(key, value)
+  }
+  if (input.cursor === null) return url
+  if (input.cursor.length > 2048) throw denied()
+  switch (mapping.next.kind) {
+    case "none":
+      throw denied()
+    case "body":
+      if (!route.queryKeys.includes(mapping.next.param)) throw denied()
+      url.searchParams.set(mapping.next.param, input.cursor)
+      return url
+    case "link": {
+      const next = onRoute(input.cursor, config, route)
+      if ([...next.searchParams.keys()].length > 20) throw denied()
+      for (const [key, value] of next.searchParams) {
+        if (!route.queryKeys.includes(key) || value.length > 2048)
+          throw denied()
+        url.searchParams.set(key, value)
+      }
+      return url
+    }
+  }
+}
 /** No response bodies, headers, or provider errors escape this boundary. */
 export function fetchConnectorPage(
   config: ConnectorConfig,
@@ -38,21 +118,8 @@ export function fetchConnectorPage(
       Object.keys(input.query).length > 20
     )
       throw denied()
-    const url = new URL(route.path, config.origin)
-    for (const [key, value] of Object.entries(input.query)) {
-      if (
-        !route.queryKeys.includes(key) ||
-        key === "cursor" ||
-        value.length > 2048
-      )
-        throw denied()
-      url.searchParams.set(key, value)
-    }
-    if (input.cursor !== null) {
-      if (!route.queryKeys.includes("cursor") || input.cursor.length > 2048)
-        throw denied()
-      url.searchParams.set("cursor", input.cursor)
-    }
+    const mapping = route.response ?? defaultResponse
+    const url = requestUrl(config, route, mapping, input)
     const store = yield* SecretService
     const secret = yield* store.find(config.scope, config.name)
     if (!secret) throw denied()
@@ -92,7 +159,7 @@ export function fetchConnectorPage(
         }
         text += decoder.decode()
         // Reject an echo before mapping, including JSON-escaped strings.
-        const body: unknown = JSON.parse(text)
+        const body = Schema.decodeUnknownSync(Schema.Json)(JSON.parse(text))
         const encodedToken = JSON.stringify(token).slice(1, -1)
         if (
           text.includes(token) ||
@@ -107,16 +174,24 @@ export function fetchConnectorPage(
               !value.includes(encodeURIComponent(token))
           )
         )
-        const page = Schema.decodeUnknownSync(
-          Schema.Struct({
-            rows: Schema.Array(
-              Schema.Record(Schema.String, Schema.Unknown)
-            ).check(Schema.isMaxLength(input.limits.maxRows)),
-            nextCursor: Schema.optionalKey(
-              Schema.NullOr(safeText.check(Schema.isMaxLength(2048)))
-            ),
-          })
-        )(body)
+        const pageRows = Schema.decodeUnknownSync(
+          Schema.Array(Schema.Record(Schema.String, Schema.Unknown)).check(
+            Schema.isMaxLength(input.limits.maxRows)
+          )
+        )(at(body, mapping.rows))
+        const parseCursor = Schema.decodeUnknownSync(
+          Schema.UndefinedOr(
+            Schema.NullOr(safeText.check(Schema.isMaxLength(2048)))
+          )
+        )
+        let nextCursor: string | null = null
+        if (mapping.next.kind === "body")
+          nextCursor = parseCursor(at(body, mapping.next.path)) ?? null
+        if (mapping.next.kind === "link") {
+          const link = nextLink(response.headers.get("link"))
+          if (link !== null)
+            nextCursor = parseCursor(onRoute(link, config, route).href) ?? null
+        }
         const parseValue = Schema.decodeUnknownSync(
           Schema.Union([
             safeText.check(Schema.isMaxLength(8192)),
@@ -127,7 +202,7 @@ export function fetchConnectorPage(
           ])
         )
         const rows: Row[] = []
-        for (const item of page.rows) {
+        for (const item of pageRows) {
           const row: Row = {}
           for (const field of route.fields) {
             const value = parseValue(item[field])
@@ -136,7 +211,6 @@ export function fetchConnectorPage(
           }
           rows.push(row)
         }
-        const nextCursor = page.nextCursor ?? null
         return { rows, nextCursor, bytesRead }
       },
       catch: denied,
