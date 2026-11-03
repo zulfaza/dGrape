@@ -57,6 +57,7 @@ require-static-classes as errors.
   heading line height are also retained explicitly.
 - Measured landing animation properties and specimen token/contrast swatches
   have file-scoped inline property allowances. These retain existing behavior.
+  The waving sloth permits only animationPlayState to pause when not visible.
   Tabs use measured CSS variables. Sonner uses shared radius and color tokens.
 - Static class analysis is off only in calendar and the specimen: calendar
   consumes react-day-picker class names; the specimen demonstrates CSS classes.
