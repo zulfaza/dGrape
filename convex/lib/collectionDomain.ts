@@ -9,7 +9,13 @@ import { v, type Infer } from "convex/values"
 export const collectionFieldValidator = v.object({
   id: v.string(),
   label: v.string(),
-  type: v.union(v.literal("text"), v.literal("number"), v.literal("boolean")),
+  type: v.union(
+    v.literal("text"),
+    v.literal("number"),
+    v.literal("integer"),
+    v.literal("currency"),
+    v.literal("boolean")
+  ),
   /**
    * When true, a record may leave this field out. When absent, every record
    * must have a value. A field added after creation is always optional,
@@ -48,6 +54,21 @@ export const collectionRecordValidator = v.object({
   values: recordValuesValidator,
   idempotencyKey: v.optional(v.string()),
 })
+
+/** Shared by HTTP parsers and human forms; field kinds keep scalar wire values. */
+export function isFieldType(value: unknown): value is CollectionField["type"] {
+  return (
+    value === "text" ||
+    value === "number" ||
+    value === "boolean" ||
+    value === "integer" ||
+    value === "currency"
+  )
+}
+
+export function isNumericField(type: CollectionField["type"]): boolean {
+  return type === "number" || type === "integer"
+}
 
 export type CollectionField = Infer<typeof collectionFieldValidator>
 export type CollectionDefinition = Infer<typeof collectionDefinitionValidator>
@@ -171,6 +192,17 @@ export function checkRecordValues(
           `Field "${field.id}" is indexed, so its text must be at most ${MAX_INDEXED_TEXT_LENGTH} characters`
         )
       textLength += value.length
+    } else if (field.type === "currency") {
+      if (typeof value !== "string" || !/^[A-Z]{3}$/.test(value))
+        return invalid(
+          `Field "${field.id}" must be a three-letter uppercase currency code`
+        )
+      textLength += value.length
+    } else if (field.type === "integer") {
+      if (typeof value !== "number" || !Number.isSafeInteger(value))
+        return invalid(
+          `Field "${field.id}" must be a safe integer (minor units for money)`
+        )
     } else if (field.type === "number") {
       if (typeof value !== "number" || !Number.isFinite(value))
         return invalid(`Field "${field.id}" must be a finite number`)

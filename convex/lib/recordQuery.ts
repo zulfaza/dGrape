@@ -4,6 +4,7 @@ import type { Doc } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
 import {
   recordValueValidator,
+  checkRecordValues,
   type Checked,
   type CollectionField,
   type RecordValue,
@@ -39,12 +40,6 @@ export const recordQueryValidator = v.object({
 
 export type RecordQuery = Infer<typeof recordQueryValidator>
 
-const TYPE_OF: Record<CollectionField["type"], string> = {
-  text: "string",
-  number: "number",
-  boolean: "boolean",
-}
-
 const invalid = (message: string): Checked<never> => ({ ok: false, message })
 
 /** Checks that the field is indexed and every value has the field's type. */
@@ -69,8 +64,10 @@ export function checkQuery(
         : [where.lower?.value, where.upper?.value].filter(
             (value) => value !== undefined
           )
-  if (values.some((value) => typeof value !== TYPE_OF[field.type]))
-    return invalid(`Values for field "${field.id}" must be ${field.type}`)
+  for (const value of values) {
+    const checked = checkRecordValues([field], { [field.id]: value })
+    if (!checked.ok) return checked
+  }
   return { ok: true, value: query }
 }
 

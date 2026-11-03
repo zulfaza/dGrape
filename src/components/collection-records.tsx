@@ -1,3 +1,8 @@
+import { Match } from "effect"
+import {
+  isNumericField,
+  checkRecordValues,
+} from "../../convex/lib/collectionDomain"
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react"
 import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
@@ -58,7 +63,7 @@ function initialValues(fields: Field[]): Draft["values"] {
       field.id,
       field.type === "boolean"
         ? false
-        : field.type === "number" && !field.optional
+        : isNumericField(field.type) && !field.optional
           ? "0"
           : "",
     ])
@@ -119,7 +124,7 @@ export function CollectionRecords({
       const value = draft.values[field.id]
       // An empty optional field has no value, so the record leaves it out.
       if (field.optional && (value === undefined || value === "")) continue
-      if (field.type === "number") {
+      if (isNumericField(field.type)) {
         if (
           typeof value !== "string" ||
           value.trim() === "" ||
@@ -130,6 +135,14 @@ export function CollectionRecords({
         }
         values[field.id] = Number(value)
       } else if (value !== undefined) values[field.id] = value
+    }
+    const checked = checkRecordValues(
+      collection?.definition.fields ?? [],
+      values
+    )
+    if (!checked.ok) {
+      toast.error(checked.message)
+      return
     }
     setSaving(true)
     try {
@@ -268,7 +281,7 @@ export function CollectionRecords({
                   <TableHead
                     key={field.id}
                     className={
-                      field.type === "number" ? "px-4 text-right" : "px-4"
+                      isNumericField(field.type) ? "px-4 text-right" : "px-4"
                     }
                   >
                     {field.label}
@@ -286,7 +299,7 @@ export function CollectionRecords({
                     <TableCell
                       key={field.id}
                       className={
-                        field.type === "number"
+                        isNumericField(field.type)
                           ? "px-4 py-3 text-right tabular-nums"
                           : "max-w-80 truncate px-4 py-3"
                       }
@@ -420,10 +433,14 @@ export function CollectionRecords({
                       <Input
                         disabled={saving}
                         id={`record-${field.id}`}
-                        type={field.type === "number" ? "number" : "text"}
-                        step={field.type === "number" ? "any" : undefined}
+                        type={isNumericField(field.type) ? "number" : "text"}
+                        step={Match.value(field.type).pipe(
+                          Match.when("integer", () => 1),
+                          Match.when("number", () => "any"),
+                          Match.orElse(() => undefined)
+                        )}
                         maxLength={field.type === "text" ? 10000 : undefined}
-                        required={field.type === "number" && !field.optional}
+                        required={isNumericField(field.type) && !field.optional}
                         value={String(draft.values[field.id] ?? "")}
                         onChange={(e) =>
                           setDraft({

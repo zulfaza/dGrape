@@ -1,3 +1,4 @@
+import { isFieldType } from "./collectionDomain"
 import type {
   CollectionField,
   RecordValue,
@@ -39,7 +40,7 @@ function parseField(value: unknown): CollectionField | null {
   if (!isObject(value)) return null
   const { id, label, type, optional, indexed } = value
   if (typeof id !== "string" || typeof label !== "string") return null
-  if (type !== "text" && type !== "number" && type !== "boolean") return null
+  if (!isFieldType(type)) return null
   if (optional !== undefined && optional !== true) return null
   if (indexed !== undefined && indexed !== true) return null
   return {
