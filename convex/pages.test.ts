@@ -212,6 +212,50 @@ test("page bindings pin query revisions, validate result fields and expose schem
       },
     })
   ).rejects.toThrow("Chart requires")
+  await expect(
+    owner.mutation(api.pages.save, {
+      workspaceId,
+      definition: {
+        title: "Bad scatter",
+        blocks: [
+          {
+            kind: "chart",
+            title: "Bad scatter",
+            binding: saved,
+            chart: {
+              type: "scatter",
+              labelField: "amount",
+              xField: "missing",
+              xUnit: "",
+              valueField: "amount",
+              unit: "USD",
+            },
+          },
+        ],
+      },
+    })
+  ).rejects.toThrow("Chart requires")
+  await owner.mutation(api.pages.save, {
+    workspaceId,
+    definition: {
+      title: "Scatter",
+      blocks: [
+        {
+          kind: "chart",
+          title: "Scatter",
+          binding: saved,
+          chart: {
+            type: "scatter",
+            labelField: "amount",
+            xField: "amount",
+            xUnit: "",
+            valueField: "amount",
+            unit: "USD",
+          },
+        },
+      ],
+    },
+  })
   await t.run((ctx) =>
     ctx.db.insert("workspaceMembers", {
       workspaceId: otherWorkspaceId,
