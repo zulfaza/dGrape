@@ -2,6 +2,7 @@ import { v, type Infer, type PropertyValidators } from "convex/values"
 import type { Id } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
 import { storedScopesValidator } from "./agentScope"
+import { budgetOverridesValidator } from "./budgets"
 
 /**
  * Audit events: an append-only history of the changes in a workspace.
@@ -40,6 +41,7 @@ const op = <Name extends string, Fields extends PropertyValidators>(
 
 export const auditEventValidator = v.union(
   op("workspace.create", {}),
+  op("workspace.setBudgets", { overrides: budgetOverridesValidator }),
   op("collection.create", { collectionId: v.id("collections") }),
   op("collection.addField", {
     collectionId: v.id("collections"),
