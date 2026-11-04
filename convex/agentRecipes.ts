@@ -3,6 +3,7 @@ import { internalMutation, internalQuery } from "./_generated/server"
 import { withGrant, type Grant } from "./lib/agentGrant"
 import { missingScopeMessage, missingScopes } from "./lib/agentScope"
 import type { Recipe } from "./lib/recipeDomain"
+import { agentOperation, runOnce } from "./lib/operations"
 import * as recipes from "./recipes"
 
 /**
@@ -32,20 +33,26 @@ export const publish = internalMutation({
   args: {
     digest: v.string(),
     ...recipes.publishArgs.omit("workspaceId").fields,
+    idempotencyKey: v.optional(v.string()),
   },
   returns: recipes.publishResult,
-  handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), ["jobs.manage"], async (grant) => {
-      requireConnectionUse(grant, args.recipe)
-      await recipes.checkRecipe(ctx, grant.workspaceId, args.recipe)
-      const { digest, ...input } = args
-      void digest
-      return recipes.publishForPrincipal(
+  handler: (ctx, { digest, idempotencyKey, ...input }) =>
+    withGrant(ctx, digest, Date.now(), ["jobs.manage"], (grant) =>
+      runOnce(
         ctx,
-        { ...input, workspaceId: grant.workspaceId },
-        grant
+        agentOperation(grant, "recipes.publish", idempotencyKey, input),
+        recipes.publishResult,
+        async () => {
+          requireConnectionUse(grant, input.recipe)
+          await recipes.checkRecipe(ctx, grant.workspaceId, input.recipe)
+          return recipes.publishForPrincipal(
+            ctx,
+            { ...input, workspaceId: grant.workspaceId },
+            grant
+          )
+        }
       )
-    }),
+    ),
 })
 export const validate = internalQuery({
   args: {
@@ -165,22 +172,39 @@ export const schedule = internalMutation({
     digest: v.string(),
     ...recipes.scheduleArgs.fields,
     versionId: v.string(),
+    idempotencyKey: v.optional(v.string()),
   },
   returns: recipes.scheduleResult,
-  handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), ["jobs.manage"], async (grant) => {
-      const { digest, ...input } = args
-      void digest
-      const versionId = ctx.db.normalizeId("recipeVersions", input.versionId)
-      const document = versionId ? await ctx.db.get(versionId) : null
-      if (!versionId || !document || document.workspaceId !== grant.workspaceId)
-        throw new ConvexError({
-          status: 403,
-          message: "Workspace access denied",
-        })
-      requireConnectionUse(grant, document.recipe)
-      return recipes.scheduleForPrincipal(ctx, { ...input, versionId }, grant)
-    }),
+  handler: (ctx, { digest, idempotencyKey, ...input }) =>
+    withGrant(ctx, digest, Date.now(), ["jobs.manage"], (grant) =>
+      runOnce(
+        ctx,
+        agentOperation(grant, "recipes.schedule", idempotencyKey, input),
+        recipes.scheduleResult,
+        async () => {
+          const versionId = ctx.db.normalizeId(
+            "recipeVersions",
+            input.versionId
+          )
+          const document = versionId ? await ctx.db.get(versionId) : null
+          if (
+            !versionId ||
+            !document ||
+            document.workspaceId !== grant.workspaceId
+          )
+            throw new ConvexError({
+              status: 403,
+              message: "Workspace access denied",
+            })
+          requireConnectionUse(grant, document.recipe)
+          return recipes.scheduleForPrincipal(
+            ctx,
+            { ...input, versionId },
+            grant
+          )
+        }
+      )
+    ),
 })
 export const schedules = internalMutation({
   args: {
@@ -205,33 +229,42 @@ export const setEnabled = internalMutation({
     digest: v.string(),
     ...recipes.setEnabledArgs.fields,
     scheduleId: v.string(),
+    idempotencyKey: v.optional(v.string()),
   },
   returns: recipes.setEnabledResult,
-  handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), ["jobs.manage"], async (grant) => {
-      const { digest, ...input } = args
-      void digest
-      const scheduleId = ctx.db.normalizeId("recipeSchedules", input.scheduleId)
-      const document = scheduleId ? await ctx.db.get(scheduleId) : null
-      if (
-        !scheduleId ||
-        !document ||
-        document.workspaceId !== grant.workspaceId
-      )
-        throw new ConvexError({
-          status: 403,
-          message: "Workspace access denied",
-        })
-      if (input.enabled) {
-        const version = await ctx.db.get(document.versionId)
-        if (version) requireConnectionUse(grant, version.recipe)
-      }
-      return recipes.setEnabledForPrincipal(
+  handler: (ctx, { digest, idempotencyKey, ...input }) =>
+    withGrant(ctx, digest, Date.now(), ["jobs.manage"], (grant) =>
+      runOnce(
         ctx,
-        { ...input, scheduleId },
-        grant
+        agentOperation(grant, "recipes.setEnabled", idempotencyKey, input),
+        recipes.setEnabledResult,
+        async () => {
+          const scheduleId = ctx.db.normalizeId(
+            "recipeSchedules",
+            input.scheduleId
+          )
+          const document = scheduleId ? await ctx.db.get(scheduleId) : null
+          if (
+            !scheduleId ||
+            !document ||
+            document.workspaceId !== grant.workspaceId
+          )
+            throw new ConvexError({
+              status: 403,
+              message: "Workspace access denied",
+            })
+          if (input.enabled) {
+            const version = await ctx.db.get(document.versionId)
+            if (version) requireConnectionUse(grant, version.recipe)
+          }
+          return recipes.setEnabledForPrincipal(
+            ctx,
+            { ...input, scheduleId },
+            grant
+          )
+        }
       )
-    }),
+    ),
 })
 export const updateSchedule = internalMutation({
   args: {
@@ -239,52 +272,74 @@ export const updateSchedule = internalMutation({
     ...recipes.updateScheduleArgs.fields,
     scheduleId: v.string(),
     versionId: v.string(),
+    idempotencyKey: v.optional(v.string()),
   },
   returns: recipes.updateScheduleResult,
-  handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), ["jobs.manage"], async (grant) => {
-      const { digest, ...input } = args
-      void digest
-      const scheduleId = ctx.db.normalizeId("recipeSchedules", input.scheduleId)
-      const versionId = ctx.db.normalizeId("recipeVersions", input.versionId)
-      const schedule = scheduleId ? await ctx.db.get(scheduleId) : null
-      const version = versionId ? await ctx.db.get(versionId) : null
-      if (
-        !scheduleId ||
-        !versionId ||
-        !schedule ||
-        !version ||
-        schedule.workspaceId !== grant.workspaceId ||
-        version.workspaceId !== grant.workspaceId
-      )
-        throw new ConvexError({
-          status: 403,
-          message: "Workspace access denied",
-        })
-      requireConnectionUse(grant, version.recipe)
-      return recipes.updateScheduleForPrincipal(
+  handler: (ctx, { digest, idempotencyKey, ...input }) =>
+    withGrant(ctx, digest, Date.now(), ["jobs.manage"], (grant) =>
+      runOnce(
         ctx,
-        { ...input, scheduleId, versionId },
-        grant
+        agentOperation(grant, "recipes.updateSchedule", idempotencyKey, input),
+        recipes.updateScheduleResult,
+        async () => {
+          const scheduleId = ctx.db.normalizeId(
+            "recipeSchedules",
+            input.scheduleId
+          )
+          const versionId = ctx.db.normalizeId(
+            "recipeVersions",
+            input.versionId
+          )
+          const schedule = scheduleId ? await ctx.db.get(scheduleId) : null
+          const version = versionId ? await ctx.db.get(versionId) : null
+          if (
+            !scheduleId ||
+            !versionId ||
+            !schedule ||
+            !version ||
+            schedule.workspaceId !== grant.workspaceId ||
+            version.workspaceId !== grant.workspaceId
+          )
+            throw new ConvexError({
+              status: 403,
+              message: "Workspace access denied",
+            })
+          requireConnectionUse(grant, version.recipe)
+          return recipes.updateScheduleForPrincipal(
+            ctx,
+            { ...input, scheduleId, versionId },
+            grant
+          )
+        }
       )
-    }),
+    ),
 })
 export const cancel = internalMutation({
-  args: { digest: v.string(), ...recipes.cancelArgs.fields, runId: v.string() },
+  args: {
+    digest: v.string(),
+    ...recipes.cancelArgs.fields,
+    runId: v.string(),
+    idempotencyKey: v.optional(v.string()),
+  },
   returns: recipes.cancelResult,
-  handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), ["jobs.run"], async (grant) => {
-      const { digest, ...input } = args
-      void digest
-      const runId = ctx.db.normalizeId("recipeRuns", input.runId)
-      const document = runId ? await ctx.db.get(runId) : null
-      if (!runId || !document || document.workspaceId !== grant.workspaceId)
-        throw new ConvexError({
-          status: 403,
-          message: "Workspace access denied",
-        })
-      return recipes.cancelForPrincipal(ctx, { ...input, runId }, grant)
-    }),
+  handler: (ctx, { digest, idempotencyKey, ...input }) =>
+    withGrant(ctx, digest, Date.now(), ["jobs.run"], (grant) =>
+      runOnce(
+        ctx,
+        agentOperation(grant, "recipes.cancel", idempotencyKey, input),
+        recipes.cancelResult,
+        async () => {
+          const runId = ctx.db.normalizeId("recipeRuns", input.runId)
+          const document = runId ? await ctx.db.get(runId) : null
+          if (!runId || !document || document.workspaceId !== grant.workspaceId)
+            throw new ConvexError({
+              status: 403,
+              message: "Workspace access denied",
+            })
+          return recipes.cancelForPrincipal(ctx, { ...input, runId }, grant)
+        }
+      )
+    ),
 })
 export const retry = internalMutation({
   args: { digest: v.string(), ...recipes.retryArgs.fields, runId: v.string() },
@@ -310,23 +365,36 @@ export const setRunAccess = internalMutation({
     digest: v.string(),
     ...recipes.setRunAccessArgs.fields,
     versionId: v.string(),
+    idempotencyKey: v.optional(v.string()),
   },
   returns: recipes.setRunAccessResult,
-  handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), ["jobs.manage"], async (grant) => {
-      const { digest, ...input } = args
-      void digest
-      const versionId = ctx.db.normalizeId("recipeVersions", input.versionId)
-      const document = versionId ? await ctx.db.get(versionId) : null
-      if (!versionId || !document || document.workspaceId !== grant.workspaceId)
-        throw new ConvexError({
-          status: 403,
-          message: "Workspace access denied",
-        })
-      return recipes.setRunAccessForPrincipal(
+  handler: (ctx, { digest, idempotencyKey, ...input }) =>
+    withGrant(ctx, digest, Date.now(), ["jobs.manage"], (grant) =>
+      runOnce(
         ctx,
-        { ...input, versionId },
-        grant
+        agentOperation(grant, "recipes.setRunAccess", idempotencyKey, input),
+        recipes.setRunAccessResult,
+        async () => {
+          const versionId = ctx.db.normalizeId(
+            "recipeVersions",
+            input.versionId
+          )
+          const document = versionId ? await ctx.db.get(versionId) : null
+          if (
+            !versionId ||
+            !document ||
+            document.workspaceId !== grant.workspaceId
+          )
+            throw new ConvexError({
+              status: 403,
+              message: "Workspace access denied",
+            })
+          return recipes.setRunAccessForPrincipal(
+            ctx,
+            { ...input, versionId },
+            grant
+          )
+        }
       )
-    }),
+    ),
 })

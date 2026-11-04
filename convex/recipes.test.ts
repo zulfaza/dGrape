@@ -588,6 +588,26 @@ describe("recipe credentials", () => {
         },
       })
     ).rejects.toThrow("does not have the scope connections.use")
+    // A retried keyed write returns the first schedule.
+    const keyedSchedule = {
+      digest: "jobsManage",
+      versionId,
+      timing: { kind: "once" as const, at: Date.now() + 60000 },
+      idempotencyKey: "schedule-1",
+    }
+    const scheduleId = await t.mutation(
+      internal.agentRecipes.schedule,
+      keyedSchedule
+    )
+    expect(
+      await t.mutation(internal.agentRecipes.schedule, keyedSchedule)
+    ).toBe(scheduleId)
+    await expect(
+      t.mutation(internal.agentRecipes.schedule, {
+        ...keyedSchedule,
+        timing: { kind: "once", at: Date.now() + 120000 },
+      })
+    ).rejects.toThrow("different request")
     const { digestToken } = await import("./agentAccess")
     const jobsOnly = "c".repeat(64)
     const jobsOnlyDigest = await digestToken(jobsOnly)

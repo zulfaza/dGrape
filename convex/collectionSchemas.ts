@@ -11,6 +11,7 @@ import {
   type MutationCtx,
 } from "./_generated/server"
 import { withGrant } from "./lib/agentGrant"
+import { agentOperation, runOnce } from "./lib/operations"
 import { requireMembership } from "./lib/auth"
 import {
   auditActor,
@@ -134,6 +135,8 @@ export const renameField = mutation({
 })
 
 /** renameField for an agent credential with the data.write scope. */
+const renamedField = v.object({ version: v.number() })
+
 export const renameFieldForAgent = internalMutation({
   args: {
     digest: v.string(),
@@ -141,20 +144,30 @@ export const renameFieldForAgent = internalMutation({
     expectedVersion: v.number(),
     fieldId: v.string(),
     label: v.string(),
+    /** See convex/lib/operations.ts. */
+    idempotencyKey: v.optional(v.string()),
   },
-  returns: v.object({ version: v.number() }),
-  handler: (ctx, { digest, collectionId, ...rename }) =>
-    withGrant(ctx, digest, Date.now(), ["data.write"], async (grant) => {
-      const id = ctx.db.normalizeId("collections", collectionId)
-      const collection = id && (await ctx.db.get(id))
-      if (!collection || collection.workspaceId !== grant.workspaceId)
-        throw new Error("Collection access denied")
-      const { version } = await renameFieldLabel(
+  returns: renamedField,
+  handler: (ctx, { digest, idempotencyKey, ...input }) =>
+    withGrant(ctx, digest, Date.now(), ["data.write"], (grant) =>
+      runOnce(
         ctx,
-        collection,
-        auditActor(grant.owner, grant),
-        rename
+        agentOperation(grant, "collections.renameField", idempotencyKey, input),
+        renamedField,
+        async () => {
+          const { collectionId, ...rename } = input
+          const id = ctx.db.normalizeId("collections", collectionId)
+          const collection = id && (await ctx.db.get(id))
+          if (!collection || collection.workspaceId !== grant.workspaceId)
+            throw new Error("Collection access denied")
+          const { version } = await renameFieldLabel(
+            ctx,
+            collection,
+            auditActor(grant.owner, grant),
+            rename
+          )
+          return { version }
+        }
       )
-      return { version }
-    }),
+    ),
 })

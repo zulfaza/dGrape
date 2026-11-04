@@ -179,7 +179,8 @@ const AddField = Tool.make("collections_add_field", {
 
 const RenameField = Tool.make("collections_rename_field", {
   description:
-    "Change the label of one field. The field `id` stays, so records, saved queries, and pages keep working. Pass the collection's current `version` (from collections_describe) as `expectedVersion`; if the schema changed since you read it, the call fails: read it again. The label is trimmed and must not be empty. Returns the new schema version. Needs the data.write scope.",
+    "Change the label of one field. The field `id` stays, so records, saved queries, and pages keep working. Pass the collection's current `version` (from collections_describe) as `expectedVersion`; if the schema changed since you read it, the call fails: read it again. The label is trimmed and must not be empty. Returns the new schema version. Needs the data.write scope." +
+    OperationKeyDescription,
   parameters: Collections.RenameFieldInput,
   success: Collections.RenamedField,
   failure: AgentApi.AgentApiError,
@@ -272,7 +273,8 @@ const ListTemplates = Tool.make("collections_templates", {
 
 const RecipePublish = Tool.make("recipes_publish", {
   description:
-    "Publish an immutable recipe. Use recipes_validate and recipes_preview first. Requires jobs.manage, and connections.use for a fetch step.",
+    "Publish an immutable recipe. Use recipes_validate and recipes_preview first. Requires jobs.manage, and connections.use for a fetch step." +
+    OperationKeyDescription,
   parameters: Recipes.PublishInput,
   success: Schema.String,
   failure: AgentApi.AgentApiError,
@@ -333,7 +335,8 @@ const RecipeTrigger = Tool.make("recipes_trigger", {
 
 const RecipeSchedule = Tool.make("recipes_schedule", {
   description:
-    "Create a UTC schedule. Only the recipe creator can manage it. Requires jobs.manage, and connections.use for a fetch step. Overlap: a due run is skipped while the schedule's prior run is active. Catch-up: after missed occurrences, one run starts for the latest due time only.",
+    "Create a UTC schedule. Only the recipe creator can manage it. Requires jobs.manage, and connections.use for a fetch step. Overlap: a due run is skipped while the schedule's prior run is active. Catch-up: after missed occurrences, one run starts for the latest due time only." +
+    OperationKeyDescription,
   parameters: Recipes.ScheduleInput,
   success: Schema.String,
   failure: AgentApi.AgentApiError,
@@ -350,7 +353,8 @@ const RecipeSchedules = Tool.make("recipes_schedules", {
 
 const RecipeSetEnabled = Tool.make("recipes_set_enabled", {
   description:
-    "Enable or disable a schedule. Requires creator and jobs.manage. Enabling a recipe with a fetch step also requires connections.use.",
+    "Enable or disable a schedule. Requires creator and jobs.manage. Enabling a recipe with a fetch step also requires connections.use." +
+    OperationKeyDescription,
   parameters: Recipes.EnabledInput,
   success: Schema.Null,
   failure: AgentApi.AgentApiError,
@@ -359,7 +363,8 @@ const RecipeSetEnabled = Tool.make("recipes_set_enabled", {
 
 const ScheduleUpdate = Tool.make("schedules_update", {
   description:
-    "Change the timing and the pinned recipe version of a schedule. Read the schedule with recipes_schedules and pass its `revision` (0 when absent) as `expectedRevision`; if it changed, the call fails with the current revision. The next run time is computed again from now. Returns the new revision. Requires creator and jobs.manage, and connections.use for a fetch step. Overlap: a due run is skipped while the schedule's prior run is active. Catch-up: after missed occurrences, one run starts for the latest due time only.",
+    "Change the timing and the pinned recipe version of a schedule. Read the schedule with recipes_schedules and pass its `revision` (0 when absent) as `expectedRevision`; if it changed, the call fails with the current revision. The next run time is computed again from now. Returns the new revision. Requires creator and jobs.manage, and connections.use for a fetch step. Overlap: a due run is skipped while the schedule's prior run is active. Catch-up: after missed occurrences, one run starts for the latest due time only." +
+    OperationKeyDescription,
   parameters: Recipes.UpdateScheduleInput,
   success: Recipes.UpdateScheduleResult,
   failure: AgentApi.AgentApiError,
@@ -367,7 +372,9 @@ const ScheduleUpdate = Tool.make("schedules_update", {
 }).annotate(Tool.Destructive, true)
 
 const RecipeCancel = Tool.make("recipes_cancel", {
-  description: "Cancel a run. Requires recipe run permission and jobs.run.",
+  description:
+    "Cancel a run. Requires recipe run permission and jobs.run." +
+    OperationKeyDescription,
   parameters: Recipes.CancelInput,
   success: Schema.Null,
   failure: AgentApi.AgentApiError,
@@ -385,7 +392,8 @@ const RecipeRetry = Tool.make("recipes_retry", {
 
 const RecipeSetRunAccess = Tool.make("recipes_set_run_access", {
   description:
-    "Grant or remove recipe run permission. Requires creator and jobs.manage.",
+    "Grant or remove recipe run permission. Requires creator and jobs.manage." +
+    OperationKeyDescription,
   parameters: Recipes.AccessInput,
   success: Schema.Null,
   failure: AgentApi.AgentApiError,
@@ -393,7 +401,9 @@ const RecipeSetRunAccess = Tool.make("recipes_set_run_access", {
 }).annotate(Tool.Destructive, false)
 
 const QuerySave = Tool.make("queries_save", {
-  description: `Save a records query so pages can show its results. \`query\` has the records_query shape: \`fieldId\` (an indexed field), \`order\`, and \`where\`. Each save makes a new immutable revision. To change a saved query, pass its \`queryId\` and its current \`revision\` as \`expectedRevision\`; if it changed since you read it, the call fails and you must list it again. Returns \`queryId\` and \`revision\`. Needs the data.write scope.`,
+  description:
+    `Save a records query so pages can show its results. \`query\` has the records_query shape: \`fieldId\` (an indexed field), \`order\`, and \`where\`. Each save makes a new immutable revision. To change a saved query, pass its \`queryId\` and its current \`revision\` as \`expectedRevision\`; if it changed since you read it, the call fails and you must list it again. Returns \`queryId\` and \`revision\`. Needs the data.write scope.` +
+    OperationKeyDescription,
   parameters: Queries.SaveInput,
   success: Queries.Saved,
   failure: AgentApi.AgentApiError,
@@ -417,7 +427,9 @@ const QueryRun = Tool.make("queries_run", {
 }).annotate(Tool.Readonly, true)
 
 const PageSaveDraft = Tool.make("pages_save_draft", {
-  description: `Save a page definition as a new draft revision. A draft is not visible on the published page until pages_publish. \`definition\` has a \`title\` and up to 20 \`blocks\`: markdown \`{ kind, text }\`, artifact \`{ kind, title, artifactId }\`, htmlReport \`{ kind, title, artifactId }\` (an HTML file with a report data timestamp, shown as a sandboxed static snapshot), and live blocks bound to a saved query revision (\`binding: { queryId, revision }\` from queries_list): table \`{ fields }\`, metric \`{ field, unit, operation: "sum" | "count" }\`, chart \`{ chart: { type: "bar" | "line" | "area" | "pie", labelField, valueField, unit } }\` or \`{ chart: { type: "scatter", labelField, xField, xUnit, valueField, unit } }\`. Bound fields must be in the query result, and sum and chart values (and the scatter \`xField\`) must be number fields. Pie values must be zero or more. An invalid block fails with its block number and the result fields. Omit \`pageId\` to create a page. To change a page, pass its \`pageId\` and its current \`revision\` as \`expectedRevision\`. Needs the pages.write scope.`,
+  description:
+    `Save a page definition as a new draft revision. A draft is not visible on the published page until pages_publish. \`definition\` has a \`title\` and up to 20 \`blocks\`: markdown \`{ kind, text }\`, artifact \`{ kind, title, artifactId }\`, htmlReport \`{ kind, title, artifactId }\` (an HTML file with a report data timestamp, shown as a sandboxed static snapshot), and live blocks bound to a saved query revision (\`binding: { queryId, revision }\` from queries_list): table \`{ fields }\`, metric \`{ field, unit, operation: "sum" | "count" }\`, chart \`{ chart: { type: "bar" | "line" | "area" | "pie", labelField, valueField, unit } }\` or \`{ chart: { type: "scatter", labelField, xField, xUnit, valueField, unit } }\`. Bound fields must be in the query result, and sum and chart values (and the scatter \`xField\`) must be number fields. Pie values must be zero or more. An invalid block fails with its block number and the result fields. Omit \`pageId\` to create a page. To change a page, pass its \`pageId\` and its current \`revision\` as \`expectedRevision\`. Needs the pages.write scope.` +
+    OperationKeyDescription,
   parameters: Pages.SaveDraftInput,
   success: Pages.SavedDraft,
   failure: AgentApi.AgentApiError,
@@ -426,7 +438,8 @@ const PageSaveDraft = Tool.make("pages_save_draft", {
 
 const PagePublish = Tool.make("pages_publish", {
   description:
-    "Publish a stored revision of a page, or roll back to an earlier one. Pass the page's current `revision` as `expectedRevision` and its current `publishedRevision` (null when never published) as `expectedPublishedRevision`, from pages_get or pages_list. If the page changed, the call fails: read it again. Bindings are checked again before publication. Needs the pages.write scope.",
+    "Publish a stored revision of a page, or roll back to an earlier one. Pass the page's current `revision` as `expectedRevision` and its current `publishedRevision` (null when never published) as `expectedPublishedRevision`, from pages_get or pages_list. If the page changed, the call fails: read it again. Bindings are checked again before publication. Needs the pages.write scope." +
+    OperationKeyDescription,
   parameters: Pages.PublishInput,
   success: Pages.Published,
   failure: AgentApi.AgentApiError,

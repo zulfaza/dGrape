@@ -136,9 +136,12 @@ export const PageInput = Schema.Struct({
     cursor: Schema.NullOr(Schema.String.check(Schema.isMaxLength(4096))),
   }),
 })
+/** An optional idempotency key; see convex/lib/operations.ts. */
+const OperationKey = { idempotencyKey: Schema.optionalKey(Schema.String) }
 export const PublishInput = Schema.Struct({
   name: Schema.String,
   recipe: Recipe,
+  ...OperationKey,
 })
 export const ValidateInput = Schema.Struct({ recipe: Recipe })
 export const PreviewInput = Schema.Struct({
@@ -182,19 +185,25 @@ export const TriggerInput = Schema.Struct({
 export const ScheduleInput = Schema.Struct({
   versionId: Schema.String,
   timing: Timing,
+  ...OperationKey,
 })
 export const EnabledInput = Schema.Struct({
   scheduleId: Schema.String,
   enabled: Schema.Boolean,
+  ...OperationKey,
 })
 export const UpdateScheduleInput = Schema.Struct({
   scheduleId: Schema.String,
   expectedRevision: Schema.Int,
   versionId: Schema.String,
   timing: Timing,
+  ...OperationKey,
 })
 export const UpdateScheduleResult = Schema.Struct({ revision: Schema.Number })
-export const CancelInput = Schema.Struct({ runId: Schema.String })
+export const CancelInput = Schema.Struct({
+  runId: Schema.String,
+  ...OperationKey,
+})
 export const RetryInput = Schema.Struct({
   runId: Schema.String,
   idempotencyKey: Schema.String,
@@ -203,4 +212,5 @@ export const AccessInput = Schema.Struct({
   versionId: Schema.String,
   userId: Schema.String,
   allowed: Schema.Boolean,
+  ...OperationKey,
 })

@@ -15,6 +15,7 @@ import {
   saveQueryInWorkspace,
 } from "./lib/savedQueries"
 import { sourceStatusValidator } from "./lib/sourceSync"
+import { agentOperation, runOnce } from "./lib/operations"
 
 /**
  * Saved-query operations for agent credentials. convex/http.ts calls these
@@ -22,6 +23,12 @@ import { sourceStatusValidator } from "./lib/sourceSync"
  * credential check and the operation share one transaction (withGrant).
  */
 
+const savedQuery = v.object({
+  queryId: v.id("queryDefinitions"),
+  revision: v.number(),
+})
+
+/** Saves a query revision. See convex/lib/operations.ts for `idempotencyKey`. */
 export const save = internalMutation({
   args: {
     digest: v.string(),
@@ -30,34 +37,42 @@ export const save = internalMutation({
     query: recordQueryValidator,
     queryId: v.optional(v.string()),
     expectedRevision: v.optional(v.number()),
+    idempotencyKey: v.optional(v.string()),
   },
-  returns: v.object({
-    queryId: v.id("queryDefinitions"),
-    revision: v.number(),
-  }),
-  handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), ["data.write"], async (grant) => {
-      const collectionId = ctx.db.normalizeId("collections", args.collectionId)
-      if (!collectionId) throw new Error("Collection access denied")
-      const queryId =
-        args.queryId === undefined
-          ? undefined
-          : ctx.db.normalizeId("queryDefinitions", args.queryId)
-      if (args.queryId !== undefined && !queryId)
-        throw new Error("Query access denied")
-      return saveQueryInWorkspace(
+  returns: savedQuery,
+  handler: (ctx, { digest, idempotencyKey, ...args }) =>
+    withGrant(ctx, digest, Date.now(), ["data.write"], (grant) =>
+      runOnce(
         ctx,
-        grant.workspaceId,
-        auditActor(grant.owner, grant),
-        {
-          collectionId,
-          name: args.name,
-          query: args.query,
-          queryId: queryId ?? undefined,
-          expectedRevision: args.expectedRevision,
+        agentOperation(grant, "queries.save", idempotencyKey, args),
+        savedQuery,
+        async () => {
+          const collectionId = ctx.db.normalizeId(
+            "collections",
+            args.collectionId
+          )
+          if (!collectionId) throw new Error("Collection access denied")
+          const queryId =
+            args.queryId === undefined
+              ? undefined
+              : ctx.db.normalizeId("queryDefinitions", args.queryId)
+          if (args.queryId !== undefined && !queryId)
+            throw new Error("Query access denied")
+          return saveQueryInWorkspace(
+            ctx,
+            grant.workspaceId,
+            auditActor(grant.owner, grant),
+            {
+              collectionId,
+              name: args.name,
+              query: args.query,
+              queryId: queryId ?? undefined,
+              expectedRevision: args.expectedRevision,
+            }
+          )
         }
       )
-    }),
+    ),
 })
 
 export const list = internalQuery({

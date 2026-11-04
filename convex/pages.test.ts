@@ -682,4 +682,26 @@ test("agent credentials draft, publish, get and list pages with clear binding er
     status: 200,
     body: { version: { definition: report } },
   })
+
+  // A retried keyed write returns the first result and writes once.
+  const keyed = { definition, idempotencyKey: "draft-1" }
+  const first = await call("saveDraft", keyed)
+  expect(first).toMatchObject({ status: 200, body: { revision: 1 } })
+  expect(await call("saveDraft", keyed)).toEqual(first)
+  expect(
+    await call("saveDraft", { ...keyed, definition: report })
+  ).toMatchObject({ status: 409 })
+  const publishOnce = {
+    pageId: first.body.pageId,
+    revision: 1,
+    expectedRevision: 1,
+    expectedPublishedRevision: null,
+    idempotencyKey: "publish-1",
+  }
+  const published = await call("publish", publishOnce)
+  expect(published).toMatchObject({ status: 200 })
+  expect(await call("publish", publishOnce)).toEqual(published)
+  expect(await call("list", { limit: 20 }, reader)).toMatchObject({
+    body: { page: { length: 4 } },
+  })
 }, 30_000)
