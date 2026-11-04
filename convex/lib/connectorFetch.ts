@@ -1,4 +1,4 @@
-import { Effect, Redacted, Schema } from "effect"
+import { Clock, Effect, Redacted, Schema } from "effect"
 import { SecretService, type SecretScope } from "./secretService"
 import {
   defaultResponse,
@@ -118,7 +118,48 @@ function requestUrl(
     url.searchParams.set(key, value)
   return url
 }
-/** No response bodies, headers, or provider errors escape this boundary. */
+/** Attempts per page, including the first. */
+const MAX_ATTEMPTS = 3
+/** A longer wait fails the page; the recipe run retries the step later. */
+const MAX_WAIT_MS = 10_000
+/** Rate limits (GitHub also uses 403) and transient gateway errors. */
+function transient(response: Response) {
+  if ([429, 502, 503, 504].includes(response.status)) return true
+  return (
+    response.status === 403 &&
+    (response.headers.has("retry-after") ||
+      response.headers.get("x-ratelimit-remaining") === "0")
+  )
+}
+/**
+ * The wait that the provider asks for: `Retry-After` in seconds or as an
+ * HTTP date, or GitHub's `x-ratelimit-reset` when no requests remain.
+ */
+function requestedWait(headers: Headers, now: number) {
+  const retryAfter = headers.get("retry-after")?.trim()
+  if (retryAfter) {
+    if (/^\d{1,9}$/.test(retryAfter)) return Number(retryAfter) * 1000
+    const date = Date.parse(retryAfter)
+    return Number.isNaN(date) ? null : Math.max(0, date - now)
+  }
+  const reset = headers.get("x-ratelimit-reset")
+  if (
+    headers.get("x-ratelimit-remaining") === "0" &&
+    reset?.match(/^\d{1,12}$/)
+  )
+    return Math.max(0, Number(reset) * 1000 - now)
+  return null
+}
+/** The wait before the next attempt, or null when this response is final. */
+function retryWait(response: Response, attempt: number, now: number) {
+  if (!transient(response) || attempt >= MAX_ATTEMPTS) return null
+  const wait = requestedWait(response.headers, now) ?? 1000 * 2 ** (attempt - 1)
+  return wait <= MAX_WAIT_MS ? wait : null
+}
+/**
+ * No response bodies, headers, or provider errors escape this boundary.
+ * A rate-limited or transient response is retried with bounded backoff.
+ */
 export function fetchConnectorPage(
   config: ConnectorConfig,
   input: PageRequest,
@@ -144,11 +185,11 @@ export function fetchConnectorPage(
     const store = yield* SecretService
     const secret = yield* store.find(config.scope, config.name)
     if (!secret) throw denied()
-    return yield* Effect.tryPromise({
-      try: async () => {
-        const token = Redacted.value(secret.value)
-        if (!token || /[\r\n]/.test(token)) throw denied()
-        const response = await transport(url, {
+    const token = Redacted.value(secret.value)
+    if (!token || /[\r\n]/.test(token)) throw denied()
+    const send = Effect.tryPromise({
+      try: () =>
+        transport(url, {
           method: input.method,
           redirect: "error",
           headers: {
@@ -157,7 +198,24 @@ export function fetchConnectorPage(
             Authorization: `Bearer ${token}`,
           },
           signal: AbortSignal.timeout(15000),
-        })
+        }),
+      catch: denied,
+    })
+    let response = yield* send
+    for (let attempt = 1; ; attempt++) {
+      const wait = retryWait(response, attempt, yield* Clock.currentTimeMillis)
+      if (wait === null) break
+      const discarded = response
+      yield* Effect.ignore(
+        Effect.tryPromise(async () => discarded.body?.cancel())
+      )
+      yield* Effect.sleep(wait)
+      response = yield* send
+    }
+    const final = response
+    return yield* Effect.tryPromise({
+      try: async () => {
+        const response = final
         if (
           !response.ok ||
           !response.body ||

@@ -3,7 +3,7 @@ import type { Json } from "effect/Schema"
 /// <reference types="vite/client" />
 import { describe, expect, it, vi } from "vitest"
 import { convexTest } from "convex-test"
-import { Effect, Layer, Redacted } from "effect"
+import { Clock, Duration, Effect, Layer, Redacted, Result } from "effect"
 import schema from "./schema"
 import * as secretServices from "./lib/secretService"
 import { api, internal } from "./_generated/api"
@@ -533,6 +533,80 @@ describe("connector response mapping and pagination", () => {
       await expect(
         fetchWith(link, () => Response.json([]), { cursor })
       ).rejects.toThrow("Connector request failed")
+  })
+  it("retries rate limits with bounded backoff and Retry-After", async () => {
+    const now = Date.parse("2026-11-04T00:00:00Z")
+    async function attempt(replies: Response[]) {
+      const memory = memoryStore()
+      await Effect.runPromise(
+        memory.store.put(config.scope, config.name, Redacted.make(token))
+      )
+      const waits: number[] = []
+      const clock: Clock.Clock = {
+        currentTimeMillisUnsafe: () => now,
+        currentTimeMillis: Effect.succeed(now),
+        currentTimeNanosUnsafe: () => BigInt(now) * 1_000_000n,
+        currentTimeNanos: Effect.succeed(BigInt(now) * 1_000_000n),
+        monotonicTimeNanosUnsafe: () => 0n,
+        monotonicTimeNanos: Effect.succeed(0n),
+        sleep: (duration) =>
+          Effect.sync(() => {
+            waits.push(Duration.toMillis(duration))
+          }),
+      }
+      let sent = 0
+      const transport: typeof fetch = async () =>
+        replies[sent++] ?? Response.json({ rows: [] })
+      const page = await Effect.runPromise(
+        Effect.result(
+          fetchConnectorPage(config, input, transport).pipe(
+            Effect.provide(memory.layer),
+            Effect.provideService(Clock.Clock, clock)
+          )
+        )
+      )
+      return { ok: Result.isSuccess(page), sent, waits }
+    }
+    const limited = (headers: Record<string, string> = {}, status = 429) =>
+      new Response("{}", { status, headers })
+    const rows = Response.json({ rows: [{ id: 1 }] })
+    expect(
+      await attempt([limited({ "Retry-After": "2" }), limited({}, 503), rows])
+    ).toEqual({ ok: true, sent: 3, waits: [2000, 2000] })
+    expect(
+      await attempt([
+        limited({ "Retry-After": new Date(now + 3000).toUTCString() }, 403),
+        Response.json({ rows: [] }),
+      ])
+    ).toEqual({ ok: true, sent: 2, waits: [3000] })
+    expect(
+      await attempt([
+        limited(
+          {
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(now / 1000 + 4),
+          },
+          403
+        ),
+        Response.json({ rows: [] }),
+      ])
+    ).toEqual({ ok: true, sent: 2, waits: [4000] })
+    // Three attempts at most, and no wait longer than ten seconds.
+    expect(await attempt([limited(), limited(), limited(), rows])).toEqual({
+      ok: false,
+      sent: 3,
+      waits: [1000, 2000],
+    })
+    expect(await attempt([limited({ "Retry-After": "3600" }), rows])).toEqual({
+      ok: false,
+      sent: 1,
+      waits: [],
+    })
+    expect(await attempt([limited({}, 403), rows])).toEqual({
+      ok: false,
+      sent: 1,
+      waits: [],
+    })
   })
   it("rejects unsafe mapping paths and unknown cursor parameters", () => {
     for (const response of [
