@@ -17,4 +17,11 @@ crons.interval(
   internal.artifacts.sweepExpiredUploads
 )
 
+crons.interval(
+  "prune expired idempotency keys",
+  { hours: 1 },
+  internal.operations.prune,
+  {}
+)
+
 export default crons

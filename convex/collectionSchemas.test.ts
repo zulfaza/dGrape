@@ -5,6 +5,8 @@ import schema from "./schema"
 import { api, internal } from "./_generated/api"
 import { publishCompatibleSchema } from "./lib/collectionSchemas"
 import type { CollectionField } from "./lib/collectionDomain"
+import { v, type Value } from "convex/values"
+import { runOnce } from "./lib/operations"
 const modules = import.meta.glob("./**/*.ts")
 
 async function fixture() {
@@ -410,3 +412,34 @@ test("agent activity shows only events whose read scope the credential has", asy
   expect((await list(reader, { limit: 51 })).status).toBe(400)
   expect((await list("c".repeat(64), {})).status).toBe(403)
 }, 20_000)
+
+test("an idempotency key returns the first result, refuses other input, and expires", async () => {
+  const { t, workspaceId } = await fixture()
+  let runs = 0
+  const once = (caller: string, input: Value) =>
+    t.run((ctx) =>
+      runOnce(
+        ctx,
+        { workspaceId, caller, operation: "test.write", key: "k1", input },
+        v.object({ run: v.number() }),
+        async () => ({ run: ++runs })
+      )
+    )
+  expect(await once("grant:a", { a: 1, b: [1, 2] })).toEqual({ run: 1 })
+  // The same input with its keys in another order is the same request.
+  expect(await once("grant:a", { b: [1, 2], a: 1 })).toEqual({ run: 1 })
+  await expect(once("grant:a", { a: 2, b: [1, 2] })).rejects.toThrow(
+    "different request"
+  )
+  // A key belongs to one caller.
+  expect(await once("grant:b", { a: 1, b: [1, 2] })).toEqual({ run: 2 })
+  expect(runs).toBe(2)
+
+  await t.run(async (ctx) => {
+    for (const row of await ctx.db.query("operations").take(10))
+      await ctx.db.patch(row._id, { expiresAt: Date.now() - 1 })
+  })
+  await t.mutation(internal.operations.prune, {})
+  expect(await t.run((ctx) => ctx.db.query("operations").take(10))).toEqual([])
+  expect(await once("grant:a", { a: 2 })).toEqual({ run: 3 })
+})
