@@ -16,7 +16,7 @@ import {
   runSavedQuery,
   savedQueryPageValidator,
 } from "./lib/savedQueries"
-import { recordAuditEvent, type AuditActor } from "./lib/auditEvents"
+import { recordAuditEvent, type PrincipalActor } from "./lib/auditEvents"
 import { previewKind } from "./lib/artifactPreview"
 import {
   chartNumericFields,
@@ -123,7 +123,7 @@ async function validateBindings(
 export async function savePageDraft(
   ctx: MutationCtx,
   workspaceId: Id<"workspaces">,
-  actor: AuditActor,
+  actor: PrincipalActor,
   args: {
     pageId?: Id<"pages">
     expectedRevision?: number
@@ -179,7 +179,7 @@ export type PublishDirection = "forward" | "back" | "either"
 export async function publishPage(
   ctx: MutationCtx,
   workspaceId: Id<"workspaces">,
-  actor: AuditActor,
+  actor: PrincipalActor,
   args: {
     pageId: Id<"pages">
     revision: number

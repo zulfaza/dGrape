@@ -726,7 +726,7 @@ export const dispatch = internalMutation({
       const active = item.activeRunId
         ? await ctx.db.get(item.activeRunId)
         : null
-      const { runId } = await enqueue(
+      const { runId, created } = await enqueue(
         ctx,
         version,
         occurrenceId(item._id, at),
@@ -735,6 +735,13 @@ export const dispatch = internalMutation({
           scheduleId: item._id,
         }
       )
+      if (created)
+        await recordAuditEvent(
+          ctx,
+          version.workspaceId,
+          { kind: "scheduler", scheduleId: item._id },
+          { operation: "run.trigger", runId, versionId: version._id }
+        )
       if (active && !terminal(active))
         await ctx.db.patch(runId, { state: "skipped", finishedAt: now })
       const next = nextOccurrence(item.timing, now)

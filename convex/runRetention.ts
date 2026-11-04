@@ -10,8 +10,8 @@ const CHECKPOINT_PAGE = 8
 
 /**
  * Deletes finished runs older than each workspace's `runRetentionDays`
- * budget. The daily cron in convex/crons.ts starts it. Records and artifacts
- * that runs wrote stay.
+ * budget, and audit events older than AUDIT_RETENTION_DAYS. The daily cron
+ * in convex/crons.ts starts it. Records and artifacts that runs wrote stay.
  */
 export const pruneAll = internalMutation({
   args: { after: v.union(v.number(), v.null()) },
@@ -23,10 +23,14 @@ export const pruneAll = internalMutation({
         after === null ? q : q.gt("_creationTime", after)
       )
       .take(WORKSPACE_PAGE)
-    for (const workspace of page)
+    for (const workspace of page) {
       await ctx.scheduler.runAfter(0, internal.runRetention.pruneWorkspace, {
         workspaceId: workspace._id,
       })
+      await ctx.scheduler.runAfter(0, internal.auditEvents.pruneWorkspace, {
+        workspaceId: workspace._id,
+      })
+    }
     const last = page.at(-1)
     if (page.length === WORKSPACE_PAGE && last)
       await ctx.scheduler.runAfter(0, internal.runRetention.pruneAll, {

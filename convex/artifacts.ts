@@ -29,9 +29,11 @@ import {
   artifactValidator,
   checkArtifactName,
   newObjectKey,
+  type ArtifactCreator,
 } from "./lib/artifactDomain"
 import { artifactBudgetProblem, changeArtifactUsage } from "./lib/artifactUsage"
 import { requireMembership } from "./lib/auth"
+import { recordAuditEvent, type PrincipalActor } from "./lib/auditEvents"
 import { r2 } from "./lib/r2"
 
 /**
@@ -103,6 +105,22 @@ export const getUpload = internalQuery({
   },
 })
 
+/** The audit actor of the user or agent credential that uploaded a file. */
+async function creatorActor(
+  ctx: MutationCtx,
+  creator: ArtifactCreator
+): Promise<PrincipalActor> {
+  if (creator.kind === "user") return creator
+  const grant = await ctx.db.get(creator.grantId)
+  if (!grant) throw new Error("Agent credential not found")
+  return {
+    kind: "agent",
+    grantId: creator.grantId,
+    registrationId: grant.registrationId ?? null,
+    owner: grant.owner,
+  }
+}
+
 const insertResult = v.union(
   v.object({ status: v.literal("missing") }),
   v.object({ status: v.literal("overBudget"), message: v.string() }),
@@ -139,6 +157,12 @@ export const insertArtifact = internalMutation({
     const artifact = await ctx.db.get(artifactId)
     if (!artifact) throw new Error("Artifact missing")
     await changeArtifactUsage(ctx, artifact, 1)
+    await recordAuditEvent(
+      ctx,
+      upload.workspaceId,
+      await creatorActor(ctx, upload.createdBy),
+      { operation: "artifact.upload", artifactId }
+    )
     return { status: "inserted", artifactId }
   },
 })
@@ -382,12 +406,18 @@ export const remove = mutation({
   handler: async (ctx, { artifactId }) => {
     const artifact = await ctx.db.get(artifactId)
     if (!artifact) throw new Error("Artifact not found")
-    await requireMembership(ctx, artifact.workspaceId, "write")
+    const member = await requireMembership(ctx, artifact.workspaceId, "write")
     // A referenced artifact stays, so that no reference points to nothing.
     if (await referencingArtifact(ctx, artifactId)) return "referenced"
     await r2.deleteObject(ctx, artifact.key)
     await changeArtifactUsage(ctx, artifact, -1)
     await ctx.db.delete(artifactId)
+    await recordAuditEvent(
+      ctx,
+      artifact.workspaceId,
+      { kind: "user", userId: member.userId },
+      { operation: "artifact.delete", artifactId }
+    )
     return "deleted"
   },
 })

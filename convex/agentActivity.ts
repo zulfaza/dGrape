@@ -40,6 +40,8 @@ const READ_SCOPE: Record<AuditEvent["operation"], AgentScope | null> = {
   "run.trigger": "jobs.read",
   "run.retry": "jobs.read",
   "run.cancel": "jobs.read",
+  "artifact.upload": "artifacts.read",
+  "artifact.delete": "artifacts.read",
   // Connections and their secrets show with connections_list (jobs.read).
   "connection.create": "jobs.read",
   "connection.grantUse": "jobs.read",

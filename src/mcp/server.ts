@@ -474,7 +474,7 @@ const PageList = Tool.make("pages_list", {
 }).annotate(Tool.Readonly, true)
 
 const ActivityList = Tool.make("activity_list", {
-  description: `List the workspace's activity history, newest first: who made each change (a user, or an agent credential for its owner), the \`operation\`, and the IDs and revisions of the changed objects. Events never contain record values, names, or secret values. You see an event only when the credential has the read scope of the changed object (data.read, pages.read, or jobs.read). Reads up to \`limit\` events (1 to ${Activity.MAX_PAGE_SIZE}), so a page can have fewer items, or none; when \`isDone\` is false, pass \`continueCursor\` as \`cursor\`.`,
+  description: `List the workspace's activity history, newest first: who made each change (a user, an agent credential for its owner, or a recipe schedule), the \`operation\`, and the IDs and revisions of the changed objects. Events never contain record values, names, or secret values. Events older than 365 days are deleted. You see an event only when the credential has the read scope of the changed object (data.read, pages.read, jobs.read, or artifacts.read). Reads up to \`limit\` events (1 to ${Activity.MAX_PAGE_SIZE}), so a page can have fewer items, or none; when \`isDone\` is false, pass \`continueCursor\` as \`cursor\`.`,
   parameters: Activity.ListInput,
   success: Activity.ActivityPage,
   failure: AgentApi.AgentApiError,

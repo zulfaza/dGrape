@@ -12,6 +12,7 @@ const PAGE_SIZE = 20
 function actorLabel(actor: AuditActor, byViewer: boolean) {
   const owner = byViewer ? "Your" : "A member's"
   if (actor.kind === "user") return byViewer ? "You" : "A member"
+  if (actor.kind === "scheduler") return "A schedule"
   return actor.registrationId
     ? `${owner} connected agent`
     : `${owner} agent token`
@@ -62,6 +63,10 @@ function describe(event: AuditEvent): string {
       return "retried a recipe run"
     case "run.cancel":
       return "cancelled a recipe run"
+    case "artifact.upload":
+      return "uploaded a file"
+    case "artifact.delete":
+      return "deleted a file"
     case "connection.create":
       return "added a connection"
     case "connection.grantUse":
