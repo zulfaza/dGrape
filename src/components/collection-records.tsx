@@ -13,6 +13,7 @@ import type { RecordQuery } from "../../convex/lib/recordQuery"
 import { ChevronLeft, Plus, Trash2 } from "lucide-react"
 import { Match } from "effect"
 import { AddFieldDialog } from "@/components/add-field-dialog"
+import { ChangeSchemaDialog } from "@/components/change-schema-dialog"
 import {
   MultiSelectFieldInput,
   SelectFieldInput,
@@ -260,6 +261,7 @@ export function CollectionRecords({
       </p>
     )
   const { fields } = collection.definition
+  const { migrationLock } = collection
   const setDraftValue = (fieldId: string, value: Draft["values"][string]) =>
     setDraft(
       (current) =>
@@ -275,7 +277,7 @@ export function CollectionRecords({
   }
   const newRecordButton = canWrite && (
     <Button
-      disabled={saving}
+      disabled={saving || migrationLock !== undefined}
       onClick={() => openDraft({ record: null, values: initialValues(fields) })}
     >
       <Plus aria-hidden />
@@ -311,18 +313,38 @@ export function CollectionRecords({
                 />
               )}
               {canWrite && (
-                <AddFieldDialog
-                  workspaceId={collection.workspaceId}
-                  collectionId={collectionId}
-                  fields={fields}
-                  disabled={saving}
-                />
+                <>
+                  <AddFieldDialog
+                    workspaceId={collection.workspaceId}
+                    collectionId={collectionId}
+                    fields={fields}
+                    disabled={saving || migrationLock !== undefined}
+                  />
+                  <ChangeSchemaDialog
+                    workspaceId={collection.workspaceId}
+                    collectionId={collectionId}
+                    definition={collection.definition}
+                    lockedBy={migrationLock?.migrationId ?? null}
+                    disabled={saving}
+                  />
+                </>
               )}
               {(results.length > 0 || query) && newRecordButton}
             </>
           }
         />
       </div>
+      {migrationLock && (
+        <Alert>
+          <AlertTitle>
+            Changing to schema version {migrationLock.targetVersion}
+          </AlertTitle>
+          <AlertDescription>
+            Record changes wait until the schema change ends. Some records can
+            show their new values before it ends.
+          </AlertDescription>
+        </Alert>
+      )}
       <RecordQueryBar fields={fields} query={query} onChange={setQuery} />
       <section
         aria-label="Records"
