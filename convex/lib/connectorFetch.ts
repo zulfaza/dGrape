@@ -1,4 +1,4 @@
-import { Clock, Effect, Redacted, Schema } from "effect"
+import { Clock, Context, Effect, Redacted, Schema } from "effect"
 import { SecretService, type SecretScope } from "./secretService"
 import {
   defaultResponse,
@@ -118,6 +118,14 @@ function requestUrl(
     url.searchParams.set(key, value)
   return url
 }
+/**
+ * The request-rate budget of one connection. `take` uses one request and
+ * returns null, or returns the wait in ms until a request is free.
+ */
+export class RequestBudget extends Context.Service<
+  RequestBudget,
+  { readonly take: Effect.Effect<number | null> }
+>()("dfe/RequestBudget") {}
 /** Attempts per page, including the first. */
 const MAX_ATTEMPTS = 3
 /** A longer wait fails the page; the recipe run retries the step later. */
@@ -187,7 +195,8 @@ export function fetchConnectorPage(
     if (!secret) throw denied()
     const token = Redacted.value(secret.value)
     if (!token || /[\r\n]/.test(token)) throw denied()
-    const send = Effect.tryPromise({
+    const budget = yield* RequestBudget
+    const request = Effect.tryPromise({
       try: () =>
         transport(url, {
           method: input.method,
@@ -200,6 +209,16 @@ export function fetchConnectorPage(
           signal: AbortSignal.timeout(15000),
         }),
       catch: denied,
+    })
+    /** Each attempt uses the budget. A long wait fails the page. */
+    const send = Effect.gen(function* () {
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        const wait = yield* budget.take
+        if (wait === null) return yield* request
+        if (wait > MAX_WAIT_MS) break
+        yield* Effect.sleep(wait)
+      }
+      return yield* Effect.fail(denied())
     })
     let response = yield* send
     for (let attempt = 1; ; attempt++) {

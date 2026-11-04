@@ -3,6 +3,7 @@ import type { Json } from "effect/Schema"
 /// <reference types="vite/client" />
 import { describe, expect, it, vi } from "vitest"
 import { convexTest } from "convex-test"
+import rateLimiterTest from "@convex-dev/rate-limiter/test"
 import { Clock, Duration, Effect, Layer, Redacted, Result } from "effect"
 import schema from "./schema"
 import * as secretServices from "./lib/secretService"
@@ -15,6 +16,7 @@ import {
 import {
   fetchConnectorPage,
   httpRoutes,
+  RequestBudget,
   type ConnectorConfig,
   type PageRequest,
 } from "./lib/connectorFetch"
@@ -32,6 +34,7 @@ import {
 const modules = import.meta.glob("./**/*.ts")
 const paginationOpts = { numItems: 100, cursor: null }
 const token = "fixture-private-token"
+const unlimited = { take: Effect.succeed(null) }
 function memoryStore() {
   const values = new Map<string, string>()
   const store: SecretStore = {
@@ -51,7 +54,11 @@ function memoryStore() {
         values.delete(name)
       }),
   }
-  return { store, values, layer: Layer.succeed(SecretService, store) }
+  const layer = Layer.merge(
+    Layer.succeed(SecretService, store),
+    Layer.succeed(RequestBudget, unlimited)
+  )
+  return { store, values, layer }
 }
 const storedRoute: ConnectorRoute = {
   path: "/items",
@@ -287,6 +294,39 @@ describe("settings list pagination", () => {
       "pending",
     ])
   })
+  it("limits requests per connection with the workspace budget", async () => {
+    const { t, workspaceId, secretRef } = await fixture()
+    rateLimiterTest.register(t)
+    const [first, second] = await t.run(async (ctx) => {
+      await ctx.db.patch(workspaceId, {
+        budgets: { connectionRequestsPerMinute: 2 },
+      })
+      const fields = {
+        workspaceId,
+        secretRef,
+        createdBy: "owner",
+        label: "Connection",
+        origin: config.origin,
+        routes: [storedRoute],
+      }
+      return [
+        await ctx.db.insert("connections", fields),
+        await ctx.db.insert("connections", fields),
+      ]
+    })
+    if (!first || !second) throw new Error("Invalid fixture")
+    const take = (connectionId: typeof first) =>
+      t.mutation(internal.connectors.takeRequest, {
+        workspaceId,
+        connectionId,
+      })
+    expect(await take(first)).toBeNull()
+    expect(await take(first)).toBeNull()
+    const wait = await take(first)
+    expect(wait).toBeGreaterThan(0)
+    expect(wait).toBeLessThanOrEqual(30_000)
+    expect(await take(second)).toBeNull()
+  })
   it("continues past inaccessible connections to owned and granted connections", async () => {
     const { t, owner, other, workspaceId, secretRef } = await fixture()
     const visible = await t.run(async (ctx) => {
@@ -423,7 +463,10 @@ describe("provider-independent connector boundary", () => {
     })
     await expect(
       Effect.runPromise(
-        fetchConnectorPage(config, input).pipe(Effect.provide(layer))
+        fetchConnectorPage(config, input).pipe(
+          Effect.provide(layer),
+          Effect.provideService(RequestBudget, unlimited)
+        )
       )
     ).rejects.toThrow("Connector request failed")
   })
@@ -536,7 +579,10 @@ describe("connector response mapping and pagination", () => {
   })
   it("retries rate limits with bounded backoff and Retry-After", async () => {
     const now = Date.parse("2026-11-04T00:00:00Z")
-    async function attempt(replies: Response[]) {
+    async function attempt(
+      replies: Response[],
+      budget: (number | null)[] = []
+    ) {
       const memory = memoryStore()
       await Effect.runPromise(
         memory.store.put(config.scope, config.name, Redacted.make(token))
@@ -557,9 +603,11 @@ describe("connector response mapping and pagination", () => {
       let sent = 0
       const transport: typeof fetch = async () =>
         replies[sent++] ?? Response.json({ rows: [] })
+      const take = Effect.sync(() => budget.shift() ?? null)
       const page = await Effect.runPromise(
         Effect.result(
           fetchConnectorPage(config, input, transport).pipe(
+            Effect.provideService(RequestBudget, { take }),
             Effect.provide(memory.layer),
             Effect.provideService(Clock.Clock, clock)
           )
@@ -605,6 +653,22 @@ describe("connector response mapping and pagination", () => {
     expect(await attempt([limited({}, 403), rows])).toEqual({
       ok: false,
       sent: 1,
+      waits: [],
+    })
+    // Each attempt waits for the connection's request budget.
+    expect(
+      await attempt(
+        [limited(), Response.json({ rows: [] })],
+        [500, null, 700, null]
+      )
+    ).toEqual({
+      ok: true,
+      sent: 2,
+      waits: [500, 1000, 700],
+    })
+    expect(await attempt([], [60_000])).toEqual({
+      ok: false,
+      sent: 0,
       waits: [],
     })
   })

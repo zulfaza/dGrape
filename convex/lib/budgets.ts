@@ -30,6 +30,7 @@ export const budgetsValidator = v.object({
   runSteps: v.number(),
   runDurationMs: v.number(),
   runRetentionDays: v.number(),
+  connectionRequestsPerMinute: v.number(),
 })
 export const budgetOverridesValidator = budgetsValidator.partial()
 
@@ -110,6 +111,14 @@ export const BUDGET_SPECS = {
     default: 3650,
     max: 3650,
   },
+  // Each HTTP attempt to a provider counts, including retries.
+  connectionRequestsPerMinute: {
+    label: "Requests per connection per minute",
+    unit: "count",
+    min: 1,
+    default: 60,
+    max: 600,
+  },
 } satisfies { readonly [K in BudgetKey]: BudgetSpec }
 
 const isBudgetKey = (key: string): key is BudgetKey =>
@@ -137,6 +146,10 @@ export function effectiveBudgets(
     runSteps: budget(overrides, "runSteps"),
     runDurationMs: budget(overrides, "runDurationMs"),
     runRetentionDays: budget(overrides, "runRetentionDays"),
+    connectionRequestsPerMinute: budget(
+      overrides,
+      "connectionRequestsPerMinute"
+    ),
   }
 }
 
