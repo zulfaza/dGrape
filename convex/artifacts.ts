@@ -204,6 +204,24 @@ const completeResult = v.union(
  * Reads the uploaded object's size and type from R2 and records the
  * artifact. A file over the workspace budget is deleted.
  */
+/**
+ * The object's size in bytes, or null when R2 does not report it.
+ *
+ * R2 compresses some files (such as HTML) when the client accepts gzip, and
+ * then its HEAD response has no Content-Length. The Convex fetch accepts gzip,
+ * so `r2.syncMetadata` can store no size. A one-byte range read is not
+ * compressed, and its Content-Range gives the full size.
+ */
+async function storedSize(key: string): Promise<number | null> {
+  const response = await fetch(
+    await r2.getUrl(key, { expiresIn: DOWNLOAD_URL_SECONDS }),
+    { headers: { Range: "bytes=0-0" } }
+  )
+  await response.body?.cancel()
+  const total = /\/(\d+)$/.exec(response.headers.get("Content-Range") ?? "")
+  return total ? Number(total[1]) : null
+}
+
 async function finishUpload(
   ctx: ActionCtx,
   workspaceId: Id<"workspaces">,
@@ -220,12 +238,13 @@ async function finishUpload(
     return { status: "invalid", message: "Upload the file to the URL first." }
   }
   const metadata = await r2.getMetadata(ctx, key)
-  if (!metadata || metadata.size === undefined)
+  const size = metadata && (metadata.size ?? (await storedSize(key)))
+  if (!metadata || size === null)
     return { status: "invalid", message: "Upload the file to the URL first." }
   const result = await ctx.runMutation(internal.artifacts.insertArtifact, {
     key,
     contentType: metadata.contentType ?? "application/octet-stream",
-    size: metadata.size,
+    size,
   })
   if (result.status === "missing")
     return { status: "invalid", message: "The upload does not exist." }
