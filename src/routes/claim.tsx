@@ -74,6 +74,8 @@ function ClaimPage() {
     {},
     { initialNumItems: 50 }
   )
+  // Only owners can connect an agent to a workspace.
+  const owned = workspaces.results.filter((w) => w.role === "owner")
   const confirm = useAction(api.agentRegistrations.confirmClaim)
   const [workspaceId, setWorkspaceId] = useState<Id<"workspaces"> | null>(null)
   // Read-only is the default; the user must choose more.
@@ -147,9 +149,9 @@ function ClaimPage() {
             </AlertDescription>
           </Alert>
         )}
-        {workspaces.results.length === 0 ? (
+        {owned.length === 0 ? (
           <p>
-            You have no workspace yet.{" "}
+            You own no workspace yet.{" "}
             <Link to="/dashboard/workspaces" className="underline">
               Create a workspace
             </Link>
@@ -166,9 +168,7 @@ function ClaimPage() {
                 <Select
                   value={workspaceId ?? ""}
                   onValueChange={(value) => {
-                    const match = workspaces.results.find(
-                      (w) => w._id === value
-                    )
+                    const match = owned.find((w) => w._id === value)
                     if (match) setWorkspaceId(match._id)
                   }}
                 >
@@ -177,7 +177,7 @@ function ClaimPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {workspaces.results.map((w) => (
+                      {owned.map((w) => (
                         <SelectItem key={w._id} value={w._id}>
                           {w.name}
                         </SelectItem>

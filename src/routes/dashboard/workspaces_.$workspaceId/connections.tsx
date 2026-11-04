@@ -15,6 +15,12 @@ function ConnectionsSection() {
   const { workspaceId } = Route.useParams()
   const workspace = useQuery(api.workspaces.get, { workspaceId })
   if (!workspace) return null
+  if (workspace.role !== "owner")
+    return (
+      <p className="text-sm text-muted-foreground">
+        Only workspace owners manage credentials, connections and agent access.
+      </p>
+    )
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <WorkspaceConnections workspaceId={workspace._id} />

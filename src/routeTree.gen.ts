@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CallbackRouteImport } from './routes/callback'
 import { Route as ClaimRouteImport } from './routes/claim'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
+import { Route as InviteRouteImport } from './routes/invite'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignOutRouteImport } from './routes/sign-out'
@@ -28,6 +29,7 @@ import { Route as DashboardWorkspacesWorkspaceIdArtifactsRouteImport } from './r
 import { Route as DashboardWorkspacesWorkspaceIdConnectionsRouteImport } from './routes/dashboard/workspaces_.$workspaceId/connections'
 import { Route as DashboardWorkspacesWorkspaceIdDataRouteImport } from './routes/dashboard/workspaces_.$workspaceId/data'
 import { Route as DashboardWorkspacesWorkspaceIdJobsRouteImport } from './routes/dashboard/workspaces_.$workspaceId/jobs'
+import { Route as DashboardWorkspacesWorkspaceIdMembersRouteImport } from './routes/dashboard/workspaces_.$workspaceId/members'
 import { Route as DashboardWorkspacesWorkspaceIdPagesRouteImport } from './routes/dashboard/workspaces_.$workspaceId/pages'
 import { Route as DashboardWorkspacesWorkspaceIdUsageRouteImport } from './routes/dashboard/workspaces_.$workspaceId/usage'
 
@@ -49,6 +51,11 @@ const ClaimRoute = ClaimRouteImport.update({
 const DashboardRouteRoute = DashboardRouteRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteRoute = InviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
   getParentRoute: () => rootRouteImport,
 } as any)
 const McpRoute = McpRouteImport.update({
@@ -135,6 +142,12 @@ const DashboardWorkspacesWorkspaceIdJobsRoute =
     path: '/jobs',
     getParentRoute: () => DashboardWorkspacesWorkspaceIdRouteRoute,
   } as any)
+const DashboardWorkspacesWorkspaceIdMembersRoute =
+  DashboardWorkspacesWorkspaceIdMembersRouteImport.update({
+    id: '/members',
+    path: '/members',
+    getParentRoute: () => DashboardWorkspacesWorkspaceIdRouteRoute,
+  } as any)
 const DashboardWorkspacesWorkspaceIdPagesRoute =
   DashboardWorkspacesWorkspaceIdPagesRouteImport.update({
     id: '/pages',
@@ -153,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/callback': typeof CallbackRoute
   '/claim': typeof ClaimRoute
+  '/invite': typeof InviteRoute
   '/mcp': typeof McpRoute
   '/sign-in': typeof SignInRoute
   '/sign-out': typeof SignOutRoute
@@ -167,6 +181,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/workspaces/$workspaceId/connections': typeof DashboardWorkspacesWorkspaceIdConnectionsRoute
   '/dashboard/workspaces/$workspaceId/data': typeof DashboardWorkspacesWorkspaceIdDataRoute
   '/dashboard/workspaces/$workspaceId/jobs': typeof DashboardWorkspacesWorkspaceIdJobsRoute
+  '/dashboard/workspaces/$workspaceId/members': typeof DashboardWorkspacesWorkspaceIdMembersRoute
   '/dashboard/workspaces/$workspaceId/pages': typeof DashboardWorkspacesWorkspaceIdPagesRoute
   '/dashboard/workspaces/$workspaceId/usage': typeof DashboardWorkspacesWorkspaceIdUsageRoute
   '/dashboard/workspaces/$workspaceId/': typeof DashboardWorkspacesWorkspaceIdIndexRoute
@@ -175,6 +190,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
   '/claim': typeof ClaimRoute
+  '/invite': typeof InviteRoute
   '/mcp': typeof McpRoute
   '/sign-in': typeof SignInRoute
   '/sign-out': typeof SignOutRoute
@@ -188,6 +204,7 @@ export interface FileRoutesByTo {
   '/dashboard/workspaces/$workspaceId/connections': typeof DashboardWorkspacesWorkspaceIdConnectionsRoute
   '/dashboard/workspaces/$workspaceId/data': typeof DashboardWorkspacesWorkspaceIdDataRoute
   '/dashboard/workspaces/$workspaceId/jobs': typeof DashboardWorkspacesWorkspaceIdJobsRoute
+  '/dashboard/workspaces/$workspaceId/members': typeof DashboardWorkspacesWorkspaceIdMembersRoute
   '/dashboard/workspaces/$workspaceId/pages': typeof DashboardWorkspacesWorkspaceIdPagesRoute
   '/dashboard/workspaces/$workspaceId/usage': typeof DashboardWorkspacesWorkspaceIdUsageRoute
   '/dashboard/workspaces/$workspaceId': typeof DashboardWorkspacesWorkspaceIdIndexRoute
@@ -198,6 +215,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/callback': typeof CallbackRoute
   '/claim': typeof ClaimRoute
+  '/invite': typeof InviteRoute
   '/mcp': typeof McpRoute
   '/sign-in': typeof SignInRoute
   '/sign-out': typeof SignOutRoute
@@ -212,6 +230,7 @@ export interface FileRoutesById {
   '/dashboard/workspaces_/$workspaceId/connections': typeof DashboardWorkspacesWorkspaceIdConnectionsRoute
   '/dashboard/workspaces_/$workspaceId/data': typeof DashboardWorkspacesWorkspaceIdDataRoute
   '/dashboard/workspaces_/$workspaceId/jobs': typeof DashboardWorkspacesWorkspaceIdJobsRoute
+  '/dashboard/workspaces_/$workspaceId/members': typeof DashboardWorkspacesWorkspaceIdMembersRoute
   '/dashboard/workspaces_/$workspaceId/pages': typeof DashboardWorkspacesWorkspaceIdPagesRoute
   '/dashboard/workspaces_/$workspaceId/usage': typeof DashboardWorkspacesWorkspaceIdUsageRoute
   '/dashboard/workspaces_/$workspaceId/': typeof DashboardWorkspacesWorkspaceIdIndexRoute
@@ -223,6 +242,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/callback'
     | '/claim'
+    | '/invite'
     | '/mcp'
     | '/sign-in'
     | '/sign-out'
@@ -237,6 +257,7 @@ export interface FileRouteTypes {
     | '/dashboard/workspaces/$workspaceId/connections'
     | '/dashboard/workspaces/$workspaceId/data'
     | '/dashboard/workspaces/$workspaceId/jobs'
+    | '/dashboard/workspaces/$workspaceId/members'
     | '/dashboard/workspaces/$workspaceId/pages'
     | '/dashboard/workspaces/$workspaceId/usage'
     | '/dashboard/workspaces/$workspaceId/'
@@ -245,6 +266,7 @@ export interface FileRouteTypes {
     | '/'
     | '/callback'
     | '/claim'
+    | '/invite'
     | '/mcp'
     | '/sign-in'
     | '/sign-out'
@@ -258,6 +280,7 @@ export interface FileRouteTypes {
     | '/dashboard/workspaces/$workspaceId/connections'
     | '/dashboard/workspaces/$workspaceId/data'
     | '/dashboard/workspaces/$workspaceId/jobs'
+    | '/dashboard/workspaces/$workspaceId/members'
     | '/dashboard/workspaces/$workspaceId/pages'
     | '/dashboard/workspaces/$workspaceId/usage'
     | '/dashboard/workspaces/$workspaceId'
@@ -267,6 +290,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/callback'
     | '/claim'
+    | '/invite'
     | '/mcp'
     | '/sign-in'
     | '/sign-out'
@@ -281,6 +305,7 @@ export interface FileRouteTypes {
     | '/dashboard/workspaces_/$workspaceId/connections'
     | '/dashboard/workspaces_/$workspaceId/data'
     | '/dashboard/workspaces_/$workspaceId/jobs'
+    | '/dashboard/workspaces_/$workspaceId/members'
     | '/dashboard/workspaces_/$workspaceId/pages'
     | '/dashboard/workspaces_/$workspaceId/usage'
     | '/dashboard/workspaces_/$workspaceId/'
@@ -291,6 +316,7 @@ export interface RootRouteChildren {
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
   CallbackRoute: typeof CallbackRoute
   ClaimRoute: typeof ClaimRoute
+  InviteRoute: typeof InviteRoute
   McpRoute: typeof McpRoute
   SignInRoute: typeof SignInRoute
   SignOutRoute: typeof SignOutRoute
@@ -326,6 +352,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mcp': {
@@ -433,6 +466,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardWorkspacesWorkspaceIdJobsRouteImport
       parentRoute: typeof DashboardWorkspacesWorkspaceIdRouteRoute
     }
+    '/dashboard/workspaces_/$workspaceId/members': {
+      id: '/dashboard/workspaces_/$workspaceId/members'
+      path: '/members'
+      fullPath: '/dashboard/workspaces/$workspaceId/members'
+      preLoaderRoute: typeof DashboardWorkspacesWorkspaceIdMembersRouteImport
+      parentRoute: typeof DashboardWorkspacesWorkspaceIdRouteRoute
+    }
     '/dashboard/workspaces_/$workspaceId/pages': {
       id: '/dashboard/workspaces_/$workspaceId/pages'
       path: '/pages'
@@ -456,6 +496,7 @@ interface DashboardWorkspacesWorkspaceIdRouteRouteChildren {
   DashboardWorkspacesWorkspaceIdConnectionsRoute: typeof DashboardWorkspacesWorkspaceIdConnectionsRoute
   DashboardWorkspacesWorkspaceIdDataRoute: typeof DashboardWorkspacesWorkspaceIdDataRoute
   DashboardWorkspacesWorkspaceIdJobsRoute: typeof DashboardWorkspacesWorkspaceIdJobsRoute
+  DashboardWorkspacesWorkspaceIdMembersRoute: typeof DashboardWorkspacesWorkspaceIdMembersRoute
   DashboardWorkspacesWorkspaceIdPagesRoute: typeof DashboardWorkspacesWorkspaceIdPagesRoute
   DashboardWorkspacesWorkspaceIdUsageRoute: typeof DashboardWorkspacesWorkspaceIdUsageRoute
   DashboardWorkspacesWorkspaceIdIndexRoute: typeof DashboardWorkspacesWorkspaceIdIndexRoute
@@ -473,6 +514,8 @@ const DashboardWorkspacesWorkspaceIdRouteRouteChildren: DashboardWorkspacesWorks
       DashboardWorkspacesWorkspaceIdDataRoute,
     DashboardWorkspacesWorkspaceIdJobsRoute:
       DashboardWorkspacesWorkspaceIdJobsRoute,
+    DashboardWorkspacesWorkspaceIdMembersRoute:
+      DashboardWorkspacesWorkspaceIdMembersRoute,
     DashboardWorkspacesWorkspaceIdPagesRoute:
       DashboardWorkspacesWorkspaceIdPagesRoute,
     DashboardWorkspacesWorkspaceIdUsageRoute:
@@ -523,6 +566,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRouteRoute: DashboardRouteRouteWithChildren,
   CallbackRoute: CallbackRoute,
   ClaimRoute: ClaimRoute,
+  InviteRoute: InviteRoute,
   McpRoute: McpRoute,
   SignInRoute: SignInRoute,
   SignOutRoute: SignOutRoute,

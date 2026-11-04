@@ -9,6 +9,7 @@ import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { PageBlockView, PagePreview, revisionAction } from "./page-preview"
 import { PageSourcePicker } from "./page-source-picker"
+import { useWorkspaceCan } from "@/components/workspace-role"
 
 type Draft = {
   definition: PageDefinition
@@ -36,6 +37,7 @@ function WorkspacePagesEditor({
   workspaceId: Id<"workspaces">
 }) {
   const client = useConvex()
+  const canWrite = useWorkspaceCan("write")
   const save = useMutation(api.pages.save)
   const publish = useMutation(api.pages.publish)
   const rollback = useMutation(api.pages.rollback)
@@ -136,6 +138,7 @@ function WorkspacePagesEditor({
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl font-semibold">Pages</h2>
         <Button
+          hidden={!canWrite}
           disabled={pending}
           onClick={() => {
             if (!canLeave()) return
@@ -354,6 +357,7 @@ function WorkspacePagesEditor({
           </div>
           <div className="flex flex-wrap gap-3">
             <Button
+              hidden={!canWrite}
               disabled={pending || !dirty || !draft.definition.title.trim()}
               onClick={() =>
                 void run(async () => {

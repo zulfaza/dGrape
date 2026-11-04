@@ -24,6 +24,7 @@ import {
 } from "@/components/reference-field-input"
 import { ExportRecordsButton } from "@/components/export-records-button"
 import { Mascot } from "@/components/mascot"
+import { useWorkspaceCan } from "@/components/workspace-role"
 import { RecordQueryBar } from "@/components/record-query-bar"
 import { SaveQueryDialog } from "@/components/save-query-dialog"
 import { PageHeader } from "@/components/page-header"
@@ -138,6 +139,7 @@ export function CollectionRecords({
     { initialNumItems: 20 }
   )
   const { results, status, loadMore } = query ? queried : listed
+  const canWrite = useWorkspaceCan("write")
   const create = useMutation(api.workspaces.createRecord)
   const update = useMutation(api.workspaces.updateRecord)
   const remove = useMutation(api.workspaces.deleteRecord)
@@ -271,7 +273,7 @@ export function CollectionRecords({
     setConfirmingDelete(false)
     setDraft(next)
   }
-  const newRecordButton = (
+  const newRecordButton = canWrite && (
     <Button
       disabled={saving}
       onClick={() => openDraft({ record: null, values: initialValues(fields) })}
@@ -301,19 +303,21 @@ export function CollectionRecords({
           actions={
             <>
               <ExportRecordsButton collection={collection} disabled={saving} />
-              {query && (
+              {canWrite && query && (
                 <SaveQueryDialog
                   collectionId={collectionId}
                   query={query}
                   disabled={saving}
                 />
               )}
-              <AddFieldDialog
-                workspaceId={collection.workspaceId}
-                collectionId={collectionId}
-                fields={fields}
-                disabled={saving}
-              />
+              {canWrite && (
+                <AddFieldDialog
+                  workspaceId={collection.workspaceId}
+                  collectionId={collectionId}
+                  fields={fields}
+                  disabled={saving}
+                />
+              )}
               {(results.length > 0 || query) && newRecordButton}
             </>
           }
@@ -350,7 +354,7 @@ export function CollectionRecords({
                 credential that has the data.write scope.
               </EmptyDescription>
             </EmptyHeader>
-            <EmptyContent>{newRecordButton}</EmptyContent>
+            {newRecordButton && <EmptyContent>{newRecordButton}</EmptyContent>}
           </Empty>
         ) : (
           <Table>
@@ -366,9 +370,11 @@ export function CollectionRecords({
                     {field.label}
                   </TableHead>
                 ))}
-                <TableHead className="px-4">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
+                {canWrite && (
+                  <TableHead className="px-4">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -395,21 +401,23 @@ export function CollectionRecords({
                       )}
                     </TableCell>
                   ))}
-                  <TableCell className="w-0 px-4 py-2 text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={saving}
-                      onClick={() =>
-                        openDraft({
-                          record,
-                          values: editValues(fields, record.values),
-                        })
-                      }
-                    >
-                      Edit
-                    </Button>
-                  </TableCell>
+                  {canWrite && (
+                    <TableCell className="w-0 px-4 py-2 text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={saving}
+                        onClick={() =>
+                          openDraft({
+                            record,
+                            values: editValues(fields, record.values),
+                          })
+                        }
+                      >
+                        Edit
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

@@ -32,6 +32,7 @@ import {
 import { Separator } from "./ui/separator"
 import { Skeleton } from "./ui/skeleton"
 import { SourceFreshness } from "./source-freshness"
+import { useWorkspaceCan } from "@/components/workspace-role"
 
 const sample: typeof Recipe.Type = {
   steps: [{ kind: "artifact", name: "report.json", format: "json" }],
@@ -172,6 +173,7 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
   const intents = useRef(new Map<Id<"recipeVersions">, Intent>())
   const operation = useOperation()
   const publish = useMutation(api.recipes.publish)
+  const canWrite = useWorkspaceCan("write")
   const version = versions.results.find((item) => item._id === versionId)
   const selectedRun = runs.results.find((item) => item._id === runId)
   return (
@@ -182,6 +184,7 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">Recipes and schedules</h2>
         <Button
+          hidden={!canWrite}
           disabled={operation.busy || draft !== null}
           onClick={() =>
             setDraft({
@@ -449,6 +452,7 @@ function VersionControls({
   onCopy: () => void
   copying: boolean
 }) {
+  const canWrite = useWorkspaceCan("write")
   const permissions = useQuery(api.recipes.permissions, {
     versionId: version._id,
   })
@@ -488,7 +492,12 @@ function VersionControls({
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" disabled={busy || copying} onClick={onCopy}>
+        <Button
+          variant="outline"
+          hidden={!canWrite}
+          disabled={busy || copying}
+          onClick={onCopy}
+        >
           Copy to new version
         </Button>
         <Button
