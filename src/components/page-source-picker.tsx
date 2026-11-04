@@ -2,6 +2,7 @@ import { useQuery } from "convex/react"
 import { useId, useState } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
+import { isNumericField } from "../../convex/lib/collectionDomain"
 import {
   chartTypes,
   type ChartSpec,
@@ -56,10 +57,10 @@ export function PageSourcePicker({
   const xUnitId = useId()
   const source = sources?.find((item) => item.queryId === queryId)
   const numeric = source?.fields.find(
-    (field) => fields.includes(field.id) && field.type === "number"
+    (field) => fields.includes(field.id) && isNumericField(field.type)
   )
   const numericFields =
-    source?.fields.filter((field) => field.type === "number") ?? []
+    source?.fields.filter((field) => isNumericField(field.type)) ?? []
   const isNumeric = (id: string) => numericFields.some((f) => f.id === id)
   const chart: ChartSpec | null =
     !source?.fields.some((field) => field.id === labelField) ||

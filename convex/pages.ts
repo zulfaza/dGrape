@@ -1,4 +1,7 @@
-import { collectionFieldValidator } from "./lib/collectionDomain"
+import {
+  collectionFieldValidator,
+  isNumericField,
+} from "./lib/collectionDomain"
 import { paginationOptsValidator, type PaginationOptions } from "convex/server"
 import { ConvexError, v, type Infer } from "convex/values"
 import type { Id } from "./_generated/dataModel"
@@ -13,7 +16,8 @@ import { workspaceBudgets } from "./lib/budgets"
 import { asQueryTooExpensive } from "./lib/queryErrors"
 import {
   firstPageWithinBudget,
-  runSavedQuery,
+  readSavedResult,
+  savedAggregateValidator,
   savedQueryPageValidator,
 } from "./lib/savedQueries"
 import { recordAuditEvent, type PrincipalActor } from "./lib/auditEvents"
@@ -86,7 +90,7 @@ async function bindingProblem(
   )
   const has = (id: string) => fields.some((f) => f.id === id)
   const numeric = (id: string) =>
-    fields.some((f) => f.id === id && f.type === "number")
+    fields.some((f) => f.id === id && isNumericField(f.type))
   const available = `Result fields: ${fields.map((f) => `${f.id} (${f.type})`).join(", ") || "none"}`
   if (block.kind === "table") {
     const missing = block.fields.filter((id) => !has(id))
@@ -392,7 +396,10 @@ export const history = query({
 export const liveBlock = query({
   returns: v.union(
     v.object({ problem: v.string(), result: v.null() }),
-    v.object({ problem: v.null(), result: savedQueryPageValidator })
+    v.object({
+      problem: v.null(),
+      result: v.union(savedQueryPageValidator, savedAggregateValidator),
+    })
   ),
   args: { pageId: v.id("pages"), revision: v.number(), blockIndex: v.number() },
   handler: async (ctx, args) => {
@@ -419,7 +426,7 @@ export const liveBlock = query({
     const problem = await bindingProblem(ctx, page.workspaceId, block)
     if (problem) return { problem, result: null }
     try {
-      const result = await runSavedQuery(ctx, {
+      const result = await readSavedResult(ctx, {
         queryId: block.binding.queryId,
         expectedRevision: block.binding.revision,
         paginationOpts: firstPageWithinBudget(

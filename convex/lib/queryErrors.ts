@@ -21,8 +21,11 @@ export type QueryTooExpensive = {
   readonly hint: string
 }
 
-/** - "resultBytes": the bytes of one result page. */
-export type QueryBudget = "resultBytes"
+/**
+ * - "resultBytes": the bytes of one result page.
+ * - "rowsRead": the index rows that one bounded aggregate read can examine.
+ */
+export type QueryBudget = "resultBytes" | "rowsRead"
 
 const MATERIALIZE =
   "For a larger report, run a recipe with an aggregate step that writes a summary collection, then query that collection."
@@ -31,6 +34,10 @@ const DETAILS: Record<QueryBudget, { message: string; hint: string }> = {
   resultBytes: {
     message: "Query result byte budget exceeded",
     hint: `Select fewer fields or lower the page size. ${MATERIALIZE}`,
+  },
+  rowsRead: {
+    message: "Aggregate matches more records than one bounded read",
+    hint: `Narrow the indexed range or filters. ${MATERIALIZE}`,
   },
 }
 
@@ -52,7 +59,7 @@ export function queryTooExpensive(
 const Data = Schema.Struct({
   kind: Schema.Literal("QueryTooExpensive"),
   status: Schema.Literal(400),
-  budget: Schema.Literals(["resultBytes"]),
+  budget: Schema.Literals(["resultBytes", "rowsRead"]),
   limit: Schema.Number,
   message: Schema.String,
   hint: Schema.String,

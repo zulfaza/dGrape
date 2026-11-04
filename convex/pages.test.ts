@@ -379,12 +379,31 @@ test("live blocks authorize stored addresses, bound results and report stale sou
     name: "Live",
     query: { fieldId: "amount", order: "asc" },
   })
+  const totals = await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "Totals",
+    query: {
+      fieldId: "amount",
+      order: "asc",
+      aggregate: {
+        measures: [{ op: "count" }, { op: "sum", fieldId: "amount" }],
+      },
+    },
+  })
   const page = await owner.mutation(api.pages.save, {
     workspaceId,
     definition: {
       title: "Live",
       blocks: [
         { kind: "table", title: "Rows", binding, fields: ["amount"] },
+        {
+          kind: "metric",
+          title: "Count",
+          binding: totals,
+          field: "count",
+          unit: "rows",
+          operation: "sum",
+        },
         {
           kind: "chart",
           title: "Chart",
@@ -400,9 +419,17 @@ test("live blocks authorize stored addresses, bound results and report stale sou
     },
   })
   const address = { pageId: page.pageId, revision: 1, blockIndex: 0 }
-  expect(
-    (await owner.query(api.pages.liveBlock, address)).result?.page
-  ).toEqual([])
+  const rowsOf = async (blockIndex: number) => {
+    const { result } = await owner.query(api.pages.liveBlock, {
+      ...address,
+      blockIndex,
+    })
+    return result?.kind === "records" ? result.page : result?.rows
+  }
+  expect(await rowsOf(0)).toEqual([])
+  expect(await rowsOf(1)).toEqual([
+    { key: "null", values: { count: 0, sum_amount: 0 } },
+  ])
   await expect(other.query(api.pages.liveBlock, address)).rejects.toThrow(
     "Workspace access denied"
   )
@@ -432,16 +459,19 @@ test("live blocks authorize stored addresses, bound results and report stale sou
   const live = await owner.query(api.pages.liveBlock, address)
   const chart = await owner.query(api.pages.liveBlock, {
     ...address,
-    blockIndex: 1,
+    blockIndex: 2,
   })
-  expect(chart.result?.page).toEqual(live.result?.page)
+  expect(await rowsOf(2)).toEqual(await rowsOf(0))
   expect(chart.result?.completeness).toBe("partial")
   await expect(
-    other.query(api.pages.liveBlock, { ...address, blockIndex: 1 })
+    other.query(api.pages.liveBlock, { ...address, blockIndex: 2 })
   ).rejects.toThrow("Workspace access denied")
-  expect(live.result?.page).toHaveLength(50)
+  expect(await rowsOf(0)).toHaveLength(50)
   expect(live.result?.completeness).toBe("partial")
-  expect(await owner.query(api.pages.sources, { workspaceId })).toHaveLength(1)
+  expect(await rowsOf(1)).toEqual([
+    { key: "null", values: { count: 60, sum_amount: 1770 } },
+  ])
+  expect(await owner.query(api.pages.sources, { workspaceId })).toHaveLength(2)
   await t.run((ctx) =>
     ctx.db.patch(collectionId, { definition: { version: 2, fields: [] } })
   )
@@ -449,7 +479,7 @@ test("live blocks authorize stored addresses, bound results and report stale sou
     "schema is stale"
   )
   expect(
-    (await owner.query(api.pages.liveBlock, { ...address, blockIndex: 1 }))
+    (await owner.query(api.pages.liveBlock, { ...address, blockIndex: 2 }))
       .problem
   ).toContain("schema is stale")
   expect(await owner.query(api.pages.sources, { workspaceId })).toEqual([])

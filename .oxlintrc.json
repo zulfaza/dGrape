@@ -218,7 +218,7 @@
       }
     },
     {
-      "files": ["convex/lib/recordQuery.ts"],
+      "files": ["convex/lib/recordQuery.ts", "convex/lib/queryAggregate.ts"],
       "rules": {
         "anti-slop/no-runtime-typeof": "off"
       }

@@ -12,14 +12,17 @@ import { recordAuditEvent, type AuditActor } from "./auditEvents"
 import {
   collectionDefinitionValidator,
   collectionRecordValidator,
+  recordValuesValidator,
 } from "./collectionDomain"
-import { queryTooExpensive } from "./queryErrors"
 import {
-  checkQuery,
-  queryRecords,
-  selectedFields,
-  type RecordQuery,
-} from "./recordQuery"
+  aggregateRecords,
+  checkSavedQuery,
+  savedQueryFields,
+  type AggregateRow,
+  type SavedQuery,
+} from "./queryAggregate"
+import { queryTooExpensive } from "./queryErrors"
+import { queryRecords } from "./recordQuery"
 import {
   dataAsOf,
   readSourceStatus,
@@ -30,7 +33,7 @@ import {
 type SaveQueryArgs = {
   collectionId: Id<"collections">
   name: string
-  query: RecordQuery
+  query: SavedQuery
   queryId?: Id<"queryDefinitions">
   expectedRevision?: number
 }
@@ -65,8 +68,13 @@ export async function saveQueryInWorkspace(
   const collection = await ctx.db.get(args.collectionId)
   if (!collection || collection.workspaceId !== workspaceId)
     throw new Error("Collection access denied")
-  const checked = checkQuery(collection.definition.fields, args.query)
+  const checked = checkSavedQuery(collection.definition.fields, args.query)
   if (!checked.ok) throw new Error(checked.message)
+  const resultFields = savedQueryFields(
+    collection.definition.fields,
+    checked.value
+  )
+  if (!resultFields.ok) throw new Error(resultFields.message)
   const name = args.name.trim()
   if (!name || name.length > 100)
     throw new Error("Query name must be 1 to 100 characters")
@@ -102,7 +110,7 @@ export async function saveQueryInWorkspace(
     schemaVersion: collection.definition.version,
     resultSchema: {
       version: collection.definition.version,
-      fields: selectedFields(collection.definition.fields, checked.value),
+      fields: resultFields.value,
     },
     query: checked.value,
   })
@@ -122,6 +130,7 @@ export async function saveQueryInWorkspace(
 export const savedQueryPageValidator = paginationResultValidator(
   collectionRecordValidator
 ).extend({
+  kind: v.literal("records"),
   queryId: v.id("queryDefinitions"),
   revision: v.number(),
   resultSchema: collectionDefinitionValidator,
@@ -131,6 +140,7 @@ export const savedQueryPageValidator = paginationResultValidator(
   source: sourceStatusValidator,
 })
 export type SavedQueryPage = PaginationResult<Doc<"collectionRecords">> & {
+  kind: "records"
   queryId: Id<"queryDefinitions">
   revision: number
   resultSchema: Doc<"collections">["definition"]
@@ -176,21 +186,16 @@ export async function runSavedQueryInWorkspace(
   workspaceId: Id<"workspaces">,
   args: RunSavedQueryArgs
 ): Promise<SavedQueryPage> {
-  const saved = await ctx.db.get(args.queryId)
-  if (!saved || saved.workspaceId !== workspaceId)
-    throw new Error("Query access denied")
-  const version = await ctx.db
-    .query("queryDefinitionVersions")
-    .withIndex("by_queryId_and_revision", (q) =>
-      q.eq("queryId", saved._id).eq("revision", args.expectedRevision)
+  const { saved, version, collection } = await runnableRevision(
+    ctx,
+    workspaceId,
+    args.queryId,
+    args.expectedRevision
+  )
+  if (version.query.aggregate !== undefined)
+    throw new Error(
+      "This query aggregates records; read it with the aggregate operation"
     )
-    .unique()
-  if (!version) throw new Error("Query revision mismatch")
-  const collection = await ctx.db.get(saved.collectionId)
-  if (!collection || collection.workspaceId !== saved.workspaceId)
-    throw new Error("Collection access denied")
-  if (version.schemaVersion !== collection.definition.version)
-    throw new Error("Query schema mismatch; save a new revision")
   const budgets = await workspaceBudgets(ctx, saved.workspaceId)
   const opts = args.paginationOpts
   if (
@@ -218,6 +223,7 @@ export async function runSavedQueryInWorkspace(
     throw queryTooExpensive("resultBytes", opts.maximumBytesRead)
   const source = await readSourceStatus(ctx, collection)
   return {
+    kind: "records",
     queryId: saved._id,
     revision: version.revision,
     resultSchema: version.resultSchema,
@@ -230,6 +236,152 @@ export async function runSavedQueryInWorkspace(
     dataAsOf: dataAsOf(source.freshness),
     source,
   }
+}
+
+/**
+ * A saved query revision that can run now: it is in `workspaceId` and was
+ * saved for the current schema of its collection.
+ */
+async function runnableRevision(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  queryId: Id<"queryDefinitions">,
+  revision: number
+) {
+  const saved = await ctx.db.get(queryId)
+  if (!saved || saved.workspaceId !== workspaceId)
+    throw new Error("Query access denied")
+  const version = await ctx.db
+    .query("queryDefinitionVersions")
+    .withIndex("by_queryId_and_revision", (q) =>
+      q.eq("queryId", saved._id).eq("revision", revision)
+    )
+    .unique()
+  if (!version) throw new Error("Query revision mismatch")
+  const collection = await ctx.db.get(saved.collectionId)
+  if (!collection || collection.workspaceId !== saved.workspaceId)
+    throw new Error("Collection access denied")
+  if (version.schemaVersion !== collection.definition.version)
+    throw new Error("Query schema mismatch; save a new revision")
+  return { saved, version, collection }
+}
+
+/**
+ * The groups of an aggregate query with its source freshness. It is always
+ * complete: a query that matches more records than one bounded read fails
+ * with QueryTooExpensive instead. `matched` is the records that matched the
+ * query, before grouping.
+ */
+export const savedAggregateValidator = v.object({
+  kind: v.literal("aggregate"),
+  queryId: v.id("queryDefinitions"),
+  revision: v.number(),
+  resultSchema: collectionDefinitionValidator,
+  rows: v.array(v.object({ key: v.string(), values: recordValuesValidator })),
+  matched: v.number(),
+  completeness: v.literal("complete"),
+  evaluatedAt: v.number(),
+  dataAsOf: v.union(v.number(), v.null()),
+  source: sourceStatusValidator,
+})
+export type SavedAggregate = {
+  kind: "aggregate"
+  queryId: Id<"queryDefinitions">
+  revision: number
+  resultSchema: Doc<"collections">["definition"]
+  rows: AggregateRow[]
+  matched: number
+  completeness: "complete"
+  evaluatedAt: number
+  dataAsOf: number | null
+  source: SourceStatus
+}
+
+type RunSavedAggregateArgs = {
+  queryId: Id<"queryDefinitions">
+  expectedRevision: number
+}
+
+/** Membership is checked here, as in runSavedQuery. */
+export async function runSavedAggregate(
+  ctx: QueryCtx,
+  args: RunSavedAggregateArgs
+): Promise<SavedAggregate> {
+  const saved = await ctx.db.get(args.queryId)
+  if (!saved) throw new Error("Query access denied")
+  await requireMembership(ctx, saved.workspaceId, "read")
+  return runSavedAggregateInWorkspace(ctx, saved.workspaceId, args)
+}
+
+/**
+ * Runs a saved aggregate revision of `workspaceId` over one read of at most
+ * the workspace's query row and byte budgets. The caller has already proved
+ * access to the workspace.
+ */
+export async function runSavedAggregateInWorkspace(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  args: RunSavedAggregateArgs
+): Promise<SavedAggregate> {
+  const { saved, version, collection } = await runnableRevision(
+    ctx,
+    workspaceId,
+    args.queryId,
+    args.expectedRevision
+  )
+  const { aggregate } = version.query
+  if (aggregate === undefined)
+    throw new Error("This query has no aggregate; run it to read its records")
+  const budgets = await workspaceBudgets(ctx, saved.workspaceId)
+  const result = await queryRecords(ctx, collection, version.query, {
+    cursor: null,
+    numItems: budgets.queryRowsRead,
+    maximumRowsRead: budgets.queryRowsRead,
+    maximumBytesRead: budgets.queryBytesRead,
+  })
+  if (!result.ok) throw new Error(result.message)
+  const { page, isDone, pageStatus } = result.value
+  if (!isDone || pageStatus === "SplitRequired")
+    throw queryTooExpensive("rowsRead", budgets.queryRowsRead)
+  const source = await readSourceStatus(ctx, collection)
+  return {
+    kind: "aggregate",
+    queryId: saved._id,
+    revision: version.revision,
+    resultSchema: version.resultSchema,
+    rows: aggregateRecords(
+      aggregate,
+      version.query.order,
+      page.map((record) => record.values)
+    ),
+    matched: page.length,
+    completeness: "complete",
+    evaluatedAt: Date.now(),
+    dataAsOf: dataAsOf(source.freshness),
+    source,
+  }
+}
+
+/**
+ * The first page of a record query, or the groups of an aggregate query, as
+ * live page blocks read them. Membership is checked here.
+ */
+export async function readSavedResult(
+  ctx: QueryCtx,
+  args: RunSavedQueryArgs
+): Promise<SavedQueryPage | SavedAggregate> {
+  const saved = await ctx.db.get(args.queryId)
+  if (!saved) throw new Error("Query access denied")
+  await requireMembership(ctx, saved.workspaceId, "read")
+  const { version } = await runnableRevision(
+    ctx,
+    saved.workspaceId,
+    args.queryId,
+    args.expectedRevision
+  )
+  return version.query.aggregate === undefined
+    ? runSavedQueryInWorkspace(ctx, saved.workspaceId, args)
+    : runSavedAggregateInWorkspace(ctx, saved.workspaceId, args)
 }
 
 /** One saved query with its current revision, as agents list them. */
