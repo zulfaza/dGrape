@@ -1,6 +1,7 @@
 import * as Activity from "../../convex/lib/agentActivityTransport"
 import * as Collections from "../../convex/lib/agentCollectionTransport"
 import * as ArtifactLinks from "../../convex/lib/agentArtifactLinkTransport"
+import * as Exports from "../../convex/lib/agentExportTransport"
 import * as Pages from "../../convex/lib/agentPageTransport"
 import * as Queries from "../../convex/lib/agentQueryTransport"
 import * as Recipes from "../../convex/lib/agentRecipeTransport"
@@ -33,6 +34,15 @@ const DescribeWorkspace = Tool.make("workspace_describe", {
   description:
     "Describe the workspace this credential can read: its name and each collection with its fields. Call this first to find collection IDs.",
   success: AgentApi.WorkspaceDescription,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const ExportWorkspace = Tool.make("workspace_export", {
+  description:
+    "Export the workspace definitions as one versioned JSON document (`format`, `formatVersion`): each collection with its schema and schema history, each saved query with every revision, recipe versions and schedules, and each page with every version. IDs are the stored IDs, so references between definitions stay valid. It never contains records, run state, or secret values. Needs the data.read, jobs.read, and pages.read scopes.",
+  parameters: Tool.EmptyParams,
+  success: Exports.WorkspaceExport,
   failure: AgentApi.AgentApiError,
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Readonly, true)
@@ -499,6 +509,7 @@ const DfeToolkit = Toolkit.make(
   ListTemplates,
   ListCapabilities,
   DescribeWorkspace,
+  ExportWorkspace,
   DescribeCollection,
   ListConnections,
   DescribeConnection,
@@ -547,6 +558,7 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       collections_templates: () => Effect.succeed(collectionTemplates()),
       capabilities_list: () => api.capabilities,
       workspace_describe: () => api.describeWorkspace,
+      workspace_export: () => api.exportWorkspace,
       collections_describe: (input) => api.describeCollection(input),
       connections_list: (input) => api.listConnections(input),
       connections_describe: (input) => api.describeConnection(input),
@@ -595,7 +607,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, collections_rename_field, records_create, records_update, and records_delete change data, and records_link_artifact and records_unlink_artifact link files to records. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. " +
+      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, collections_rename_field, records_create, records_update, and records_delete change data, and records_link_artifact and records_unlink_artifact link files to records. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. workspace_export returns every definition (collections, saved queries, recipes, schedules, and pages) as one JSON document, without records or secret values. " +
       "Recipes fetch and transform data without a model. A recipe fetch step uses a connection: connections_list and connections_describe show each connection's origin, routes, and credential status, never secret values. A person adds credentials in the dashboard. recipes_publish saves an immutable recipe version (fetch, map, filter, join, aggregate, upsert, snapshot, and artifact steps); recipes_versions lists versions. recipes_trigger starts a run (reuse its idempotencyKey to retry), recipes_runs lists runs, recipes_history lists the attempts of one run, and recipes_cancel stops a run. recipes_schedule creates a UTC schedule, recipes_schedules lists schedules, recipes_set_enabled turns one on or off, and recipes_set_run_access lets another user run a recipe. Only the recipe creator manages schedules and run access.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)

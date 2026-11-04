@@ -2,64 +2,75 @@ import { Schema } from "effect"
 
 const Value = Schema.Union([Schema.String, Schema.Number, Schema.Boolean])
 const Values = Schema.Record(Schema.String, Value)
-export const Recipe = Schema.Struct({
-  steps: Schema.mutable(
-    Schema.Array(
-      Schema.Union([
-        Schema.Struct({
-          kind: Schema.Literal("fetch"),
-          connectionId: Schema.String,
-          route: Schema.String,
-          maxPages: Schema.Number,
-        }),
-        Schema.Struct({
-          kind: Schema.Literal("map"),
-          fields: Schema.Record(Schema.String, Schema.String),
-        }),
-        Schema.Struct({
-          kind: Schema.Literal("filter"),
-          field: Schema.String,
-          equals: Value,
-        }),
-        Schema.Struct({
-          kind: Schema.Literal("join"),
-          field: Schema.String,
-          rightField: Schema.String,
-          prefix: Schema.String,
-          rows: Schema.mutable(Schema.Array(Values)),
-        }),
-        Schema.Struct({
-          kind: Schema.Literal("aggregate"),
-          groupBy: Schema.String,
-          operation: Schema.Literals(["count", "sum"]),
-          field: Schema.optionalKey(Schema.String),
-          output: Schema.String,
-        }),
-        Schema.Struct({
-          kind: Schema.Literal("upsert"),
-          collectionId: Schema.String,
-          source: Schema.String,
-          identityField: Schema.String,
-        }),
-        Schema.Struct({
-          kind: Schema.Literal("snapshot"),
-          collectionId: Schema.String,
-        }),
-        Schema.Struct({
-          kind: Schema.Literal("artifact"),
-          name: Schema.String,
-          format: Schema.Literal("json"),
-        }),
-      ])
-    )
-  ),
-  limits: Schema.Struct({
-    rows: Schema.Number,
-    bytes: Schema.Number,
-    durationMs: Schema.Number,
-    attempts: Schema.Number,
-  }),
-})
+const StoredValues = Schema.Record(
+  Schema.String,
+  Schema.Union([Value, Schema.Array(Schema.String)])
+)
+/**
+ * A recipe whose join rows hold `values`. Agents send scalar values; stored
+ * recipes can also hold the string arrays of recordValuesValidator.
+ */
+const recipe = <V extends typeof Values | typeof StoredValues>(values: V) =>
+  Schema.Struct({
+    steps: Schema.mutable(
+      Schema.Array(
+        Schema.Union([
+          Schema.Struct({
+            kind: Schema.Literal("fetch"),
+            connectionId: Schema.String,
+            route: Schema.String,
+            maxPages: Schema.Number,
+          }),
+          Schema.Struct({
+            kind: Schema.Literal("map"),
+            fields: Schema.Record(Schema.String, Schema.String),
+          }),
+          Schema.Struct({
+            kind: Schema.Literal("filter"),
+            field: Schema.String,
+            equals: Value,
+          }),
+          Schema.Struct({
+            kind: Schema.Literal("join"),
+            field: Schema.String,
+            rightField: Schema.String,
+            prefix: Schema.String,
+            rows: Schema.mutable(Schema.Array(values)),
+          }),
+          Schema.Struct({
+            kind: Schema.Literal("aggregate"),
+            groupBy: Schema.String,
+            operation: Schema.Literals(["count", "sum"]),
+            field: Schema.optionalKey(Schema.String),
+            output: Schema.String,
+          }),
+          Schema.Struct({
+            kind: Schema.Literal("upsert"),
+            collectionId: Schema.String,
+            source: Schema.String,
+            identityField: Schema.String,
+          }),
+          Schema.Struct({
+            kind: Schema.Literal("snapshot"),
+            collectionId: Schema.String,
+          }),
+          Schema.Struct({
+            kind: Schema.Literal("artifact"),
+            name: Schema.String,
+            format: Schema.Literal("json"),
+          }),
+        ])
+      )
+    ),
+    limits: Schema.Struct({
+      rows: Schema.Number,
+      bytes: Schema.Number,
+      durationMs: Schema.Number,
+      attempts: Schema.Number,
+    }),
+  })
+export const Recipe = recipe(Values)
+export const StoredRecipe = recipe(StoredValues)
 export const Timing = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("once"), at: Schema.Number }),
   Schema.Struct({ kind: Schema.Literal("cron"), expression: Schema.String }),

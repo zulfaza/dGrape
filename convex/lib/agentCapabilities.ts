@@ -17,6 +17,12 @@ const CAPABILITIES = [
     description: "Describe the workspace and list its collections.",
   },
   {
+    id: "definitions.read",
+    scopes: ["data.read", "jobs.read", "pages.read"],
+    description:
+      "Export the workspace definitions as one JSON document: collection schemas with their history, saved queries, recipe versions and schedules, and pages with their versions. It never contains records or secret values.",
+  },
+  {
     id: "collections.read",
     scopes: ["data.read"],
     description: "Describe one collection, its fields, and schema version.",

@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet } from "@tanstack/react-router"
 import { useQuery } from "convex/react"
 import { ChevronLeft } from "lucide-react"
 import { api } from "../../../../convex/_generated/api"
+import { ExportDefinitionsButton } from "@/components/export-definitions-button"
 import { PageHeader } from "@/components/page-header"
 
 export const Route = createFileRoute("/dashboard/workspaces_/$workspaceId")({
@@ -27,7 +28,17 @@ function WorkspaceLayout() {
           <ChevronLeft aria-hidden className="size-4" />
           All workspaces
         </Link>
-        <PageHeader title={workspace ? workspace.name : "Loading workspace…"} />
+        <PageHeader
+          title={workspace ? workspace.name : "Loading workspace…"}
+          actions={
+            workspace && (
+              <ExportDefinitionsButton
+                key={workspace._id}
+                workspace={workspace}
+              />
+            )
+          }
+        />
       </div>
       <Outlet />
     </main>
