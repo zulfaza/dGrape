@@ -3,7 +3,7 @@ import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
 import { Schema } from "effect"
 import schema from "./schema"
-import { api } from "./_generated/api"
+import { api, internal } from "./_generated/api"
 import * as Queries from "./lib/agentQueryTransport"
 import { insertRecord } from "./lib/records"
 const modules = import.meta.glob("./**/*.ts")
@@ -266,3 +266,96 @@ test("agent credentials save, list, and run queries in their own workspace", asy
     status: 403,
   })
 }, 30_000)
+
+test("workspace roles limit viewers to reads and editors to data changes", async () => {
+  const t = convexTest(schema, modules)
+  const { workspaceId, collectionId } = await t.run(async (ctx) => {
+    const workspaceId = await ctx.db.insert("workspaces", { name: "Roles" })
+    for (const role of ["owner", "editor", "viewer"] as const)
+      await ctx.db.insert("workspaceMembers", {
+        workspaceId,
+        userId: role,
+        role,
+      })
+    const collectionId = await ctx.db.insert("collections", {
+      workspaceId,
+      name: "Rows",
+      definition: {
+        version: 1,
+        fields: [{ id: "name", label: "Name", type: "text", indexed: true }],
+      },
+    })
+    return { workspaceId, collectionId }
+  })
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const editor = t.withIdentity({ tokenIdentifier: "editor" })
+  const viewer = t.withIdentity({ tokenIdentifier: "viewer" })
+  const denied = "Workspace permission denied for your role"
+  const page = { numItems: 10, cursor: null }
+
+  // Writes: owners and editors only.
+  await owner.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { name: "a" },
+  })
+  await editor.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { name: "b" },
+  })
+  await expect(
+    viewer.mutation(api.workspaces.createRecord, {
+      collectionId,
+      values: { name: "c" },
+    })
+  ).rejects.toThrow(denied)
+  await expect(
+    viewer.mutation(api.savedQueries.save, {
+      collectionId,
+      name: "Names",
+      query: { fieldId: "name", order: "asc" },
+    })
+  ).rejects.toThrow(denied)
+
+  // Reads: every role.
+  const rows = await viewer.query(api.workspaces.listRecords, {
+    collectionId,
+    paginationOpts: page,
+  })
+  expect(rows.page.map((row) => row.values.name)).toEqual(["a", "b"])
+
+  // Members, credentials, agent grants and budgets: owners only.
+  for (const member of [editor, viewer]) {
+    await expect(
+      member.mutation(api.secrets.prepare, {
+        workspaceId,
+        label: "Key",
+        private: true,
+      })
+    ).rejects.toThrow(denied)
+    await expect(
+      member.query(api.agentGrants.list, { workspaceId, paginationOpts: page })
+    ).rejects.toThrow(denied)
+    await expect(
+      member.mutation(api.workspaceBudgets.set, { workspaceId, overrides: {} })
+    ).rejects.toThrow(denied)
+  }
+  await owner.mutation(api.workspaceBudgets.set, { workspaceId, overrides: {} })
+
+  // An agent credential works only while its owner keeps the owner role.
+  const now = Date.now()
+  await t.run(async (ctx) => {
+    for (const userId of ["owner", "editor"])
+      await ctx.db.insert("agentGrants", {
+        workspaceId,
+        owner: userId,
+        digest: `${userId}-digest`,
+        expiresAt: now + 60_000,
+        state: "active",
+        scope: "readwrite",
+      })
+  })
+  const describe = (digest: string) =>
+    t.query(internal.agentGrants.describe, { digest, now })
+  expect(await describe("owner-digest")).not.toBe("denied")
+  expect(await describe("editor-digest")).toBe("denied")
+})
