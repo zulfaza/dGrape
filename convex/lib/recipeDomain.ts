@@ -1,6 +1,20 @@
 import { v, type Infer } from "convex/values"
 import { indexValueValidator, recordValuesValidator } from "./collectionDomain"
 
+const rangeBoundValidator = v.union(v.string(), v.number())
+/** Inclusive bounds. A row matches only when its value has the type of the bounds. */
+const rangeValidator = v.object({
+  min: v.optional(rangeBoundValidator),
+  max: v.optional(rangeBoundValidator),
+})
+const aggregateOperationValidator = v.union(
+  v.literal("count"),
+  v.literal("sum"),
+  v.literal("min"),
+  v.literal("max"),
+  v.literal("average")
+)
+
 export const recipeStepValidator = v.union(
   v.object({
     kind: v.literal("fetch"),
@@ -18,6 +32,16 @@ export const recipeStepValidator = v.union(
     equals: indexValueValidator,
   }),
   v.object({
+    kind: v.literal("filter"),
+    field: v.string(),
+    in: v.array(indexValueValidator),
+  }),
+  v.object({
+    kind: v.literal("filter"),
+    field: v.string(),
+    range: rangeValidator,
+  }),
+  v.object({
     kind: v.literal("join"),
     field: v.string(),
     rightField: v.string(),
@@ -27,7 +51,7 @@ export const recipeStepValidator = v.union(
   v.object({
     kind: v.literal("aggregate"),
     groupBy: v.string(),
-    operation: v.union(v.literal("count"), v.literal("sum")),
+    operation: aggregateOperationValidator,
     field: v.optional(v.string()),
     output: v.string(),
   }),
@@ -56,6 +80,10 @@ export const recipeValidator = v.object({
 export type Recipe = Infer<typeof recipeValidator>
 export type RecipeStep = Infer<typeof recipeStepValidator>
 export type RecipeRow = Infer<typeof recordValuesValidator>
+type FilterStep = Extract<RecipeStep, { kind: "filter" }>
+type AggregateStep = Extract<RecipeStep, { kind: "aggregate" }>
+type Range = Infer<typeof rangeValidator>
+export const MAX_FILTER_VALUES = 100
 
 function integer(value: number, min: number, max: number, label: string) {
   if (!Number.isSafeInteger(value) || value < min || value > max)
@@ -96,6 +124,9 @@ export function validateRecipe(recipe: Recipe): void {
         break
       case "filter":
         field(step.field)
+        if ("in" in step)
+          integer(step.in.length, 1, MAX_FILTER_VALUES, "filter values")
+        if ("range" in step) checkRange(step.range)
         break
       case "join":
         field(step.field)
@@ -108,8 +139,8 @@ export function validateRecipe(recipe: Recipe): void {
         field(step.output)
         if (step.output === step.groupBy)
           throw new Error("Aggregate output must differ from group field")
-        if (step.operation === "sum" && !step.field)
-          throw new Error("Sum needs a field")
+        if (step.operation !== "count" && !step.field)
+          throw new Error(`Aggregate ${step.operation} needs a field`)
         if (step.field) field(step.field)
         break
       case "upsert":
@@ -136,8 +167,83 @@ export function validateRecipe(recipe: Recipe): void {
   )
 }
 
+function checkRange({ min, max }: Range) {
+  if (min === undefined && max === undefined)
+    throw new Error("A range needs a min or a max")
+  if (min !== undefined && max !== undefined) {
+    if (typeof min !== typeof max)
+      throw new Error("Range bounds must have the same type")
+    if (min > max) throw new Error("Range min must not exceed max")
+  }
+  for (const bound of [min, max])
+    if (typeof bound === "number" && !Number.isFinite(bound))
+      throw new Error("Range bounds must be finite")
+}
+
 function own(row: RecipeRow, key: string) {
   return Object.hasOwn(row, key) ? row[key] : undefined
+}
+function inRange(value: RecipeRow[string] | undefined, { min, max }: Range) {
+  const bound = min ?? max
+  if (typeof value !== "string" && typeof value !== "number") return false
+  if (typeof value !== typeof bound) return false
+  return (
+    (min === undefined || value >= min) && (max === undefined || value <= max)
+  )
+}
+function matches(row: RecipeRow, step: FilterStep): boolean {
+  const value = own(row, step.field)
+  if ("range" in step) return inRange(value, step.range)
+  if ("in" in step) return step.in.some((item) => item === value)
+  return value === step.equals
+}
+function combine(
+  operation: AggregateStep["operation"],
+  value: number,
+  amount: number
+) {
+  switch (operation) {
+    case "min":
+      return Math.min(value, amount)
+    case "max":
+      return Math.max(value, amount)
+    case "count":
+    case "sum":
+    case "average":
+      return value + amount
+  }
+}
+/** Groups keep first-seen order. Average divides the finite sum at the end. */
+function aggregate(rows: RecipeRow[], step: AggregateStep): RecipeRow[] {
+  const groups = new Map<
+    string,
+    { key: RecipeRow[string]; value: number; count: number }
+  >()
+  for (const row of rows) {
+    const key = own(row, step.groupBy)
+    if (key === undefined) throw new Error("Missing group field")
+    const amount =
+      step.operation === "count"
+        ? 1
+        : step.field
+          ? own(row, step.field)
+          : undefined
+    if (typeof amount !== "number" || !Number.isFinite(amount))
+      throw new Error(`Aggregate ${step.operation} needs finite numbers`)
+    const encoded = JSON.stringify(key)
+    const current = groups.get(encoded)
+    if (!current) {
+      groups.set(encoded, { key, value: amount, count: 1 })
+      continue
+    }
+    current.count += 1
+    current.value = combine(step.operation, current.value, amount)
+    if (!Number.isFinite(current.value)) throw new Error("Aggregate overflow")
+  }
+  return [...groups.values()].map(({ key, value, count }) => ({
+    [step.groupBy]: key,
+    [step.output]: step.operation === "average" ? value / count : value,
+  }))
 }
 export function checkBudget(rows: RecipeRow[], limits: Recipe["limits"]) {
   for (const row of rows)
@@ -170,7 +276,7 @@ export function transform(
       })
       break
     case "filter":
-      result = rows.filter((row) => own(row, step.field) === step.equals)
+      result = rows.filter((row) => matches(row, step))
       break
     case "join": {
       result = []
@@ -193,30 +299,9 @@ export function transform(
         }
       break
     }
-    case "aggregate": {
-      const groups = new Map<string, RecipeRow>()
-      for (const row of rows) {
-        const key = own(row, step.groupBy)
-        if (key === undefined) throw new Error("Missing group field")
-        const encoded = JSON.stringify(key)
-        const current = groups.get(encoded)
-        const amount =
-          step.operation === "count"
-            ? 1
-            : step.field
-              ? own(row, step.field)
-              : undefined
-        if (typeof amount !== "number" || !Number.isFinite(amount))
-          throw new Error("Sum needs finite numbers")
-        const previous = (current ? own(current, step.output) : 0) ?? 0
-        if (typeof previous !== "number") throw new Error("Invalid aggregate")
-        const total = previous + amount
-        if (!Number.isFinite(total)) throw new Error("Aggregate overflow")
-        groups.set(encoded, { [step.groupBy]: key, [step.output]: total })
-      }
-      result = [...groups.values()]
+    case "aggregate":
+      result = aggregate(rows, step)
       break
-    }
     default:
       throw new Error("This step requires the trusted runtime")
   }

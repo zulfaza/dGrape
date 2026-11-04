@@ -4,6 +4,8 @@ import {
   transform,
   validateRecipe,
   type Recipe,
+  type RecipeRow,
+  type RecipeStep,
 } from "./recipeDomain"
 import { latestDue, nextOccurrence, occurrenceId } from "./recipeSchedule"
 
@@ -64,6 +66,78 @@ describe("trusted recipe transforms", () => {
       { group: 1, total: 6 },
       { group: "1", total: 8 },
     ])
+  })
+  it("filters by value set and inclusive typed range", () => {
+    const rows: RecipeRow[] = [
+      { n: 1 },
+      { n: 5 },
+      { n: "5" },
+      { n: 9 },
+      { d: "x" },
+    ]
+    expect(
+      transform(rows, { kind: "filter", field: "n", in: [5, 9] }, limits)
+    ).toEqual([{ n: 5 }, { n: 9 }])
+    expect(
+      transform(
+        rows,
+        { kind: "filter", field: "n", range: { min: 2, max: 9 } },
+        limits
+      )
+    ).toEqual([{ n: 5 }, { n: 9 }])
+    expect(
+      transform(
+        [{ day: "2026-01-01" }, { day: "2026-02-01" }],
+        { kind: "filter", field: "day", range: { max: "2026-01-31" } },
+        limits
+      )
+    ).toEqual([{ day: "2026-01-01" }])
+    const output: RecipeStep = { kind: "artifact", name: "a", format: "json" }
+    const invalid: RecipeStep[] = [
+      { kind: "filter", field: "n", in: [] },
+      { kind: "filter", field: "n", range: {} },
+      { kind: "filter", field: "n", range: { min: 1, max: "2" } },
+      { kind: "filter", field: "n", range: { min: 3, max: 2 } },
+    ]
+    for (const filter of invalid)
+      expect(() => validateRecipe({ limits, steps: [filter, output] })).toThrow(
+        /filter values|range/i
+      )
+  })
+  it("aggregates min, max and average per group", () => {
+    const rows = [
+      { g: "a", v: 4 },
+      { g: "b", v: 1 },
+      { g: "a", v: 2 },
+      { g: "a", v: 9 },
+    ]
+    const run = (operation: "min" | "max" | "average") =>
+      transform(
+        rows,
+        { kind: "aggregate", groupBy: "g", operation, field: "v", output: "o" },
+        limits
+      )
+    expect(run("min")).toEqual([
+      { g: "a", o: 2 },
+      { g: "b", o: 1 },
+    ])
+    expect(run("max")).toEqual([
+      { g: "a", o: 9 },
+      { g: "b", o: 1 },
+    ])
+    expect(run("average")).toEqual([
+      { g: "a", o: 5 },
+      { g: "b", o: 1 },
+    ])
+    expect(() =>
+      validateRecipe({
+        limits,
+        steps: [
+          { kind: "aggregate", groupBy: "g", operation: "max", output: "o" },
+          { kind: "artifact", name: "a", format: "json" },
+        ],
+      })
+    ).toThrow("needs a field")
   })
   it("rejects unbounded recipes and missing outputs", () => {
     expect(() => validateRecipe({ limits, steps: [] })).toThrow(
