@@ -70,7 +70,12 @@ Agent credentials use `POST /agent/migrations/plan`, `get`, `dryRun` and `start`
 `data.read`. While a lock is held, agent record writes and field additions
 return 400 with the migration message, not 503.
 
-Remaining implementation scope: UI for migrations; richer typed values and authorized record/artifact/secret references
+In the dashboard, "Change schema" on a collection plans a change of the existing
+fields, shows the changes, rollback limitations and dry run report, and starts
+the migration. While the lock is held, the collection page shows a notice and
+disables "New record" and "Add field".
+
+Remaining implementation scope: richer typed values and authorized record/artifact/secret references
 (coordinate with secret/recipe siblings); exact minor-unit money and currency
 metadata with job/transaction templates; materialized summaries and bounded,
 retry-safe correction/deletion rebuilds with freshness/completeness/error state;
