@@ -339,6 +339,13 @@ test("references stay in their workspace, and a referenced record or artifact ca
     paginationOpts: { numItems: 10, cursor: null },
   })
   expect(referencing.page.map((row) => row._id)).toEqual([job])
+  const label = (id: string) =>
+    owner.query(api.workspaces.referenceLabel, { collectionId: jobs, id })
+  expect(await label(company)).toBe("Example")
+  expect(await label(artifact)).toBe("offer.pdf")
+  expect(await label(foreign)).toBeNull()
+  expect(await label(foreignArtifact)).toBeNull()
+  expect(await label("not-an-id")).toBeNull()
   expect(
     await owner.mutation(api.workspaces.deleteRecord, {
       collectionId: companies,

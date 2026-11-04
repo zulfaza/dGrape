@@ -25,7 +25,12 @@ import {
   recordValuesValidator,
   type RecordValues,
 } from "./lib/collectionDomain"
-import { checkRecord, resolveFields, resolveNewField } from "./lib/references"
+import {
+  checkRecord,
+  referenceLabel as readReferenceLabel,
+  resolveFields,
+  resolveNewField,
+} from "./lib/references"
 import {
   deleteRecord as removeRecord,
   insertRecord,
@@ -230,6 +235,19 @@ export const queryRecords = query({
     const result = await readRecordQuery(ctx, collection, query, paginationOpts)
     if (!result.ok) throw new Error(result.message)
     return result.value
+  },
+})
+
+/**
+ * The label of a record or artifact that a record of the collection
+ * references. Null when the ID is not in the workspace.
+ */
+export const referenceLabel = query({
+  args: { collectionId: v.id("collections"), id: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { collectionId, id }) => {
+    const collection = await collectionForRecords(ctx, collectionId)
+    return readReferenceLabel(ctx, collection.workspaceId, id)
   },
 })
 

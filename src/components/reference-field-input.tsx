@@ -1,7 +1,8 @@
 import { usePaginatedQuery, useQuery } from "convex/react"
 import type { ReactNode } from "react"
 import { api } from "../../convex/_generated/api"
-import type { Doc, Id } from "../../convex/_generated/dataModel"
+import type { Id } from "../../convex/_generated/dataModel"
+import { recordLabel } from "../../convex/lib/collectionDomain"
 import {
   SelectFieldInput,
   type SelectItemOption,
@@ -89,19 +90,6 @@ export function CollectionTargetInput({
       />
     </PagedSelect>
   )
-}
-
-/** A short name for a record: its first text value, or its ID. */
-function recordLabel(
-  fields: ReadonlyArray<Doc<"collections">["definition"]["fields"][number]>,
-  record: Doc<"collectionRecords">
-): string {
-  for (const field of fields) {
-    const value = record.values[field.id]
-    if (field.type === "text" && value !== undefined && value !== "")
-      return String(value)
-  }
-  return record._id
 }
 
 /** The record form input of a record reference field. */
