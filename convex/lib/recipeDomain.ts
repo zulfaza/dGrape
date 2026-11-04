@@ -360,7 +360,7 @@ export const recipePreviewValidator = v.object({
   rows: v.array(recordValuesValidator),
 })
 export type RecipePreview = Infer<typeof recipePreviewValidator>
-/** Reads that a preview cannot do as a pure function. Each read is bounded by the recipe limits. */
+/** Reads that a preview cannot do as a pure function. */
 export type RecipeSources = {
   query: (step: QueryStep) => Promise<RecipeRow[]>
 }

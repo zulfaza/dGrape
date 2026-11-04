@@ -39,7 +39,7 @@ import {
   validateTiming,
 } from "./lib/recipeSchedule"
 import { recordSyncOutcome } from "./lib/sourceSync"
-import { readQueryStep } from "./lib/recipeQuery"
+import { readQueryPage } from "./lib/recipeQuery"
 
 /** A bounded output token detects writes made while a recipe fetches data. */
 export async function recipeOutputToken(
@@ -253,9 +253,15 @@ export async function previewForPrincipal(
   await recipeMember(ctx, args.workspaceId, "write", agent)
   return attempt(async () => {
     const output = await checkRecipe(ctx, args.workspaceId, args.recipe)
+    // Convex permits one paginated read per query, so a preview reads only
+    // the first page of one query step, as a sample.
+    let queried = false
     const preview = await previewRecipe(args.recipe, args.sample, {
-      query: (step) =>
-        readQueryStep(ctx, args.workspaceId, step, args.recipe.limits),
+      query: async (step) => {
+        if (queried) throw new Error("A preview can read one query step")
+        queried = true
+        return (await readQueryPage(ctx, args.workspaceId, step, null)).rows
+      },
     })
     if (output)
       for (const [index, row] of preview.rows.entries()) {

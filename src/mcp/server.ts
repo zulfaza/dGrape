@@ -339,7 +339,7 @@ const RecipeValidate = Tool.make("recipes_validate", {
 
 const RecipePreview = Tool.make("recipes_preview", {
   description:
-    "Dry run a recipe on `sample` rows (at most the recipe's row limit). The sample replaces the rows of the fetch step, so nothing is fetched; give an empty sample for a recipe without fetch. A `query` step (`queryId`, `revision`, `maxPages`) reads its saved query revision (from queries_list) and needs data.read. The output step saves nothing. Returns the row count after each step and the output rows, checked against the output collection fields, or `ok: false` with the `error`.",
+    "Dry run a recipe on `sample` rows (at most the recipe's row limit). The sample replaces the rows of the fetch step, so nothing is fetched; give an empty sample for a recipe without fetch. A `query` step (`queryId`, `revision`, `maxPages`) reads its saved query revision (from queries_list) and needs data.read; a preview reads only its first 50 records, and only one query step. The output step saves nothing. Returns the row count after each step and the output rows, checked against the output collection fields, or `ok: false` with the `error`.",
   parameters: Recipes.PreviewInput,
   success: Recipes.PreviewResult,
   failure: AgentApi.AgentApiError,

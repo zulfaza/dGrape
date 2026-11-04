@@ -7,6 +7,7 @@ import { api, internal } from "./_generated/api"
 import { internalAction } from "./_generated/server"
 import type { Recipe } from "./lib/recipeDomain"
 import { recordValuesValidator } from "./lib/collectionDomain"
+import { insertRecord } from "./lib/records"
 
 async function setup(kind: "upsert" | "snapshot" = "upsert", maxPages = 3) {
   const fetchPage = internalAction({
@@ -256,6 +257,64 @@ describe("durable recipe checkpoints", () => {
       [{ id: "b", total: 20 }],
     ])
     expect(result.run?.state).toBe("succeeded")
+  })
+  it("reads a query step across pages, each in its own query, up to maxPages", async () => {
+    const { t, owner, collectionId } = await setup()
+    const { workspaceId, copyId } = await t.run(async (ctx) => {
+      const collection = await ctx.db.get(collectionId)
+      if (!collection) throw new Error("Collection missing")
+      for (let i = 0; i < 55; i++)
+        await insertRecord(ctx, collection, { id: `r${i}`, total: i })
+      const copyId = await ctx.db.insert("collections", {
+        workspaceId: collection.workspaceId,
+        name: "Copy",
+        definition: collection.definition,
+      })
+      return { workspaceId: collection.workspaceId, copyId }
+    })
+    const saved = await owner.mutation(api.savedQueries.save, {
+      collectionId,
+      name: "All",
+      query: { fieldId: "id", order: "asc" },
+    })
+    const runQuery = async (maxPages: number) => {
+      const versionId = await owner.mutation(api.recipes.publish, {
+        workspaceId,
+        name: "All",
+        recipe: {
+          steps: [
+            {
+              kind: "query",
+              queryId: saved.queryId,
+              revision: saved.revision,
+              maxPages,
+            },
+            { kind: "snapshot", collectionId: copyId },
+          ],
+          limits: { rows: 100, bytes: 10000, durationMs: 60000, attempts: 3 },
+        },
+      })
+      const runId = await owner.mutation(api.recipes.trigger, {
+        versionId,
+        idempotencyKey: `pages-${maxPages}`,
+      })
+      const claims = await t.mutation(internal.recipes.dispatch, {})
+      const claim = claims.find((item) => item._id === runId)
+      if (!claim) throw new Error("Run not claimed")
+      const run = { runId, epoch: claim.epoch }
+      await t.mutation(internal.recipes.begin, run)
+      await t.action(internal.recipeRunner.execute, { ...run, step: 0 })
+      return t.run((ctx) =>
+        ctx.db
+          .query("recipeCheckpoints")
+          .withIndex("by_runId_and_step", (q) =>
+            q.eq("runId", runId).eq("step", 0)
+          )
+          .unique()
+      )
+    }
+    expect((await runQuery(2))?.rows).toHaveLength(55)
+    await expect(runQuery(1)).rejects.toThrow("Step failed")
   })
   it("rejects an output from another workspace before reading its cursor", async () => {
     const { t, args, collectionId } = await setup()

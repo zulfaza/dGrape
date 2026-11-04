@@ -18,7 +18,7 @@ import {
 } from "./lib/recordPublication"
 import { recordSyncOutcome } from "./lib/sourceSync"
 import { memberWithAccess } from "./lib/auth"
-import { readQueryStep } from "./lib/recipeQuery"
+import { readQueryPage } from "./lib/recipeQuery"
 
 export const executionArgs = {
   runId: v.id("recipeRuns"),
@@ -46,10 +46,14 @@ export const checkpoint = internalQuery({
     }
   },
 })
-/** The rows of a query step, read as the recipe owner in the run's workspace. */
-export const queryRows = internalQuery({
-  args: executionArgs,
-  returns: v.array(recordValuesValidator),
+/** One page of a query step, read as the recipe owner in the run's workspace. */
+export const queryPage = internalQuery({
+  args: { ...executionArgs, cursor: v.union(v.string(), v.null()) },
+  returns: v.object({
+    rows: v.array(recordValuesValidator),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+  }),
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId)
     if (!run || run.epoch !== args.epoch || run.state !== "running")
@@ -65,7 +69,7 @@ export const queryRows = internalQuery({
       "read"
     )
     if (!member) throw new Error("Recipe owner no longer has access")
-    return readQueryStep(ctx, run.workspaceId, step, version.recipe.limits)
+    return readQueryPage(ctx, run.workspaceId, step, args.cursor)
   },
 })
 /** Saving output and advancing the step is one transaction, even on redelivery. */
