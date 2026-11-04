@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test"
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 import schema from "./schema"
 import { api, internal } from "./_generated/api"
 import { publishCompatibleSchema } from "./lib/collectionSchemas"
@@ -315,6 +315,120 @@ test("agent collection creation and optional additions also preserve versions", 
       expectedVersion: 3,
     })
   ).rejects.toThrow("does not have the scope data.write")
+})
+
+test("migration plans report changes, and dry runs report the records that do not fit", async () => {
+  vi.useFakeTimers()
+  const { t, owner, workspaceId } = await fixture()
+  const collectionId = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Deals",
+    fields: [
+      { id: "name", label: "Name", type: "text" },
+      { id: "amount", label: "Amount", type: "text", optional: true },
+      { id: "note", label: "Note", type: "text", optional: true },
+    ],
+  })
+  const create = (values: Record<string, string>) =>
+    owner.mutation(api.workspaces.createRecord, { collectionId, values })
+  await create({ name: "A", amount: " 12 ", note: "keep?" })
+  const wrong = await create({ name: "B", amount: "twelve" })
+  const missing = await create({ name: "C" })
+  const target: CollectionField[] = [
+    { id: "name", label: "Name", type: "text" },
+    { id: "amount", label: "Amount", type: "number" },
+    { id: "stage", label: "Stage", type: "select", options: ["new", "won"] },
+  ]
+  const plan = (expectedVersion: number, fields = target, defaults = {}) =>
+    owner.mutation(api.schemaMigrations.plan, {
+      collectionId,
+      expectedVersion,
+      fields,
+      defaults,
+    })
+  await expect(plan(2)).rejects.toThrow("revision conflict")
+  await expect(
+    plan(1, [
+      { id: "name", label: "Name", type: "text" },
+      { id: "amount", label: "Amount", type: "text", optional: true },
+      { id: "note", label: "Note", type: "text", optional: true },
+    ])
+  ).rejects.toThrow("changes no field")
+  await expect(plan(1, target, { stage: "lost" })).rejects.toThrow(
+    "must be one of"
+  )
+  await expect(plan(1, target, { other: "x" })).rejects.toThrow("unknown field")
+  const migrationId = await plan(1, target, { stage: "new" })
+  const other = t.withIdentity({ tokenIdentifier: "other" })
+  await expect(
+    other.query(api.schemaMigrations.get, { migrationId })
+  ).rejects.toThrow("access denied")
+  await expect(
+    other.mutation(api.schemaMigrations.dryRun, { migrationId })
+  ).rejects.toThrow("access denied")
+
+  const planned = await owner.query(api.schemaMigrations.get, { migrationId })
+  expect(planned.target.version).toBe(2)
+  expect(planned.state).toEqual({ kind: "planned" })
+  expect(planned.changes.map((change) => change.kind).sort()).toEqual([
+    "added",
+    "changed",
+    "removed",
+  ])
+  expect(planned.rollbackLimitations).toEqual([
+    'Field "amount" changes from text to number. A change back may not restore the original values.',
+    'Field "note" is removed. Its values are deleted from records and a later schema change cannot restore them.',
+  ])
+
+  await owner.mutation(api.schemaMigrations.dryRun, { migrationId })
+  await t.finishAllScheduledFunctions(() => vi.runAllTimers())
+  expect(
+    (await owner.query(api.schemaMigrations.get, { migrationId })).state
+  ).toEqual({
+    kind: "checked",
+    checked: 3,
+    misfitCount: 2,
+    misfits: [
+      {
+        recordId: wrong,
+        message:
+          'Field "amount" has a text value that does not convert to number',
+      },
+      { recordId: missing, message: 'Missing value for field "amount"' },
+    ],
+  })
+  // The dry run changes no record and no schema.
+  expect(
+    (await owner.query(api.workspaces.getCollection, { collectionId }))
+      .definition.version
+  ).toBe(1)
+  expect(
+    (
+      await owner.query(api.workspaces.getRecord, {
+        collectionId,
+        recordId: wrong,
+      })
+    ).values
+  ).toEqual({ name: "B", amount: "twelve" })
+
+  // A schema change after the plan makes it outdated.
+  await owner.mutation(api.workspaces.addField, {
+    collectionId,
+    field: { id: "source", label: "Source", type: "text" },
+  })
+  expect(
+    (await owner.query(api.schemaMigrations.get, { migrationId })).outdated
+  ).toBe(true)
+  await expect(
+    owner.mutation(api.schemaMigrations.dryRun, { migrationId })
+  ).rejects.toThrow("plan the migration again")
+  await owner.mutation(api.schemaMigrations.cancel, { migrationId })
+  const listed = await owner.query(api.schemaMigrations.list, {
+    collectionId,
+    paginationOpts: { numItems: 5, cursor: null },
+  })
+  expect(listed.page.map((row) => row.state.kind)).toEqual(["cancelled"])
+  vi.useRealTimers()
 })
 
 // The first HTTP call loads the router, which can be slow on a busy runner.

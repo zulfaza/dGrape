@@ -22,8 +22,31 @@ version, validates field definitions and only accepts labels and optional
 additions. Removing fields or changing types, requiredness, IDs, or indexes is
 rejected; this helper must not be used to activate an incompatible migration.
 
-Remaining implementation scope: migration plans/dry runs/backfill and guarded
-activation; richer typed values and authorized record/artifact/secret references
+## Migrations
+
+Incompatible changes (type, requiredness, options, indexes, field removal) use a
+migration. `schemaMigrations.plan` requires membership and `expectedVersion`. It
+stores the active definition as `source`, the checked `target` definition with
+the next version, and `defaults` for records with no value for a target field.
+Reference fields cannot have defaults. A later schema change makes the plan
+outdated; plan again.
+
+`schemaMigrations.get` and `list` return the field changes and the rollback
+limitations: values of removed fields are deleted, and converted values may not
+convert back. `dryRun` reads every record in bounded steps of 100 and reports
+how many records do not fit the target, with the first 20 record IDs and
+reasons. It changes no record and no schema, and it does not lock the
+collection. A duplicate or cancelled step does nothing.
+
+Conversions (`convertValue` in `convex/lib/schemaMigrations.ts`): a value of the
+same type is kept; numbers and booleans become text; text becomes a number,
+integer or timestamp when it parses; "true"/"false" become booleans; a value
+becomes a select option or a one-option multi-select. A value never converts
+into a reference from another type or another target collection. The target
+rules then check each converted record.
+
+Remaining implementation scope: migration backfill and guarded activation;
+richer typed values and authorized record/artifact/secret references
 (coordinate with secret/recipe siblings); exact minor-unit money and currency
 metadata with job/transaction templates; materialized summaries and bounded,
 retry-safe correction/deletion rebuilds with freshness/completeness/error state;
