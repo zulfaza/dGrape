@@ -494,7 +494,7 @@ test("owners invite members, change roles and always keep one owner", async () =
   ).rejects.toThrow("Workspace access denied")
 })
 
-test("saved queries filter by an in list and by residual filters on any field", async () => {
+test("saved queries filter by an in list and by residual filters, and select fields", async () => {
   const t = convexTest(schema, modules)
   const owner = t.withIdentity({ tokenIdentifier: "owner" })
   const collectionId = await t.run(async (ctx) => {
@@ -580,6 +580,30 @@ test("saved queries filter by an in list and by residual filters on any field", 
       filters: [{ fieldId: "tags", op: "neq", value: "remote" }],
     })
   ).toEqual(["b", "c"])
+  const selected = await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "Salaries",
+    query: {
+      fieldId: "name",
+      order: "asc",
+      filters: [{ fieldId: "active", op: "eq", value: true }],
+      select: ["salary", "name"],
+    },
+  })
+  const salaries = await owner.query(api.savedQueries.run, {
+    queryId: selected.queryId,
+    expectedRevision: 1,
+    paginationOpts,
+  })
+  expect(salaries.resultSchema.fields.map((field) => field.id)).toEqual([
+    "salary",
+    "name",
+  ])
+  expect(salaries.page.map((row) => row.values)).toEqual([
+    { salary: 10, name: "a" },
+    { name: "c" },
+    { salary: 40, name: "d" },
+  ])
   const invalidQueries: Array<[RecordQuery, string]> = [
     [{ fieldId: "name", order: "asc", where: { in: [] } }, "1 to 20 values"],
     [
@@ -605,6 +629,14 @@ test("saved queries filter by an in list and by residual filters on any field", 
         filters: [{ fieldId: "missing", op: "eq", value: 1 }],
       },
       'Unknown filter field "missing"',
+    ],
+    [
+      { fieldId: "name", order: "asc", select: ["name", "name"] },
+      "each field once",
+    ],
+    [
+      { fieldId: "name", order: "asc", select: ["missing"] },
+      'Unknown selected field "missing"',
     ],
   ]
   for (const [query, message] of invalidQueries)

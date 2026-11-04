@@ -30,7 +30,7 @@ const MATERIALIZE =
 const DETAILS: Record<QueryBudget, { message: string; hint: string }> = {
   resultBytes: {
     message: "Query result byte budget exceeded",
-    hint: `Lower the page size. ${MATERIALIZE}`,
+    hint: `Select fewer fields or lower the page size. ${MATERIALIZE}`,
   },
 }
 
