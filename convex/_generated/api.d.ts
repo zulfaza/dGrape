@@ -73,6 +73,7 @@ import type * as lib_secretDomain from "../lib/secretDomain.js";
 import type * as lib_secretService from "../lib/secretService.js";
 import type * as lib_sourceSync from "../lib/sourceSync.js";
 import type * as lib_workspaceExport from "../lib/workspaceExport.js";
+import type * as lib_workspaceRoles from "../lib/workspaceRoles.js";
 import type * as operations from "../operations.js";
 import type * as pages from "../pages.js";
 import type * as recipeExecution from "../recipeExecution.js";
@@ -163,6 +164,7 @@ declare const fullApi: ApiFromModules<{
   "lib/secretService": typeof lib_secretService;
   "lib/sourceSync": typeof lib_sourceSync;
   "lib/workspaceExport": typeof lib_workspaceExport;
+  "lib/workspaceRoles": typeof lib_workspaceRoles;
   operations: typeof operations;
   pages: typeof pages;
   recipeExecution: typeof recipeExecution;
