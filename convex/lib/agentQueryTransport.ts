@@ -66,6 +66,7 @@ export const Field = Schema.Union([
       "timestamp",
       "date",
       "artifactReference",
+      "secretRef",
     ]),
   }),
   Schema.Struct({

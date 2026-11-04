@@ -79,7 +79,10 @@ async function bindingProblem(
     return "Source collection is unavailable"
   if (collection.definition.version !== version.schemaVersion)
     return "Query schema is stale; save and bind a new query revision"
-  const fields = version.resultSchema.fields
+  // Page blocks never show or group by a secret reference.
+  const fields = version.resultSchema.fields.filter(
+    (field) => field.type !== "secretRef"
+  )
   const has = (id: string) => fields.some((f) => f.id === id)
   const numeric = (id: string) =>
     fields.some((f) => f.id === id && f.type === "number")
@@ -468,7 +471,9 @@ export const sources = query({
           queryId: item._id,
           revision: item.revision,
           name: item.name,
-          fields: version.resultSchema.fields,
+          fields: version.resultSchema.fields.filter(
+            (field) => field.type !== "secretRef"
+          ),
         })
     }
     return sources

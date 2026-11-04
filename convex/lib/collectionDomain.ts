@@ -31,7 +31,13 @@ const scalarFieldValidator = v.object({
     /** A calendar date with no time zone, as "YYYY-MM-DD". */
     v.literal("date"),
     /** The ID of an artifact in the same workspace. */
-    v.literal("artifactReference")
+    v.literal("artifactReference"),
+    /**
+     * The ID of a workspace secret (secretRefs) in the same workspace. The
+     * record keeps only the ID, never the secret. It cannot be indexed, and
+     * exports and page blocks leave it out.
+     */
+    v.literal("secretRef")
   ),
 })
 
@@ -185,6 +191,7 @@ const FIELD_TYPES: Record<CollectionField["type"], true> = {
   recordReference: true,
   artifactReference: true,
   object: true,
+  secretRef: true,
 }
 
 /** Shared by HTTP parsers and human forms; field kinds keep scalar wire values. */
@@ -201,7 +208,7 @@ export function isChoiceField<F extends NewCollectionField>(
 
 /** False for field types whose values never have index entries. */
 export function isIndexableType(type: CollectionField["type"]): boolean {
-  return type !== "object"
+  return type !== "object" && type !== "secretRef"
 }
 
 /** True for the value of an object field. */
@@ -536,6 +543,11 @@ export function checkRecordValues(
       const problem = objectProblem(value)
       if (problem) return invalid(`Field "${field.id}" ${problem}`)
       textLength += JSON.stringify(value).length
+    } else if (field.type === "secretRef") {
+      if (typeof value !== "string" || value.length > MAX_REFERENCE_LENGTH)
+        return invalid(
+          `Field "${field.id}" must be the ID of a workspace secret in this workspace`
+        )
     } else if (field.type === "number") {
       if (typeof value !== "number" || !Number.isFinite(value))
         return invalid(`Field "${field.id}" must be a finite number`)

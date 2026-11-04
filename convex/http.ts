@@ -431,7 +431,7 @@ http.route({
     if (!body)
       return replyJson(400, {
         error:
-          'Send JSON: { name, fields: [{ id, label, type }], idempotencyKey? }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", "multiSelect", "recordReference", "artifactReference", or "object" (a JSON object nested at most 4 levels deep, at most 10000 characters as JSON; cannot be indexed). Select and multiSelect fields need options: an array of 1 to 100 texts. A recordReference field needs collectionId.',
+          'Send JSON: { name, fields: [{ id, label, type }], idempotencyKey? }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", "multiSelect", "recordReference", "artifactReference", "object" (a JSON object nested at most 4 levels deep, at most 10000 characters as JSON; cannot be indexed), or "secretRef" (the ID of a workspace secret in this workspace; cannot be indexed, and exports leave it out). Select and multiSelect fields need options: an array of 1 to 100 texts. A recordReference field needs collectionId.',
       })
     try {
       const result = await ctx.runMutation(
@@ -462,7 +462,7 @@ http.route({
     if (!body)
       return replyJson(400, {
         error:
-          'Send JSON: { collectionId, field: { id, label, type }, idempotencyKey? }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", "multiSelect", "recordReference", "artifactReference", or "object" (a JSON object nested at most 4 levels deep, at most 10000 characters as JSON; cannot be indexed). Select and multiSelect fields need options: an array of 1 to 100 texts. A recordReference field needs collectionId.',
+          'Send JSON: { collectionId, field: { id, label, type }, idempotencyKey? }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", "multiSelect", "recordReference", "artifactReference", "object" (a JSON object nested at most 4 levels deep, at most 10000 characters as JSON; cannot be indexed), or "secretRef" (the ID of a workspace secret in this workspace; cannot be indexed, and exports leave it out). Select and multiSelect fields need options: an array of 1 to 100 texts. A recordReference field needs collectionId.',
       })
     try {
       const result = await ctx.runMutation(internal.agentWrites.addField, {

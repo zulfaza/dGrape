@@ -181,3 +181,53 @@ export function ArtifactReferenceInput({
     </PagedSelect>
   )
 }
+
+/**
+ * The record form input of a secret reference field. It lists the workspace
+ * secrets by label; private secrets and deleted secrets are not offered.
+ */
+export function SecretRefInput({
+  id,
+  workspaceId,
+  optional,
+  value,
+  disabled,
+  onChange,
+}: {
+  id: string
+  workspaceId: Id<"workspaces">
+  optional: boolean
+  value: string
+  disabled: boolean
+  onChange: (value: string) => void
+}) {
+  const secrets = usePaginatedQuery(
+    api.secrets.list,
+    { workspaceId },
+    { initialNumItems: PAGE_SIZE }
+  )
+  return (
+    <PagedSelect
+      canLoadMore={secrets.status === "CanLoadMore"}
+      onLoadMore={() => secrets.loadMore(PAGE_SIZE)}
+    >
+      <SelectFieldInput
+        id={id}
+        options={withCurrent(
+          secrets.results
+            .filter(
+              (secret) =>
+                secret.owner.kind === "workspace" &&
+                (secret.status === "pending" || secret.status === "ready")
+            )
+            .map((secret) => ({ value: secret.id, label: secret.label })),
+          value
+        )}
+        optional={optional}
+        value={value}
+        disabled={disabled || secrets.status === "LoadingFirstPage"}
+        onChange={onChange}
+      />
+    </PagedSelect>
+  )
+}

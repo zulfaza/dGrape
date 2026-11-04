@@ -33,6 +33,7 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   recordReference: "Record reference",
   artifactReference: "Artifact reference",
   object: "Object (JSON)",
+  secretRef: "Secret reference",
 }
 
 /** The field types in the order the type pickers show them. */
@@ -49,6 +50,7 @@ export const FIELD_TYPES: ReadonlyArray<FieldType> = [
   "recordReference",
   "artifactReference",
   "object",
+  "secretRef",
 ]
 
 /** Option text with one option on each line; blank lines are ignored. */

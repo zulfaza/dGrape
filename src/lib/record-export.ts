@@ -11,7 +11,22 @@ type CollectionRecord = Doc<"collectionRecords">
 
 export type ExportFormat = "json" | "csv"
 
-/** JSON: the collection definition and every record, as stored. */
+/** The record values without secret references, which exports leave out. */
+function exportedValues(collection: Collection, record: CollectionRecord) {
+  const secretFields = new Set(
+    collection.definition.fields
+      .filter((field) => field.type === "secretRef")
+      .map((field) => field.id)
+  )
+  return Object.fromEntries(
+    Object.entries(record.values).filter(([id]) => !secretFields.has(id))
+  )
+}
+
+/**
+ * JSON: the collection definition and every record, as stored, except that
+ * secret references are left out.
+ */
 export function toJson(
   collection: Collection,
   records: ReadonlyArray<CollectionRecord>
@@ -33,7 +48,7 @@ export function toJson(
         ...(record.idempotencyKey === undefined
           ? {}
           : { idempotencyKey: record.idempotencyKey }),
-        values: record.values,
+        values: exportedValues(collection, record),
       })),
     },
     null,
@@ -58,7 +73,7 @@ function safeText(value: string): string {
  * CSV: one row per record; field columns use the field IDs. Timestamps are
  * ISO 8601 text in UTC, so spreadsheets can read them as dates.
  * Multi-select values are JSON arrays, so options that contain commas stay
- * whole. Object values are JSON.
+ * whole. Object values are JSON. Secret reference columns are empty.
  */
 export function toCsv(
   collection: Collection,
@@ -79,7 +94,7 @@ export function toCsv(
     String(record.schemaVersion),
     ...fields.map((field) => {
       const value = record.values[field.id]
-      if (value === undefined) return ""
+      if (value === undefined || field.type === "secretRef") return ""
       if (Array.isArray(value) || field.type === "object")
         return JSON.stringify(value)
       if (field.type === "timestamp" && typeof value === "number")
