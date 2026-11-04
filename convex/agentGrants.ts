@@ -16,7 +16,7 @@ import {
 } from "./lib/agentScope"
 import { capabilitiesFor, capabilityValidator } from "./lib/agentCapabilities"
 import { resolveGrant, resolveScopedGrant } from "./lib/agentGrant"
-import { requireMembership } from "./lib/auth"
+import { memberWithAccess, requireMembership } from "./lib/auth"
 import { recordAuditEvent } from "./lib/auditEvents"
 import {
   collectionFieldValidator,
@@ -46,13 +46,13 @@ export const insert = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const member = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", args.workspaceId).eq("userId", args.owner)
-      )
-      .unique()
-    if (!member || member.role !== "owner") throw new Error("Access denied")
+    const member = await memberWithAccess(
+      ctx,
+      args.workspaceId,
+      args.owner,
+      "manage"
+    )
+    if (!member) throw new Error("Access denied")
     if (
       !Number.isInteger(args.days) ||
       args.days < 1 ||
@@ -100,7 +100,7 @@ export const list = query({
   },
   returns: paginationResultValidator(metadata),
   handler: async (ctx, { workspaceId, paginationOpts }) => {
-    const member = await requireMembership(ctx, workspaceId)
+    const member = await requireMembership(ctx, workspaceId, "manage")
     if (
       paginationOpts.numItems < 1 ||
       paginationOpts.numItems > 50 ||
@@ -133,7 +133,7 @@ export const revoke = mutation({
   args: { workspaceId: v.id("workspaces"), grantId: v.id("agentGrants") },
   returns: v.null(),
   handler: async (ctx, { workspaceId, grantId }) => {
-    const member = await requireMembership(ctx, workspaceId)
+    const member = await requireMembership(ctx, workspaceId, "manage")
     const grant = await ctx.db.get(grantId)
     if (
       !grant ||

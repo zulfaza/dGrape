@@ -297,7 +297,7 @@ export const createUpload = mutation({
   args: { workspaceId: v.id("workspaces"), name: v.string() },
   returns: v.object({ key: v.string(), url: v.string() }),
   handler: async (ctx, { workspaceId, name }) => {
-    const member = await requireMembership(ctx, workspaceId)
+    const member = await requireMembership(ctx, workspaceId, "write")
     const result = await createPendingUpload(ctx, {
       workspaceId,
       name,
@@ -309,11 +309,15 @@ export const createUpload = mutation({
   },
 })
 
+/** Checks the caller's role for an action, which has no database access. */
 export const membership = internalQuery({
-  args: { workspaceId: v.id("workspaces") },
+  args: {
+    workspaceId: v.id("workspaces"),
+    access: v.union(v.literal("read"), v.literal("write")),
+  },
   returns: v.null(),
-  handler: async (ctx, { workspaceId }) => {
-    await requireMembership(ctx, workspaceId)
+  handler: async (ctx, { workspaceId, access }) => {
+    await requireMembership(ctx, workspaceId, access)
     return null
   },
 })
@@ -325,7 +329,10 @@ export const completeUpload = action({
     ctx,
     { workspaceId, key }
   ): Promise<Infer<typeof completeResult>> => {
-    await ctx.runQuery(internal.artifacts.membership, { workspaceId })
+    await ctx.runQuery(internal.artifacts.membership, {
+      workspaceId,
+      access: "write",
+    })
     return finishUpload(ctx, workspaceId, key)
   },
 })
@@ -337,7 +344,7 @@ export const list = query({
   },
   returns: paginationResultValidator(artifactValidator),
   handler: async (ctx, { workspaceId, paginationOpts }) => {
-    await requireMembership(ctx, workspaceId)
+    await requireMembership(ctx, workspaceId, "read")
     if (
       !Number.isInteger(paginationOpts.numItems) ||
       paginationOpts.numItems < 1 ||
@@ -362,6 +369,7 @@ export const getDownloadUrl = action({
     if (!artifact) throw new Error("Artifact not found")
     await ctx.runQuery(internal.artifacts.membership, {
       workspaceId: artifact.workspaceId,
+      access: "read",
     })
     return downloadUrl(artifact.key)
   },
@@ -374,7 +382,7 @@ export const remove = mutation({
   handler: async (ctx, { artifactId }) => {
     const artifact = await ctx.db.get(artifactId)
     if (!artifact) throw new Error("Artifact not found")
-    await requireMembership(ctx, artifact.workspaceId)
+    await requireMembership(ctx, artifact.workspaceId, "write")
     // A referenced artifact stays, so that no reference points to nothing.
     if (await referencingArtifact(ctx, artifactId)) return "referenced"
     await r2.deleteObject(ctx, artifact.key)
@@ -419,6 +427,7 @@ export const getPreview = action({
     if (!artifact) throw new Error("Artifact not found")
     await ctx.runQuery(internal.artifacts.membership, {
       workspaceId: artifact.workspaceId,
+      access: "read",
     })
     const kind = previewKind(artifact.contentType)
     if (kind === "html" && artifact.dataTimestamp === undefined)
@@ -475,7 +484,7 @@ export const metadata = query({
     v.object({ name: v.string(), contentType: v.string(), size: v.number() })
   ),
   handler: async (ctx, { workspaceId, artifactId }) => {
-    await requireMembership(ctx, workspaceId)
+    await requireMembership(ctx, workspaceId, "read")
     const artifact = await ctx.db.get(artifactId)
     if (!artifact || artifact.workspaceId !== workspaceId) return null
     return {
@@ -496,7 +505,7 @@ export const setDataTimestamp = mutation({
   handler: async (ctx, { artifactId, dataTimestamp }) => {
     const artifact = await ctx.db.get(artifactId)
     if (!artifact) throw new Error("Artifact not found")
-    await requireMembership(ctx, artifact.workspaceId)
+    await requireMembership(ctx, artifact.workspaceId, "write")
     if (previewKind(artifact.contentType) !== "html")
       throw new Error("Only HTML snapshots have a data timestamp")
     if (

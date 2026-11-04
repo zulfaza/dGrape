@@ -15,7 +15,7 @@ export const list = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.array(sourceStatusValidator),
   handler: async (ctx, args) => {
-    await requireMembership(ctx, args.workspaceId)
+    await requireMembership(ctx, args.workspaceId, "read")
     const collections = await ctx.db
       .query("collections")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))

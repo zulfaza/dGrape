@@ -36,7 +36,7 @@ export async function saveQuery(
 ): Promise<{ queryId: Id<"queryDefinitions">; revision: number }> {
   const collection = await ctx.db.get(args.collectionId)
   if (!collection) throw new Error("Collection access denied")
-  const member = await requireMembership(ctx, collection.workspaceId)
+  const member = await requireMembership(ctx, collection.workspaceId, "write")
   return saveQueryInWorkspace(
     ctx,
     collection.workspaceId,
@@ -154,7 +154,7 @@ export async function runSavedQuery(
 ): Promise<SavedQueryPage> {
   const saved = await ctx.db.get(args.queryId)
   if (!saved) throw new Error("Query access denied")
-  await requireMembership(ctx, saved.workspaceId)
+  await requireMembership(ctx, saved.workspaceId, "read")
   return runSavedQueryInWorkspace(ctx, saved.workspaceId, args)
 }
 

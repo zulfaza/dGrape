@@ -9,6 +9,7 @@ import {
 } from "./_generated/server"
 import { withGrant } from "./lib/agentGrant"
 import { requireMembership } from "./lib/auth"
+import type { WorkspaceAccess } from "./lib/workspaceRoles"
 import {
   artifactRelation,
   bindingFields,
@@ -18,12 +19,13 @@ import { previewKind } from "./lib/artifactPreview"
 
 async function recordWorkspace(
   ctx: QueryCtx,
-  recordId: Id<"collectionRecords">
+  recordId: Id<"collectionRecords">,
+  access: WorkspaceAccess
 ) {
   const record = await ctx.db.get(recordId)
   const collection = record && (await ctx.db.get(record.collectionId))
   if (!collection) throw new Error("Record unavailable")
-  await requireMembership(ctx, collection.workspaceId)
+  await requireMembership(ctx, collection.workspaceId, access)
   return collection.workspaceId
 }
 
@@ -82,13 +84,13 @@ export const bind = mutation({
   args: bindingFields,
   returns: v.id("artifactBindings"),
   handler: async (ctx, args) =>
-    linkArtifact(ctx, await recordWorkspace(ctx, args.recordId), args),
+    linkArtifact(ctx, await recordWorkspace(ctx, args.recordId, "write"), args),
 })
 export const unbind = mutation({
   args: bindingFields,
   returns: v.null(),
   handler: async (ctx, args) => {
-    await recordWorkspace(ctx, args.recordId)
+    await recordWorkspace(ctx, args.recordId, "write")
     await unlinkArtifact(ctx, args)
     return null
   },
@@ -99,7 +101,7 @@ export const list = query({
     v.object({ ...bindingFields, name: v.union(v.string(), v.null()) })
   ),
   handler: async (ctx, { recordId }) => {
-    const workspaceId = await recordWorkspace(ctx, recordId)
+    const workspaceId = await recordWorkspace(ctx, recordId, "read")
     const rows = await ctx.db
       .query("artifactBindings")
       .withIndex("by_recordId", (q) => q.eq("recordId", recordId))

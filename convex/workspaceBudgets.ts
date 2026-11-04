@@ -23,7 +23,7 @@ export const get = query({
     budgets: budgetsValidator,
   }),
   handler: async (ctx, { workspaceId }) => {
-    await requireMembership(ctx, workspaceId)
+    await requireMembership(ctx, workspaceId, "read")
     const workspace = await ctx.db.get(workspaceId)
     if (!workspace) throw new Error("Workspace not found")
     const overrides = workspace.budgets ?? {}
@@ -42,9 +42,7 @@ export const set = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { workspaceId, overrides }) => {
-    const member = await requireMembership(ctx, workspaceId)
-    if (member.role !== "owner")
-      throw new Error("Only the owner can change budgets")
+    const member = await requireMembership(ctx, workspaceId, "manage")
     const checked = checkBudgetOverrides(overrides)
     if (!checked.ok) throw new Error(checked.message)
     await ctx.db.patch(workspaceId, { budgets: checked.value })
@@ -82,7 +80,7 @@ export const usage = query({
     }),
   }),
   handler: async (ctx, { workspaceId }) => {
-    await requireMembership(ctx, workspaceId)
+    await requireMembership(ctx, workspaceId, "read")
     const collections = await ctx.db
       .query("collections")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))

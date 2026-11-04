@@ -24,6 +24,7 @@ import { operationFields } from "./lib/operations"
 import { recipeTables } from "./lib/recipeState"
 import { secretFields, connectionFields } from "./lib/secretDomain"
 import { sourceSyncFields } from "./lib/sourceSync"
+import { workspaceRoleValidator } from "./lib/workspaceRoles"
 
 export default defineSchema({
   ...recipeTables,
@@ -121,7 +122,7 @@ export default defineSchema({
   workspaceMembers: defineTable({
     workspaceId: v.id("workspaces"),
     userId: v.string(),
-    role: v.literal("owner"),
+    role: workspaceRoleValidator,
   })
     .index("by_user", ["userId"])
     .index("by_workspace_user", ["workspaceId", "userId"]),

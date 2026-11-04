@@ -23,7 +23,7 @@ export const list = query({
   },
   returns: paginationResultValidator(auditEventDocument),
   handler: async (ctx, { workspaceId, paginationOpts }) => {
-    const member = await requireMembership(ctx, workspaceId)
+    const member = await requireMembership(ctx, workspaceId, "read")
     if (
       !Number.isInteger(paginationOpts.numItems) ||
       paginationOpts.numItems < 1 ||

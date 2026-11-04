@@ -12,7 +12,8 @@ import {
 } from "./_generated/server"
 import type { Doc, Id } from "./_generated/dataModel"
 import { recipeTables } from "./lib/recipeState"
-import { requireMembership } from "./lib/auth"
+import { memberWithAccess, requireMembership } from "./lib/auth"
+import type { WorkspaceAccess } from "./lib/workspaceRoles"
 import { recipeBudgetProblem, workspaceBudgets } from "./lib/budgets"
 import {
   checkRecordValues,
@@ -66,18 +67,15 @@ export async function recipeOutputToken(
   })
 }
 
+/** The membership of the caller, or of the agent credential's owner. */
 async function recipeMember(
   ctx: QueryCtx,
   workspaceId: Id<"workspaces">,
+  access: WorkspaceAccess,
   agent?: AgentPrincipal
 ) {
-  if (agent === undefined) return requireMembership(ctx, workspaceId)
-  const member = await ctx.db
-    .query("workspaceMembers")
-    .withIndex("by_workspace_user", (q) =>
-      q.eq("workspaceId", workspaceId).eq("userId", agent.owner)
-    )
-    .unique()
+  if (agent === undefined) return requireMembership(ctx, workspaceId, access)
+  const member = await memberWithAccess(ctx, workspaceId, agent.owner, access)
   if (!member) throw new Error("Workspace access denied")
   return member
 }
@@ -88,7 +86,8 @@ async function requireRecipeAccess(
   operation: "run" | "manage",
   agent?: AgentPrincipal
 ) {
-  const member = await recipeMember(ctx, version.workspaceId, agent)
+  // Running or managing a recipe changes workspace data.
+  const member = await recipeMember(ctx, version.workspaceId, "write", agent)
   const actor = auditActor(member.userId, agent)
   if (member.userId === version.createdBy) return actor
   if (operation === "run") {
@@ -117,13 +116,14 @@ export async function setRunAccessForPrincipal(
   const version = await ctx.db.get(args.versionId)
   if (!version) throw new Error("Recipe not found")
   const actor = await requireRecipeAccess(ctx, version, "manage", agent)
-  const member = await ctx.db
-    .query("workspaceMembers")
-    .withIndex("by_workspace_user", (q) =>
-      q.eq("workspaceId", version.workspaceId).eq("userId", args.userId)
-    )
-    .unique()
-  if (!member) throw new Error("Workspace member not found")
+  // A run grant is useless to a member whose role cannot run recipes.
+  const member = await memberWithAccess(
+    ctx,
+    version.workspaceId,
+    args.userId,
+    "write"
+  )
+  if (!member) throw new Error("Workspace member cannot run recipes")
   const grant = await ctx.db
     .query("recipeRunGrants")
     .withIndex("by_versionId_and_userId", (q) =>
@@ -211,7 +211,7 @@ export async function validateForPrincipal(
   args: Infer<typeof validateArgs>,
   agent?: AgentPrincipal
 ) {
-  await recipeMember(ctx, args.workspaceId, agent)
+  await recipeMember(ctx, args.workspaceId, "write", agent)
   return attempt(async () => {
     await checkRecipe(ctx, args.workspaceId, args.recipe)
     return { ok: true as const }
@@ -237,7 +237,7 @@ export async function previewForPrincipal(
   args: Infer<typeof previewArgs>,
   agent?: AgentPrincipal
 ) {
-  await recipeMember(ctx, args.workspaceId, agent)
+  await recipeMember(ctx, args.workspaceId, "write", agent)
   return attempt(async () => {
     const output = await checkRecipe(ctx, args.workspaceId, args.recipe)
     const preview = previewRecipe(args.recipe, args.sample)
@@ -267,7 +267,7 @@ export async function publishForPrincipal(
   args: Infer<typeof publishArgs>,
   agent?: AgentPrincipal
 ) {
-  const member = await recipeMember(ctx, args.workspaceId, agent)
+  const member = await recipeMember(ctx, args.workspaceId, "write", agent)
   validateRecipe(args.recipe)
   const overBudget = recipeBudgetProblem(
     args.recipe,
@@ -310,7 +310,7 @@ export async function versionsForPrincipal(
   args: Infer<typeof versionsArgs>,
   agent?: AgentPrincipal
 ) {
-  await recipeMember(ctx, args.workspaceId, agent)
+  await recipeMember(ctx, args.workspaceId, "read", agent)
   return ctx.db
     .query("recipeVersions")
     .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
@@ -329,7 +329,7 @@ export const permissions = query({
   handler: async (ctx, { versionId }) => {
     const version = await ctx.db.get(versionId)
     if (!version) throw new Error("Recipe not found")
-    const member = await requireMembership(ctx, version.workspaceId)
+    const member = await requireMembership(ctx, version.workspaceId, "read")
     const canManage = member.userId === version.createdBy
     const grant = canManage
       ? null
@@ -358,7 +358,7 @@ export async function runsForPrincipal(
   args: Infer<typeof runsArgs>,
   agent?: AgentPrincipal
 ) {
-  await recipeMember(ctx, args.workspaceId, agent)
+  await recipeMember(ctx, args.workspaceId, "read", agent)
   return ctx.db
     .query("recipeRuns")
     .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
@@ -388,7 +388,7 @@ export async function historyForPrincipal(
 ) {
   const run = await ctx.db.get(args.runId)
   if (!run) throw new Error("Run not found")
-  await recipeMember(ctx, run.workspaceId, agent)
+  await recipeMember(ctx, run.workspaceId, "read", agent)
   return ctx.db
     .query("recipeStepAttempts")
     .withIndex("by_runId_and_step", (q) => q.eq("runId", args.runId))
@@ -564,7 +564,7 @@ export async function schedulesForPrincipal(
   args: Infer<typeof schedulesArgs>,
   agent?: AgentPrincipal
 ) {
-  await recipeMember(ctx, args.workspaceId, agent)
+  await recipeMember(ctx, args.workspaceId, "read", agent)
   return ctx.db
     .query("recipeSchedules")
     .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))

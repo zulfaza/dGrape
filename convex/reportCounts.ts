@@ -3,7 +3,7 @@ import { v, type Infer } from "convex/values"
 import { internal } from "./_generated/api"
 import { queryRecords } from "./lib/recordQuery"
 import { internalMutation, mutation, query } from "./_generated/server"
-import { requireMembership } from "./lib/auth"
+import { memberWithAccess, requireMembership } from "./lib/auth"
 import { workspaceBudgets } from "./lib/budgets"
 import { firstPageWithinBudget, runSavedQuery } from "./lib/savedQueries"
 
@@ -16,7 +16,7 @@ export const rebuild = mutation({
   handler: async (ctx, args) => {
     const saved = await ctx.db.get(args.queryId)
     if (!saved) throw new Error("Query access denied")
-    await requireMembership(ctx, saved.workspaceId)
+    await requireMembership(ctx, saved.workspaceId, "write")
     const collection = await ctx.db.get(saved.collectionId)
     if (!collection || collection.workspaceId !== saved.workspaceId)
       throw new Error("Collection access denied")
@@ -87,7 +87,7 @@ export const read = query({
   handler: async (ctx, args): Promise<Infer<typeof reportState>> => {
     const saved = await ctx.db.get(args.queryId)
     if (!saved) throw new Error("Query access denied")
-    await requireMembership(ctx, saved.workspaceId)
+    await requireMembership(ctx, saved.workspaceId, "read")
     const collection = await ctx.db.get(saved.collectionId)
     if (!collection || collection.workspaceId !== saved.workspaceId)
       throw new Error("Collection access denied")
@@ -133,7 +133,7 @@ export const start = mutation({
   handler: async (ctx, args) => {
     const saved = await ctx.db.get(args.queryId)
     if (!saved) throw new Error("Query access denied")
-    const member = await requireMembership(ctx, saved.workspaceId)
+    const member = await requireMembership(ctx, saved.workspaceId, "write")
     const collection = await ctx.db.get(saved.collectionId)
     if (!collection || collection.workspaceId !== saved.workspaceId)
       throw new Error("Collection access denied")
@@ -207,14 +207,12 @@ export const step = internalMutation({
     }
     const saved = await ctx.db.get(report.queryId)
     if (!saved) return fail("Query no longer exists")
-    const member = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q
-          .eq("workspaceId", saved.workspaceId)
-          .eq("userId", building.requestedBy)
-      )
-      .unique()
+    const member = await memberWithAccess(
+      ctx,
+      saved.workspaceId,
+      building.requestedBy,
+      "write"
+    )
     if (!member) return fail("Workspace access revoked")
     const collection = await ctx.db.get(saved.collectionId)
     if (!collection || collection.workspaceId !== saved.workspaceId)
