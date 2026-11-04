@@ -34,7 +34,8 @@ const CAPABILITIES = [
   {
     id: "records.write",
     scopes: ["data.write"],
-    description: "Create, update, and delete records.",
+    description:
+      "Create, update, and delete records, and link artifacts to records or unlink them.",
   },
   {
     id: "artifacts.read",

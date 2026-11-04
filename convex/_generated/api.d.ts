@@ -28,6 +28,7 @@ import type * as connectors from "../connectors.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as lib_agentActivityTransport from "../lib/agentActivityTransport.js";
+import type * as lib_agentArtifactLinkTransport from "../lib/agentArtifactLinkTransport.js";
 import type * as lib_agentAuthConfig from "../lib/agentAuthConfig.js";
 import type * as lib_agentAuthCrypto from "../lib/agentAuthCrypto.js";
 import type * as lib_agentAuthDiscovery from "../lib/agentAuthDiscovery.js";
@@ -112,6 +113,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   http: typeof http;
   "lib/agentActivityTransport": typeof lib_agentActivityTransport;
+  "lib/agentArtifactLinkTransport": typeof lib_agentArtifactLinkTransport;
   "lib/agentAuthConfig": typeof lib_agentAuthConfig;
   "lib/agentAuthCrypto": typeof lib_agentAuthCrypto;
   "lib/agentAuthDiscovery": typeof lib_agentAuthDiscovery;

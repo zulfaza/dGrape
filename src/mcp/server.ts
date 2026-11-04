@@ -1,5 +1,6 @@
 import * as Activity from "../../convex/lib/agentActivityTransport"
 import * as Collections from "../../convex/lib/agentCollectionTransport"
+import * as ArtifactLinks from "../../convex/lib/agentArtifactLinkTransport"
 import * as Pages from "../../convex/lib/agentPageTransport"
 import * as Queries from "../../convex/lib/agentQueryTransport"
 import * as Recipes from "../../convex/lib/agentRecipeTransport"
@@ -213,6 +214,24 @@ const DeleteRecord = Tool.make("records_delete", {
     expectedRevision: Schema.Int,
   }),
   success: AgentApi.DeletedRecord,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, true)
+
+const LinkArtifact = Tool.make("records_link_artifact", {
+  description:
+    'Link an artifact (from artifacts_list) to a record, so the record shows the file. `relation` is "attachment" (any file), "image" (PNG, JPEG, WebP, or GIF), or "report" (HTML, PDF, JSON, plain text, or CSV; an HTML report needs a data timestamp). A record has at most 20 links. Linking again with the same artifact and relation changes nothing. Needs the data.write scope.',
+  parameters: ArtifactLinks.LinkInput,
+  success: Schema.Null,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const UnlinkArtifact = Tool.make("records_unlink_artifact", {
+  description:
+    "Remove the link between a record and an artifact with this `relation`. The artifact and the record stay. When no such link exists, nothing changes. Needs the data.write scope.",
+  parameters: ArtifactLinks.LinkInput,
+  success: Schema.Null,
   failure: AgentApi.AgentApiError,
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Destructive, true)
@@ -469,7 +488,9 @@ const DfeToolkit = Toolkit.make(
   RenameField,
   CreateRecord,
   UpdateRecord,
-  DeleteRecord
+  DeleteRecord,
+  LinkArtifact,
+  UnlinkArtifact
 )
 
 const DfeToolkitHandlers = DfeToolkit.toLayer(
@@ -516,6 +537,8 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       records_create: (input) => api.createRecord(input),
       records_update: (input) => api.updateRecord(input),
       records_delete: (input) => api.deleteRecord(input),
+      records_link_artifact: (input) => api.linkArtifact(input),
+      records_unlink_artifact: (input) => api.unlinkArtifact(input),
     }
   })
 )
@@ -547,7 +570,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, collections_rename_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. " +
+      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, collections_rename_field, records_create, records_update, and records_delete change data, and records_link_artifact and records_unlink_artifact link files to records. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. " +
       "Recipes fetch and transform data without a model. A recipe fetch step uses a connection: connections_list and connections_describe show each connection's origin, routes, and credential status, never secret values. A person adds credentials in the dashboard. recipes_publish saves an immutable recipe version (fetch, map, filter, join, aggregate, upsert, snapshot, and artifact steps); recipes_versions lists versions. recipes_trigger starts a run (reuse its idempotencyKey to retry), recipes_runs lists runs, recipes_history lists the attempts of one run, and recipes_cancel stops a run. recipes_schedule creates a UTC schedule, recipes_schedules lists schedules, recipes_set_enabled turns one on or off, and recipes_set_run_access lets another user run a recipe. Only the recipe creator manages schedules and run access.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)
