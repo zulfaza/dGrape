@@ -309,7 +309,7 @@ export async function runSavedAggregate(
 ): Promise<SavedAggregate> {
   const saved = await ctx.db.get(args.queryId)
   if (!saved) throw new Error("Query access denied")
-  await requireMembership(ctx, saved.workspaceId)
+  await requireMembership(ctx, saved.workspaceId, "read")
   return runSavedAggregateInWorkspace(ctx, saved.workspaceId, args)
 }
 
@@ -372,7 +372,7 @@ export async function readSavedResult(
 ): Promise<SavedQueryPage | SavedAggregate> {
   const saved = await ctx.db.get(args.queryId)
   if (!saved) throw new Error("Query access denied")
-  await requireMembership(ctx, saved.workspaceId)
+  await requireMembership(ctx, saved.workspaceId, "read")
   const { version } = await runnableRevision(
     ctx,
     saved.workspaceId,
