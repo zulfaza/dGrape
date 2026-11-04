@@ -70,13 +70,13 @@ const CAPABILITIES = [
     id: "recipes.publish",
     scopes: ["jobs.manage"],
     description:
-      "Publish recipes. A recipe with a fetch step also needs connections.use.",
+      "Publish recipes. A recipe with a fetch step also needs connections.use, and a recipe with a saved query step also needs data.read.",
   },
   {
     id: "recipes.run",
     scopes: ["jobs.run"],
     description:
-      "Start, retry, and cancel recipe runs. This needs run permission on the recipe, and connections.use for a recipe with a fetch step.",
+      "Start, retry, and cancel recipe runs. This needs run permission on the recipe, connections.use for a recipe with a fetch step, and data.read for a recipe with a saved query step.",
   },
   {
     id: "queries.read",
@@ -111,7 +111,7 @@ const CAPABILITIES = [
     id: "schedules.write",
     scopes: ["jobs.manage"],
     description:
-      "Create, change, enable, and disable schedules, and grant run permission. Only the recipe creator can do this. A recipe with a fetch step also needs connections.use.",
+      "Create, change, enable, and disable schedules, and grant run permission. Only the recipe creator can do this. A recipe with a fetch step also needs connections.use, and a recipe with a saved query step also needs data.read.",
   },
 ] as const satisfies ReadonlyArray<{
   id: string

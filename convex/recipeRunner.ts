@@ -83,6 +83,8 @@ export const execute = internalAction({
           if (page === step.maxPages - 1)
             throw new Error("Recipe pagination is incomplete")
         }
+      } else if (step.kind === "query") {
+        rows = await ctx.runQuery(internal.recipeExecution.queryRows, args)
       } else if (step.kind === "artifact") {
         artifactKey = `workspaces/${plan.workspaceId}/recipes/${args.runId}/${args.epoch}/${args.step}/${state.attempt}`
         await r2.store(

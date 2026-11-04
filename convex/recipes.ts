@@ -39,6 +39,7 @@ import {
   validateTiming,
 } from "./lib/recipeSchedule"
 import { recordSyncOutcome } from "./lib/sourceSync"
+import { readQueryStep } from "./lib/recipeQuery"
 
 /** A bounded output token detects writes made while a recipe fetches data. */
 export async function recipeOutputToken(
@@ -175,6 +176,19 @@ export async function checkRecipe(
       if (!connection || connection.workspaceId !== workspaceId)
         throw new Error("Connection access denied")
     }
+    if (step.kind === "query") {
+      const id = ctx.db.normalizeId("queryDefinitions", step.queryId)
+      const saved = id ? await ctx.db.get(id) : null
+      if (!saved || saved.workspaceId !== workspaceId)
+        throw new Error("Query access denied")
+      const version = await ctx.db
+        .query("queryDefinitionVersions")
+        .withIndex("by_queryId_and_revision", (q) =>
+          q.eq("queryId", saved._id).eq("revision", step.revision)
+        )
+        .unique()
+      if (!version) throw new Error("Query revision mismatch")
+    }
     if (step.kind === "upsert" || step.kind === "snapshot") {
       const id = ctx.db.normalizeId("collections", step.collectionId)
       output = id ? await ctx.db.get(id) : null
@@ -239,7 +253,10 @@ export async function previewForPrincipal(
   await recipeMember(ctx, args.workspaceId, "write", agent)
   return attempt(async () => {
     const output = await checkRecipe(ctx, args.workspaceId, args.recipe)
-    const preview = previewRecipe(args.recipe, args.sample)
+    const preview = await previewRecipe(args.recipe, args.sample, {
+      query: (step) =>
+        readQueryStep(ctx, args.workspaceId, step, args.recipe.limits),
+    })
     if (output)
       for (const [index, row] of preview.rows.entries()) {
         const checked = checkRecordValues(output.definition.fields, row)

@@ -23,6 +23,12 @@ const recipe = <V extends typeof Values | typeof StoredValues>(values: V) =>
             maxPages: Schema.Number,
           }),
           Schema.Struct({
+            kind: Schema.Literal("query"),
+            queryId: Schema.String,
+            revision: Schema.Number,
+            maxPages: Schema.Number,
+          }),
+          Schema.Struct({
             kind: Schema.Literal("map"),
             fields: Schema.Record(Schema.String, Schema.String),
           }),
@@ -181,6 +187,7 @@ export const PreviewInput = Schema.Struct({
 })
 const StepKind = Schema.Literals([
   "fetch",
+  "query",
   "map",
   "filter",
   "join",
@@ -201,7 +208,7 @@ export const PreviewResult = Schema.Union([
   Schema.Struct({
     ok: Schema.Literal(true),
     steps: Schema.Array(Schema.Struct({ kind: StepKind, rows: Schema.Number })),
-    rows: Schema.Array(Values),
+    rows: Schema.Array(StoredValues),
   }),
   FailedCheck,
 ])

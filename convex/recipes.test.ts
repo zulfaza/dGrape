@@ -6,6 +6,7 @@ import { api, internal } from "./_generated/api"
 import type { AgentScope } from "./lib/agentScope"
 import type { Recipe } from "./lib/recipeDomain"
 import type { RecipeTiming } from "./lib/recipeSchedule"
+import { insertRecord } from "./lib/records"
 
 const modules = import.meta.glob("./**/*.ts")
 const recipe: Recipe = {
@@ -1051,5 +1052,117 @@ describe("recipe credentials", () => {
           .take(1)
       )
     ).toEqual([])
+  })
+
+  it("previews a saved query step and needs data.read for agents", async () => {
+    const { t, owner, workspaceId } = await setup()
+    const collectionId = await t.run(async (ctx) => {
+      const collectionId = await ctx.db.insert("collections", {
+        workspaceId,
+        name: "Teams",
+        definition: {
+          version: 1,
+          fields: [
+            { id: "team", label: "Team", type: "text", indexed: true },
+            { id: "size", label: "Size", type: "number" },
+          ],
+        },
+      })
+      const collection = await ctx.db.get(collectionId)
+      if (!collection) throw new Error("Missing fixture")
+      for (const [team, size] of [
+        ["a", 2],
+        ["b", 6],
+        ["c", 4],
+      ] satisfies Array<[string, number]>)
+        await insertRecord(ctx, collection, { team, size })
+      for (const [digest, scope] of [
+        ["jobsRead", ["jobs.read"]],
+        ["dataRead", ["jobs.read", "data.read"]],
+      ] satisfies Array<[string, Array<AgentScope>]>)
+        await ctx.db.insert("agentGrants", {
+          workspaceId,
+          owner: "test|owner",
+          digest,
+          scope,
+          state: "active",
+          expiresAt: Date.now() + 60000,
+        })
+      return collectionId
+    })
+    const saved = await owner.mutation(api.savedQueries.save, {
+      collectionId,
+      name: "Teams",
+      query: { fieldId: "team", order: "asc" },
+    })
+    const sizes: Recipe = {
+      steps: [
+        {
+          kind: "query",
+          queryId: saved.queryId,
+          revision: saved.revision,
+          maxPages: 1,
+        },
+        { kind: "filter", field: "team", in: ["a", "b"] },
+        {
+          kind: "aggregate",
+          groupBy: "team",
+          operation: "max",
+          field: "size",
+          output: "largest",
+        },
+        { kind: "artifact", name: "sizes.json", format: "json" },
+      ],
+      limits: recipe.limits,
+    }
+    expect(
+      await owner.query(api.recipes.preview, {
+        workspaceId,
+        recipe: sizes,
+        sample: [],
+      })
+    ).toEqual({
+      ok: true,
+      steps: [
+        { kind: "query", rows: 3 },
+        { kind: "filter", rows: 2 },
+        { kind: "aggregate", rows: 2 },
+        { kind: "artifact", rows: 2 },
+      ],
+      rows: [
+        { team: "a", largest: 2 },
+        { team: "b", largest: 6 },
+      ],
+    })
+    expect(
+      await owner.query(api.recipes.validate, {
+        workspaceId,
+        recipe: {
+          ...sizes,
+          steps: [
+            {
+              kind: "query",
+              queryId: saved.queryId,
+              revision: saved.revision + 1,
+              maxPages: 1,
+            },
+            ...sizes.steps.slice(1),
+          ],
+        },
+      })
+    ).toEqual({ ok: false, error: "Query revision mismatch" })
+    const agentPreview = (digest: string) =>
+      t.query(internal.agentRecipes.preview, {
+        now: Date.now(),
+        digest,
+        recipe: sizes,
+        sample: [],
+      })
+    await expect(agentPreview("jobsRead")).rejects.toThrow(
+      "does not have the scope data.read"
+    )
+    expect(await agentPreview("dataRead")).toMatchObject({
+      ok: true,
+    })
   })
 })

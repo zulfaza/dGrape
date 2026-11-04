@@ -22,6 +22,13 @@ export const recipeStepValidator = v.union(
     route: v.string(),
     maxPages: v.number(),
   }),
+  /** Replaces the rows with the records of a pinned saved query revision. */
+  v.object({
+    kind: v.literal("query"),
+    queryId: v.string(),
+    revision: v.number(),
+    maxPages: v.number(),
+  }),
   v.object({
     kind: v.literal("map"),
     fields: v.record(v.string(), v.string()),
@@ -80,6 +87,7 @@ export const recipeValidator = v.object({
 export type Recipe = Infer<typeof recipeValidator>
 export type RecipeStep = Infer<typeof recipeStepValidator>
 export type RecipeRow = Infer<typeof recordValuesValidator>
+export type QueryStep = Extract<RecipeStep, { kind: "query" }>
 type FilterStep = Extract<RecipeStep, { kind: "filter" }>
 type AggregateStep = Extract<RecipeStep, { kind: "aggregate" }>
 type Range = Infer<typeof rangeValidator>
@@ -113,6 +121,12 @@ export function validateRecipe(recipe: Recipe): void {
         fetched = true
         if (!step.connectionId || !step.route || step.route.length > 500)
           throw new Error("Invalid connector reference")
+        integer(step.maxPages, 1, 20, "maxPages")
+        break
+      case "query":
+        if (!step.queryId || step.queryId.length > 100)
+          throw new Error("Invalid saved query reference")
+        integer(step.revision, 1, Number.MAX_SAFE_INTEGER, "revision")
         integer(step.maxPages, 1, 20, "maxPages")
         break
       case "map":
@@ -332,6 +346,7 @@ export function checkOutput(step: OutputStep, rows: RecipeRow[]): void {
 
 export const recipeStepKindValidator = v.union(
   v.literal("fetch"),
+  v.literal("query"),
   v.literal("map"),
   v.literal("filter"),
   v.literal("join"),
@@ -345,16 +360,22 @@ export const recipePreviewValidator = v.object({
   rows: v.array(recordValuesValidator),
 })
 export type RecipePreview = Infer<typeof recipePreviewValidator>
+/** Reads that a preview cannot do as a pure function. Each read is bounded by the recipe limits. */
+export type RecipeSources = {
+  query: (step: QueryStep) => Promise<RecipeRow[]>
+}
 /**
  * Dry run of a valid recipe. `sample` replaces the rows that the fetch step
- * would read, so there is no network access. Output steps save nothing: the
- * result has the row count after each step and the rows the output gets.
- * Budgets and output rules are the same as in a run.
+ * would read, so there is no network access. Query steps read through
+ * `sources`. Output steps save nothing: the result has the row count after
+ * each step and the rows the output gets. Budgets and output rules are the
+ * same as in a run.
  */
-export function previewRecipe(
+export async function previewRecipe(
   recipe: Recipe,
-  sample: RecipeRow[]
-): RecipePreview {
+  sample: RecipeRow[],
+  sources: RecipeSources
+): Promise<RecipePreview> {
   validateRecipe(recipe)
   if (sample.length > 0 && !recipe.steps.some((s) => s.kind === "fetch"))
     throw new Error("Sample rows replace fetch output, but there is no fetch")
@@ -365,6 +386,9 @@ export function previewRecipe(
       switch (step.kind) {
         case "fetch":
           rows.push(...sample)
+          break
+        case "query":
+          rows = await sources.query(step)
           break
         case "upsert":
         case "snapshot":

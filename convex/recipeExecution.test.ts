@@ -195,6 +195,68 @@ describe("durable recipe checkpoints", () => {
     )
     expect(page.evaluatedAt).toBeGreaterThanOrEqual(page.dataAsOf ?? 0)
   })
+  it("runs a pinned saved query revision as a step and filters its rows", async () => {
+    const { t, owner, args, collectionId } = await setup()
+    await t.action(internal.recipeRunner.execute, { ...args, step: 0 })
+    await t.action(internal.recipeRunner.execute, { ...args, step: 1 })
+    const { workspaceId, copyId } = await t.run(async (ctx) => {
+      const collection = await ctx.db.get(collectionId)
+      if (!collection) throw new Error("Collection missing")
+      const copyId = await ctx.db.insert("collections", {
+        workspaceId: collection.workspaceId,
+        name: "Copy",
+        definition: collection.definition,
+      })
+      return { workspaceId: collection.workspaceId, copyId }
+    })
+    const saved = await owner.mutation(api.savedQueries.save, {
+      collectionId,
+      name: "By ID",
+      query: { fieldId: "id", order: "desc" },
+    })
+    const versionId = await owner.mutation(api.recipes.publish, {
+      workspaceId,
+      name: "Copy",
+      recipe: {
+        steps: [
+          {
+            kind: "query",
+            queryId: saved.queryId,
+            revision: saved.revision,
+            maxPages: 1,
+          },
+          { kind: "filter", field: "total", range: { min: 15 } },
+          { kind: "snapshot", collectionId: copyId },
+        ],
+        limits: { rows: 100, bytes: 10000, durationMs: 60000, attempts: 3 },
+      },
+    })
+    const runId = await owner.mutation(api.recipes.trigger, {
+      versionId,
+      idempotencyKey: "query",
+    })
+    const [claim] = await t.mutation(internal.recipes.dispatch, {})
+    const run = { runId, epoch: claim.epoch }
+    await t.mutation(internal.recipes.begin, run)
+    for (const step of [0, 1, 2])
+      await t.action(internal.recipeRunner.execute, { ...run, step })
+    const result = await t.run(async (ctx) => ({
+      checkpoints: await ctx.db
+        .query("recipeCheckpoints")
+        .withIndex("by_runId_and_step", (q) => q.eq("runId", runId))
+        .take(3),
+      run: await ctx.db.get(runId),
+    }))
+    expect(result.checkpoints.map((item) => item.rows)).toEqual([
+      [
+        { id: "b", total: 20 },
+        { id: "a", total: 10 },
+      ],
+      [{ id: "b", total: 20 }],
+      [{ id: "b", total: 20 }],
+    ])
+    expect(result.run?.state).toBe("succeeded")
+  })
   it("rejects an output from another workspace before reading its cursor", async () => {
     const { t, args, collectionId } = await setup()
     await t.run(async (ctx) => {
