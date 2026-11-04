@@ -8,6 +8,7 @@ import {
   type CollectionField,
   type NewCollectionField,
   type RecordValues,
+  recordLabel,
 } from "./collectionDomain"
 
 /**
@@ -188,4 +189,27 @@ export async function referencingArtifact(
     .withIndex("by_artifactId", (q) => q.eq("artifactId", artifactId))
     .first()
   return row?.recordId ?? null
+}
+
+/**
+ * The label of a record or artifact ID in the workspace: a record's
+ * {@link recordLabel}, an artifact's name. Null when the ID is not in the
+ * workspace.
+ */
+export async function referenceLabel(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  id: string
+): Promise<string | null> {
+  const recordId = ctx.db.normalizeId("collectionRecords", id)
+  if (recordId) {
+    const record = await ctx.db.get(recordId)
+    const collection = record && (await ctx.db.get(record.collectionId))
+    return record && collection?.workspaceId === workspaceId
+      ? recordLabel(collection.definition.fields, record)
+      : null
+  }
+  const artifactId = ctx.db.normalizeId("artifacts", id)
+  const artifact = artifactId && (await ctx.db.get(artifactId))
+  return artifact && artifact.workspaceId === workspaceId ? artifact.name : null
 }

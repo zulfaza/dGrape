@@ -369,7 +369,16 @@ export function CollectionRecords({
                           : "max-w-80 truncate px-4 py-3"
                       }
                     >
-                      {formatValue(field, record.values[field.id])}
+                      {(field.type === "recordReference" ||
+                        field.type === "artifactReference") &&
+                      typeof record.values[field.id] === "string" ? (
+                        <ReferenceLabel
+                          collectionId={collectionId}
+                          id={String(record.values[field.id])}
+                        />
+                      ) : (
+                        formatValue(field, record.values[field.id])
+                      )}
                     </TableCell>
                   ))}
                   <TableCell className="w-0 px-4 py-2 text-right">
@@ -674,6 +683,25 @@ function fieldLabel(field: Field) {
 /** The chosen options of a multi-select draft value. */
 function draftOptions(value: Draft["values"][string] | undefined): string[] {
   return Array.isArray(value) ? value : []
+}
+
+/**
+ * The label of a referenced record or artifact. Shows the ID until the label
+ * loads, and when the target is not in the workspace.
+ */
+function ReferenceLabel({
+  collectionId,
+  id,
+}: {
+  collectionId: Id<"collections">
+  id: string
+}) {
+  const label = useQuery(api.workspaces.referenceLabel, { collectionId, id })
+  return label === undefined || label === null ? (
+    <span className="font-mono text-muted-foreground">{id}</span>
+  ) : (
+    <span title={id}>{label}</span>
+  )
 }
 
 /**

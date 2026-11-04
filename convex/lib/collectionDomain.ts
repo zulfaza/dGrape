@@ -187,6 +187,19 @@ const FIELD_ID = /^[a-z][a-z0-9_]{0,63}$/
 /** The range of a JavaScript `Date`, in milliseconds from the epoch. */
 const MAX_TIMESTAMP = 8_640_000_000_000_000
 
+/** A short name for a record: its first nonempty text value, or its ID. */
+export function recordLabel(
+  fields: ReadonlyArray<CollectionField>,
+  record: { _id: string; values: RecordValues }
+): string {
+  for (const field of fields) {
+    const value = record.values[field.id]
+    if (field.type === "text" && typeof value === "string" && value !== "")
+      return value
+  }
+  return record._id
+}
+
 /** True for a real calendar date written as "YYYY-MM-DD". */
 export function isDateOnly(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
