@@ -349,6 +349,38 @@ test("workspace roles limit viewers to reads and editors to data changes", async
   })
   expect(rows.page.map((row) => row.values.name)).toEqual(["a", "b"])
 
+  // Writers pick workspace secrets for records; they see no private ones.
+  await t.run(async (ctx) => {
+    for (const owner of [
+      { kind: "workspace" as const },
+      { kind: "user" as const, userId: "owner" },
+    ])
+      await ctx.db.insert("secretRefs", {
+        workspaceId,
+        label: owner.kind,
+        createdBy: "owner",
+        owner,
+        revision: 1,
+        state: {
+          kind: "pending",
+          writeUntil: 0,
+          name: "n",
+          previousName: null,
+        },
+      })
+  })
+  const options = await editor.query(api.secrets.referenceOptions, {
+    workspaceId,
+    paginationOpts: page,
+  })
+  expect(options.page.map((option) => option.label)).toEqual(["workspace"])
+  await expect(
+    viewer.query(api.secrets.referenceOptions, {
+      workspaceId,
+      paginationOpts: page,
+    })
+  ).rejects.toThrow(denied)
+
   // Members, credentials, agent grants and budgets: owners only.
   for (const member of [editor, viewer]) {
     await expect(
