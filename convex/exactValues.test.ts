@@ -17,7 +17,11 @@ import {
 } from "./lib/collectionDomain"
 import type { CollectionTemplate } from "./lib/collectionTemplates"
 import { checkQuery } from "./lib/recordQuery"
-import { parseCreateCollection } from "./lib/agentRequests"
+import {
+  parseCreateCollection,
+  parseCreateRecord,
+  parseObjectValue,
+} from "./lib/agentRequests"
 import { Field } from "../src/mcp/agent-api"
 import * as Queries from "./lib/agentQueryTransport"
 import { stageSnapshotChunk, upsertSourceRecord } from "./lib/recordPublication"
@@ -164,6 +168,79 @@ test("select values are options and multi-select values list different options",
       where: { eq: "junior" },
     }).ok
   ).toBe(false)
+})
+
+test("object values have limits on depth, size, and keys, and are never indexed", async () => {
+  const objectFields: CollectionField[] = [
+    { id: "meta", label: "Meta", type: "object" },
+  ]
+  const deep = { a: { b: [{ c: 1 }] } }
+  expect(checkRecordValues(objectFields, { meta: deep }).ok).toBe(true)
+  expect(
+    parseCreateRecord({ collectionId: "c", values: { meta: deep } })?.values
+  ).toEqual({ meta: deep })
+  expect(parseObjectValue({ a: { b: [{ c: [1] }] } })).toBeNull()
+  expect(parseObjectValue([1])).toBeNull()
+  expect(parseObjectValue({ a: undefined })).toBeNull()
+  expect(
+    parseCreateRecord({ collectionId: "c", values: { meta: { a: [[[[1]]]] } } })
+  ).toBeNull()
+  for (const meta of [
+    { _id: 1 },
+    { $set: 1 },
+    { "": 1 },
+    { é: 1 },
+    JSON.parse('{"__proto__": 1}'),
+    { a: Infinity },
+    { a: "x".repeat(10_000) },
+  ]) {
+    const parsed = parseObjectValue(meta)
+    expect(parsed).not.toBeNull()
+    expect(
+      parsed !== null && checkRecordValues(objectFields, { meta: parsed }).ok
+    ).toBe(false)
+  }
+  for (const meta of ["{}", ["a"], 1])
+    expect(checkRecordValues(objectFields, { meta }).ok).toBe(false)
+  expect(
+    parseCreateCollection({ name: "Meta", fields: objectFields })?.fields
+  ).toEqual(objectFields)
+  expect(Schema.decodeUnknownSync(Field)(objectFields[0])).toEqual(
+    objectFields[0]
+  )
+
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const workspaceId = await owner.mutation(api.workspaces.create, {
+    name: "Jobs",
+  })
+  await expect(
+    owner.mutation(api.workspaces.createCollection, {
+      workspaceId,
+      name: "Bad",
+      fields: [{ id: "meta", label: "Meta", type: "object", indexed: true }],
+    })
+  ).rejects.toThrow("cannot be indexed")
+  const collectionId = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Meta",
+    fields: [...objectFields, { id: "name", label: "Name", type: "text" }],
+  })
+  const recordId = await owner.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { meta: { ...deep, note: null }, name: "x" },
+  })
+  const stored = await owner.query(api.workspaces.getRecord, {
+    collectionId,
+    recordId,
+  })
+  expect(stored?.values.meta).toEqual({ ...deep, note: null })
+  await expect(
+    owner.mutation(api.workspaces.addField, {
+      collectionId,
+      field: { id: "more", label: "More", type: "object", indexed: true },
+    })
+  ).rejects.toThrow("cannot be indexed")
 })
 
 test("collections reject bad options and multi-select queries find each chosen option", async () => {

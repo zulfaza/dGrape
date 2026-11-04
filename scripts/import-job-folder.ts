@@ -528,11 +528,16 @@ async function buildPlan(root: string, layout: Layout): Promise<Plan> {
 // ---------------------------------------------------------------------------
 // Report
 
-/** A table cell; multi-select options are joined with commas. */
-function cell(
-  value: string | number | boolean | ReadonlyArray<string> | undefined
-) {
-  const text = Array.isArray(value) ? value.join(", ") : String(value ?? "")
+/**
+ * A table cell; multi-select options are joined with commas, and objects
+ * are JSON.
+ */
+function cell(value: (typeof AgentApi.RecordValues.Type)[string] | undefined) {
+  const text = Array.isArray(value)
+    ? value.join(", ")
+    : value instanceof Object
+      ? JSON.stringify(value)
+      : String(value ?? "")
   return text.replace(/\|/g, "\\|")
 }
 

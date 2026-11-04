@@ -4,6 +4,7 @@ import { useQuery } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import type { PageBlock } from "../../convex/lib/pageDomain"
+import { valueText } from "@/lib/field-types"
 
 export function PageLiveBlock({
   pageId,
@@ -86,7 +87,7 @@ export function PageLiveBlock({
                     <td key={field} className="border-t p-2">
                       {row.values[field] === undefined
                         ? "Missing"
-                        : String(row.values[field])}
+                        : valueText(row.values[field])}
                     </td>
                   ))}
                 </tr>
