@@ -144,6 +144,7 @@ const SourceFreshness = Schema.Union([
     kind: Schema.Literal("synced"),
     lastSuccessfulSyncAt: Schema.Number,
     runId: Schema.String,
+    staleAfter: Schema.NullOr(Schema.Number),
   }),
   Schema.Struct({
     kind: Schema.Literal("stale"),
