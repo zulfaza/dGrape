@@ -18,13 +18,18 @@ function requireScopes(grant: Grant, needed: ReadonlyArray<AgentScope>) {
       message: missingScopeMessage(missing),
     })
 }
-/** A query step reads records, so a preview of its rows needs `data.read`. */
+/** Query steps and collection joins read records, so they need `data.read`. */
 function readScopes(recipe: Recipe): AgentScope[] {
-  return recipe.steps.some((step) => step.kind === "query") ? ["data.read"] : []
+  return recipe.steps.some(
+    (step) =>
+      step.kind === "query" || (step.kind === "join" && "collectionId" in step)
+  )
+    ? ["data.read"]
+    : []
 }
 /**
- * A recipe with a fetch step calls a connection, and a query step reads
- * records. Binding it to a recipe, or starting or scheduling its runs, also
+ * A recipe with a fetch step calls a connection, and a query step or a
+ * collection join reads records. Binding it to a recipe, or starting or scheduling its runs, also
  * needs `connections.use` or `data.read`.
  */
 function requireRecipeScopes(grant: Grant, recipe: Recipe) {

@@ -320,7 +320,7 @@ const ListTemplates = Tool.make("collections_templates", {
 
 const RecipePublish = Tool.make("recipes_publish", {
   description:
-    "Publish an immutable recipe. Use recipes_validate and recipes_preview first. Requires jobs.manage, connections.use for a fetch step, and data.read for a query step." +
+    "Publish an immutable recipe. Use recipes_validate and recipes_preview first. Requires jobs.manage, connections.use for a fetch step, and data.read for a query step or a collection join." +
     OperationKeyDescription,
   parameters: Recipes.PublishInput,
   success: Schema.String,
@@ -339,7 +339,7 @@ const RecipeValidate = Tool.make("recipes_validate", {
 
 const RecipePreview = Tool.make("recipes_preview", {
   description:
-    "Dry run a recipe on `sample` rows (at most the recipe's row limit). The sample replaces the rows of the fetch step, so nothing is fetched; give an empty sample for a recipe without fetch. A `query` step (`queryId`, `revision`, `maxPages`) reads its saved query revision (from queries_list) and needs data.read; a preview reads only its first 50 records, and only one query step. The output step saves nothing. Returns the row count after each step and the output rows, checked against the output collection fields, or `ok: false` with the `error`.",
+    "Dry run a recipe on `sample` rows (at most the recipe's row limit). The sample replaces the rows of the fetch step, so nothing is fetched; give an empty sample for a recipe without fetch. A `query` step (`queryId`, `revision`, `maxPages`) reads its saved query revision (from queries_list) and needs data.read; a preview reads only its first 50 records, and only one query step. A join step takes inline `rows` (at most 100), a `collectionId` (needs data.read; at most the row limit of records), or the 0-based index of an earlier `step`. The output step saves nothing. Returns the row count after each step and the output rows, checked against the output collection fields, or `ok: false` with the `error`.",
   parameters: Recipes.PreviewInput,
   success: Recipes.PreviewResult,
   failure: AgentApi.AgentApiError,

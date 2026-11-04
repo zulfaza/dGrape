@@ -39,7 +39,7 @@ import {
   validateTiming,
 } from "./lib/recipeSchedule"
 import { recordSyncOutcome } from "./lib/sourceSync"
-import { readQueryPage } from "./lib/recipeQuery"
+import { readJoinCollection, readQueryPage } from "./lib/recipeQuery"
 
 /** A bounded output token detects writes made while a recipe fetches data. */
 export async function recipeOutputToken(
@@ -176,6 +176,12 @@ export async function checkRecipe(
       if (!connection || connection.workspaceId !== workspaceId)
         throw new Error("Connection access denied")
     }
+    if (step.kind === "join" && "collectionId" in step) {
+      const id = ctx.db.normalizeId("collections", step.collectionId)
+      const collection = id ? await ctx.db.get(id) : null
+      if (!collection || collection.workspaceId !== workspaceId)
+        throw new Error("Join collection access denied")
+    }
     if (step.kind === "query") {
       const id = ctx.db.normalizeId("queryDefinitions", step.queryId)
       const saved = id ? await ctx.db.get(id) : null
@@ -262,6 +268,13 @@ export async function previewForPrincipal(
         queried = true
         return (await readQueryPage(ctx, args.workspaceId, step, null)).rows
       },
+      collection: (collectionId) =>
+        readJoinCollection(
+          ctx,
+          args.workspaceId,
+          collectionId,
+          args.recipe.limits
+        ),
     })
     if (output)
       for (const [index, row] of preview.rows.entries()) {

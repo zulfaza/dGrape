@@ -1,5 +1,10 @@
 import { v, type Infer } from "convex/values"
-import { internalMutation, internalQuery } from "./_generated/server"
+import {
+  internalMutation,
+  internalQuery,
+  type QueryCtx,
+} from "./_generated/server"
+import type { Id } from "./_generated/dataModel"
 import { artifactBudgetProblem, changeArtifactUsage } from "./lib/artifactUsage"
 import { recordValuesValidator } from "./lib/collectionDomain"
 import {
@@ -18,7 +23,7 @@ import {
 } from "./lib/recordPublication"
 import { recordSyncOutcome } from "./lib/sourceSync"
 import { memberWithAccess } from "./lib/auth"
-import { readQueryPage } from "./lib/recipeQuery"
+import { readJoinCollection, readQueryPage } from "./lib/recipeQuery"
 
 export const executionArgs = {
   runId: v.id("recipeRuns"),
@@ -46,6 +51,26 @@ export const checkpoint = internalQuery({
     }
   },
 })
+/** The running step of a run whose recipe owner can still read the workspace. */
+async function ownedStep(
+  ctx: QueryCtx,
+  args: { runId: Id<"recipeRuns">; epoch: number; step: number }
+) {
+  const run = await ctx.db.get(args.runId)
+  if (!run || run.epoch !== args.epoch || run.state !== "running")
+    throw new Error("Run lease is stale")
+  const version = await ctx.db.get(run.versionId)
+  const step = version?.recipe.steps[args.step]
+  if (!version || !step) throw new Error("Invalid recipe step")
+  const member = await memberWithAccess(
+    ctx,
+    run.workspaceId,
+    version.createdBy,
+    "read"
+  )
+  if (!member) throw new Error("Recipe owner no longer has access")
+  return { run, step, limits: version.recipe.limits }
+}
 /** One page of a query step, read as the recipe owner in the run's workspace. */
 export const queryPage = internalQuery({
   args: { ...executionArgs, cursor: v.union(v.string(), v.null()) },
@@ -55,21 +80,30 @@ export const queryPage = internalQuery({
     continueCursor: v.string(),
   }),
   handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.runId)
-    if (!run || run.epoch !== args.epoch || run.state !== "running")
-      throw new Error("Run lease is stale")
-    const version = await ctx.db.get(run.versionId)
-    const step = version?.recipe.steps[args.step]
-    if (!version || step?.kind !== "query")
-      throw new Error("Invalid recipe step")
-    const member = await memberWithAccess(
-      ctx,
-      run.workspaceId,
-      version.createdBy,
-      "read"
-    )
-    if (!member) throw new Error("Recipe owner no longer has access")
+    const { run, step } = await ownedStep(ctx, args)
+    if (step.kind !== "query") throw new Error("Invalid recipe step")
     return readQueryPage(ctx, run.workspaceId, step, args.cursor)
+  },
+})
+/** The right rows of a join step: inline rows, a collection, or an earlier checkpoint. */
+export const joinRows = internalQuery({
+  args: executionArgs,
+  returns: v.array(recordValuesValidator),
+  handler: async (ctx, args) => {
+    const { run, step, limits } = await ownedStep(ctx, args)
+    if (step.kind !== "join") throw new Error("Invalid recipe step")
+    if ("rows" in step) return step.rows
+    if ("collectionId" in step)
+      return readJoinCollection(ctx, run.workspaceId, step.collectionId, limits)
+    if (step.step >= args.step) throw new Error("Invalid join step")
+    const earlier = await ctx.db
+      .query("recipeCheckpoints")
+      .withIndex("by_runId_and_step", (q) =>
+        q.eq("runId", run._id).eq("step", step.step)
+      )
+      .unique()
+    if (!earlier) throw new Error("Join step has no output")
+    return earlier.rows
   },
 })
 /** Saving output and advancing the step is one transaction, even on redelivery. */

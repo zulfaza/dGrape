@@ -55,6 +55,22 @@ export const recipeStepValidator = v.union(
     prefix: v.string(),
     rows: v.array(recordValuesValidator),
   }),
+  /** Joins the records of a collection in the workspace, at most the row limit. */
+  v.object({
+    kind: v.literal("join"),
+    field: v.string(),
+    rightField: v.string(),
+    prefix: v.string(),
+    collectionId: v.string(),
+  }),
+  /** Joins the output rows of an earlier step, by its 0-based index. */
+  v.object({
+    kind: v.literal("join"),
+    field: v.string(),
+    rightField: v.string(),
+    prefix: v.string(),
+    step: v.number(),
+  }),
   v.object({
     kind: v.literal("aggregate"),
     groupBy: v.string(),
@@ -88,6 +104,7 @@ export type Recipe = Infer<typeof recipeValidator>
 export type RecipeStep = Infer<typeof recipeStepValidator>
 export type RecipeRow = Infer<typeof recordValuesValidator>
 export type QueryStep = Extract<RecipeStep, { kind: "query" }>
+export type JoinStep = Extract<RecipeStep, { kind: "join" }>
 type FilterStep = Extract<RecipeStep, { kind: "filter" }>
 type AggregateStep = Extract<RecipeStep, { kind: "aggregate" }>
 type Range = Infer<typeof rangeValidator>
@@ -113,7 +130,7 @@ export function validateRecipe(recipe: Recipe): void {
   integer(recipe.limits.attempts, 1, 5, "attempts")
   let output = false
   let fetched = false
-  for (const step of recipe.steps) {
+  for (const [index, step] of recipe.steps.entries()) {
     if (output) throw new Error("Output must be the last step")
     switch (step.kind) {
       case "fetch":
@@ -146,7 +163,10 @@ export function validateRecipe(recipe: Recipe): void {
         field(step.field)
         field(step.rightField)
         field(step.prefix)
-        integer(step.rows.length, 0, 100, "join rows")
+        if ("rows" in step) integer(step.rows.length, 0, 100, "join rows")
+        if ("collectionId" in step && !step.collectionId)
+          throw new Error("Invalid join collection")
+        if ("step" in step) integer(step.step, 0, index - 1, "join step")
         break
       case "aggregate":
         field(step.groupBy)
@@ -176,7 +196,9 @@ export function validateRecipe(recipe: Recipe): void {
   }
   if (!output) throw new Error("A recipe must end with an output")
   checkBudget(
-    recipe.steps.flatMap((step) => (step.kind === "join" ? step.rows : [])),
+    recipe.steps.flatMap((step) =>
+      step.kind === "join" && "rows" in step ? step.rows : []
+    ),
     recipe.limits
   )
 }
@@ -270,6 +292,35 @@ export function checkBudget(rows: RecipeRow[], limits: Recipe["limits"]) {
     throw new Error("Recipe byte limit exceeded")
 }
 
+/** Matches each left row with each right row in order. Joined fields get the step prefix. */
+export function joinRows(
+  rows: RecipeRow[],
+  right: RecipeRow[],
+  step: JoinStep,
+  limits: Recipe["limits"]
+): RecipeRow[] {
+  checkBudget(right, limits)
+  const result: RecipeRow[] = []
+  for (const left of rows)
+    for (const other of right) {
+      if (
+        own(left, step.field) === undefined ||
+        own(left, step.field) !== own(other, step.rightField)
+      )
+        continue
+      const joined = { ...left }
+      for (const [key, value] of Object.entries(other)) {
+        const target = `${step.prefix}_${key}`
+        if (Object.hasOwn(joined, target))
+          throw new Error("Join field collision")
+        joined[target] = value
+      }
+      result.push(joined)
+      checkBudget(result, limits)
+    }
+  return result
+}
+
 /** Pure transforms preserve input order; joins and groups preserve first-seen order. */
 export function transform(
   rows: RecipeRow[],
@@ -292,27 +343,11 @@ export function transform(
     case "filter":
       result = rows.filter((row) => matches(row, step))
       break
-    case "join": {
-      result = []
-      for (const left of rows)
-        for (const right of step.rows) {
-          if (
-            own(left, step.field) === undefined ||
-            own(left, step.field) !== own(right, step.rightField)
-          )
-            continue
-          const joined = { ...left }
-          for (const [key, value] of Object.entries(right)) {
-            const target = `${step.prefix}_${key}`
-            if (Object.hasOwn(joined, target))
-              throw new Error("Join field collision")
-            joined[target] = value
-          }
-          result.push(joined)
-          checkBudget(result, limits)
-        }
+    case "join":
+      if (!("rows" in step))
+        throw new Error("This step requires the trusted runtime")
+      result = joinRows(rows, step.rows, step, limits)
       break
-    }
     case "aggregate":
       result = aggregate(rows, step)
       break
@@ -363,11 +398,12 @@ export type RecipePreview = Infer<typeof recipePreviewValidator>
 /** Reads that a preview cannot do as a pure function. */
 export type RecipeSources = {
   query: (step: QueryStep) => Promise<RecipeRow[]>
+  collection: (collectionId: string) => Promise<RecipeRow[]>
 }
 /**
  * Dry run of a valid recipe. `sample` replaces the rows that the fetch step
- * would read, so there is no network access. Query steps read through
- * `sources`. Output steps save nothing: the result has the row count after
+ * would read, so there is no network access. Query steps and collection
+ * joins read through `sources`. Output steps save nothing: the result has the row count after
  * each step and the rows the output gets. Budgets and output rules are the
  * same as in a run.
  */
@@ -381,9 +417,22 @@ export async function previewRecipe(
     throw new Error("Sample rows replace fetch output, but there is no fetch")
   let rows: RecipeRow[] = []
   const steps: RecipePreview["steps"] = []
+  const outputs: RecipeRow[][] = []
   for (const [index, step] of recipe.steps.entries()) {
     try {
       switch (step.kind) {
+        case "join":
+          rows = joinRows(
+            rows,
+            "rows" in step
+              ? step.rows
+              : "step" in step
+                ? (outputs[step.step] ?? [])
+                : await sources.collection(step.collectionId),
+            step,
+            recipe.limits
+          )
+          break
         case "fetch":
           rows = [...sample]
           break
@@ -405,6 +454,7 @@ export async function previewRecipe(
       throw new Error(`Step ${index + 1} (${step.kind}): ${error.message}`)
     }
     steps.push({ kind: step.kind, rows: rows.length })
+    outputs.push(rows)
   }
   return { steps, rows }
 }

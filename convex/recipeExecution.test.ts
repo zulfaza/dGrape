@@ -196,7 +196,7 @@ describe("durable recipe checkpoints", () => {
     )
     expect(page.evaluatedAt).toBeGreaterThanOrEqual(page.dataAsOf ?? 0)
   })
-  it("runs a pinned saved query revision as a step and filters its rows", async () => {
+  it("runs a pinned saved query revision, filters it and joins a step and a collection", async () => {
     const { t, owner, args, collectionId } = await setup()
     await t.action(internal.recipeRunner.execute, { ...args, step: 0 })
     await t.action(internal.recipeRunner.execute, { ...args, step: 1 })
@@ -227,6 +227,15 @@ describe("durable recipe checkpoints", () => {
             maxPages: 1,
           },
           { kind: "filter", field: "total", range: { min: 15 } },
+          { kind: "join", field: "id", rightField: "id", prefix: "q", step: 0 },
+          {
+            kind: "join",
+            field: "id",
+            rightField: "id",
+            prefix: "c",
+            collectionId,
+          },
+          { kind: "map", fields: { id: "q_id", total: "c_total" } },
           { kind: "snapshot", collectionId: copyId },
         ],
         limits: { rows: 100, bytes: 10000, durationMs: 60000, attempts: 3 },
@@ -239,13 +248,13 @@ describe("durable recipe checkpoints", () => {
     const [claim] = await t.mutation(internal.recipes.dispatch, {})
     const run = { runId, epoch: claim.epoch }
     await t.mutation(internal.recipes.begin, run)
-    for (const step of [0, 1, 2])
+    for (const step of [0, 1, 2, 3, 4, 5])
       await t.action(internal.recipeRunner.execute, { ...run, step })
     const result = await t.run(async (ctx) => ({
       checkpoints: await ctx.db
         .query("recipeCheckpoints")
         .withIndex("by_runId_and_step", (q) => q.eq("runId", runId))
-        .take(3),
+        .take(6),
       run: await ctx.db.get(runId),
     }))
     expect(result.checkpoints.map((item) => item.rows)).toEqual([
@@ -253,6 +262,9 @@ describe("durable recipe checkpoints", () => {
         { id: "b", total: 20 },
         { id: "a", total: 10 },
       ],
+      [{ id: "b", total: 20 }],
+      [{ id: "b", total: 20, q_id: "b", q_total: 20 }],
+      [{ id: "b", total: 20, q_id: "b", q_total: 20, c_id: "b", c_total: 20 }],
       [{ id: "b", total: 20 }],
       [{ id: "b", total: 20 }],
     ])

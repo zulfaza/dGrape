@@ -3,7 +3,12 @@ import { makeFunctionReference } from "convex/server"
 import { internalAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { executionArgs } from "./recipeExecution"
-import { transform, checkBudget, type RecipeRow } from "./lib/recipeDomain"
+import {
+  transform,
+  checkBudget,
+  joinRows,
+  type RecipeRow,
+} from "./lib/recipeDomain"
 import { r2 } from "./lib/r2"
 import type { QueryStepPage } from "./lib/recipeQuery"
 import type { Id } from "./_generated/dataModel"
@@ -100,6 +105,12 @@ export const execute = internalAction({
           if (result.isDone) break
           cursor = result.continueCursor
         }
+      } else if (step.kind === "join") {
+        const right = await ctx.runQuery(
+          internal.recipeExecution.joinRows,
+          args
+        )
+        rows = joinRows(rows, right, step, plan.recipe.limits)
       } else if (step.kind === "artifact") {
         artifactKey = `workspaces/${plan.workspaceId}/recipes/${args.runId}/${args.epoch}/${args.step}/${state.attempt}`
         await r2.store(
