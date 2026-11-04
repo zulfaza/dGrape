@@ -20,6 +20,7 @@ import { artifactUsageValidator } from "./lib/artifactUsage"
 import { budgetOverridesValidator } from "./lib/budgets"
 import { recordCountValidator } from "./lib/recordCounts"
 import { auditEventFields } from "./lib/auditEvents"
+import { operationFields } from "./lib/operations"
 import { recipeTables } from "./lib/recipeState"
 import { secretFields, connectionFields } from "./lib/secretDomain"
 import { sourceSyncFields } from "./lib/sourceSync"
@@ -30,6 +31,14 @@ export default defineSchema({
   auditEvents: defineTable(auditEventFields).index("by_workspaceId", [
     "workspaceId",
   ]),
+  /** Idempotency keys of agent writes; see convex/lib/operations.ts. */
+  operations: defineTable(operationFields)
+    .index("by_workspaceId_and_caller_and_key", [
+      "workspaceId",
+      "caller",
+      "key",
+    ])
+    .index("by_expiresAt", ["expiresAt"]),
   artifactBindings: defineTable(bindingFields).index("by_recordId", [
     "recordId",
   ]),
