@@ -39,25 +39,61 @@ const dryRunProgress = {
   misfits: v.array(misfitValidator),
 }
 
+const after = v.union(v.number(), v.null())
+
 /**
+ * The plan's steps. Records are read in `_creationTime` order; `after` is the
+ * last record read (null: none yet).
+ *
  * - "planned": no dry run yet.
- * - "dryRunning": a dry run reads the records in `_creationTime` order;
- *   `after` is the last record read (null: none yet).
- * - "checked": the dry run read every record. The plan can start only when
- *   `misfitCount` is 0.
+ * - "dryRunning": a dry run reads the records. It changes nothing.
+ * - "checked": the dry run read every record. The migration can start only
+ *   when `misfitCount` is 0.
+ * - "validating": the migration started and holds the collection lock (see
+ *   `migrationLockValidator`). It checks every record again before it writes
+ *   any. If a record does not fit, it releases the lock and returns to
+ *   "checked" with the report.
+ * - "backfilling": every record fits; it writes the target values. `error`
+ *   is set when a step stopped; starting again resumes from `after`.
+ * - "active": every record was written, and the target definition is active.
  * - "cancelled": the plan cannot run.
  */
 export const migrationStateValidator = v.union(
   v.object({ kind: v.literal("planned") }),
-  v.object({
-    kind: v.literal("dryRunning"),
-    after: v.union(v.number(), v.null()),
-    ...dryRunProgress,
-  }),
+  v.object({ kind: v.literal("dryRunning"), after, ...dryRunProgress }),
   v.object({ kind: v.literal("checked"), ...dryRunProgress }),
+  v.object({ kind: v.literal("validating"), after, ...dryRunProgress }),
+  v.object({
+    kind: v.literal("backfilling"),
+    after,
+    /** Records written so far. */
+    written: v.number(),
+    error: v.union(v.string(), v.null()),
+  }),
+  v.object({
+    kind: v.literal("active"),
+    written: v.number(),
+    activatedAt: v.number(),
+  }),
   v.object({ kind: v.literal("cancelled") })
 )
 export type MigrationState = Infer<typeof migrationStateValidator>
+
+/**
+ * Set on a collection while a migration validates or backfills it. Record
+ * writes and schema changes fail, and saved queries and pages report the
+ * migration, until the migration is active or returns to "checked".
+ */
+export const migrationLockValidator = v.object({
+  migrationId: v.id("schemaMigrations"),
+  targetVersion: v.number(),
+})
+export type MigrationLock = Infer<typeof migrationLockValidator>
+
+/** The error for a change that the lock blocks. */
+export function migratingMessage(lock: MigrationLock) {
+  return `The collection is migrating to schema version ${lock.targetVersion}; try again when the migration is active`
+}
 
 export const schemaMigrationFields = {
   collectionId: v.id("collections"),

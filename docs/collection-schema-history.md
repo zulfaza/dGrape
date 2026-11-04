@@ -45,8 +45,26 @@ becomes a select option or a one-option multi-select. A value never converts
 into a reference from another type or another target collection. The target
 rules then check each converted record.
 
-Remaining implementation scope: migration backfill and guarded activation;
-richer typed values and authorized record/artifact/secret references
+`schemaMigrations.start` needs a dry run with no misfits on the active version.
+It sets `collections.migrationLock`, which blocks record writes, schema edits
+and new plans. Saved queries, report counts and pages then fail with "The
+collection is migrating to schema version N". The migration first checks every
+record again under the lock. If a record does not fit, it releases the lock and
+returns to `checked` with the report; no record is written. Otherwise it
+backfills in steps of 25 records: each step writes the target values, the target
+schema version, a new record revision, index entries and references in one
+transaction, and a duplicate step does nothing. After the last step it stores
+the target in the history with its `migrationId`, makes it active and releases
+the lock in the same transaction. A step that stops keeps the lock and sets
+`error`; `start` resumes from the stored cursor. A started migration cannot be
+cancelled. Record lists are not locked, so during the backfill they can show
+converted and unconverted records.
+
+Saved query revisions and page bindings pinned to an older schema version fail
+with the pinned and active versions in the message; save and bind a new query
+revision.
+
+Remaining implementation scope: HTTP/MCP and UI for migrations; richer typed values and authorized record/artifact/secret references
 (coordinate with secret/recipe siblings); exact minor-unit money and currency
 metadata with job/transaction templates; materialized summaries and bounded,
 retry-safe correction/deletion rebuilds with freshness/completeness/error state;

@@ -6,6 +6,7 @@ import { internalMutation, mutation, query } from "./_generated/server"
 import { memberWithAccess, requireMembership } from "./lib/auth"
 import { workspaceBudgets } from "./lib/budgets"
 import { asQueryTooExpensive } from "./lib/queryErrors"
+import { pinnedSchemaProblem } from "./lib/collectionSchemas"
 import { firstPageWithinBudget, runSavedQuery } from "./lib/savedQueries"
 
 const args = { queryId: v.id("queryDefinitions"), expectedRevision: v.number() }
@@ -99,6 +100,8 @@ export const read = query({
       )
       .unique()
     if (!version) throw new Error("Query revision mismatch")
+    const schemaProblem = pinnedSchemaProblem(collection, version.schemaVersion)
+    if (schemaProblem) throw new Error(schemaProblem)
     const report = await ctx.db
       .query("reportCounts")
       .withIndex("by_queryId_and_revision", (q) =>
@@ -106,10 +109,7 @@ export const read = query({
       )
       .unique()
     if (!report) return { state: "pending" }
-    if (
-      report.sourceRevision !== (collection.dataRevision ?? 0) ||
-      version.schemaVersion !== collection.definition.version
-    )
+    if (report.sourceRevision !== (collection.dataRevision ?? 0))
       return { state: "stale", builtAt: report.builtAt }
     if (report.result.kind === "building")
       return { state: "building", processed: report.result.count }
@@ -145,8 +145,8 @@ export const start = mutation({
       )
       .unique()
     if (!version) throw new Error("Query revision mismatch")
-    if (version.schemaVersion !== collection.definition.version)
-      throw new Error("Query schema mismatch; save a new revision")
+    const schemaProblem = pinnedSchemaProblem(collection, version.schemaVersion)
+    if (schemaProblem) throw new Error(schemaProblem)
     if (version.query.aggregate !== undefined)
       throw new Error("Report counts need a record query, not an aggregate")
     const previous = await ctx.db
@@ -220,10 +220,12 @@ export const step = internalMutation({
     const collection = await ctx.db.get(saved.collectionId)
     if (!collection || collection.workspaceId !== saved.workspaceId)
       return fail("Collection no longer exists")
-    if (
-      (collection.dataRevision ?? 0) !== report.sourceRevision ||
-      collection.definition.version !== building.schemaVersion
+    const schemaProblem = pinnedSchemaProblem(
+      collection,
+      building.schemaVersion
     )
+    if (schemaProblem) return fail(schemaProblem)
+    if ((collection.dataRevision ?? 0) !== report.sourceRevision)
       return fail("Source changed; restart rebuild")
     const version = await ctx.db
       .query("queryDefinitionVersions")

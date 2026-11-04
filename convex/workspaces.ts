@@ -15,6 +15,7 @@ import type { WorkspaceAccess } from "./lib/workspaceRoles"
 import { EMPTY_ARTIFACT_USAGE } from "./lib/artifactUsage"
 import { workspaceBudgets } from "./lib/budgets"
 import { recordCountValidator } from "./lib/recordCounts"
+import { migrationLockValidator } from "./lib/schemaMigrations"
 import { recordAuditEvent } from "./lib/auditEvents"
 import {
   addField as addFieldToDefinition,
@@ -169,6 +170,7 @@ const collectionValidator = v.object({
   workspaceId: v.id("workspaces"),
   name: v.string(),
   definition: collectionDefinitionValidator,
+  migrationLock: v.optional(migrationLockValidator),
 })
 
 async function collectionForRecords(

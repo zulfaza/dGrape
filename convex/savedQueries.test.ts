@@ -146,7 +146,7 @@ test("saved queries enforce membership, immutable revisions, source schema, and 
       expectedRevision: 2,
       paginationOpts,
     })
-  ).rejects.toThrow("schema mismatch")
+  ).rejects.toThrow("schema is stale")
 })
 
 test("agent credentials save, list, and run queries in their own workspace", async () => {

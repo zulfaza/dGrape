@@ -19,12 +19,14 @@ import {
   collectionFieldValidator,
   recordValuesValidator,
 } from "./lib/collectionDomain"
-import { planMigration } from "./lib/collectionSchemas"
+import { activateDefinition, planMigration } from "./lib/collectionSchemas"
+import { migrateRecord } from "./lib/records"
 import { checkRecord } from "./lib/references"
 import {
   fieldChangeValidator,
   fieldChanges,
   MAX_REPORTED_MISFITS,
+  migratingMessage,
   migrateValues,
   rollbackLimitations,
   schemaMigrationFields,
@@ -32,7 +34,8 @@ import {
 
 /**
  * Schema migrations for signed-in members: plan an incompatible schema
- * change, then dry run it to find the records that do not fit. See
+ * change, dry run it to find the records that do not fit, then start it to
+ * validate, backfill, and activate it. See
  * convex/lib/schemaMigrations.ts and docs/collection-schema-history.md.
  */
 
@@ -41,6 +44,11 @@ import {
  * text (~200 KB in UTF-8), so a page reads at most ~5 MB.
  */
 const DRY_RUN_PAGE = 25
+/**
+ * Records written per backfill step. Each write also replaces the record's
+ * index entries and references.
+ */
+const BACKFILL_PAGE = 25
 
 /** A migration as queries return it, with its derived report. */
 const migrationViewValidator = v.object({
@@ -190,12 +198,22 @@ export const dryRun = mutation({
  */
 const READ_RESERVE_BYTES = 10 * 1024 * 1024
 const READ_RESERVE_DOCUMENTS = 200
+/**
+ * Writes that one backfilled record can need: up to 500 index entries (five
+ * indexed multi-select fields of 100 options) and 50 references, each
+ * deleted and inserted again, plus the record and its collection.
+ */
+const WRITE_RESERVE_DOCUMENTS = 1_200
+const WRITE_RESERVE_BYTES = 2 * 1024 * 1024
 
-async function readBudgetLow(ctx: MutationCtx) {
-  const { bytesRead, documentsRead } = await ctx.meta.getTransactionMetrics()
+async function budgetLow(ctx: MutationCtx) {
+  const { bytesRead, documentsRead, bytesWritten, documentsWritten } =
+    await ctx.meta.getTransactionMetrics()
   return (
     bytesRead.remaining < READ_RESERVE_BYTES ||
-    documentsRead.remaining < READ_RESERVE_DOCUMENTS
+    documentsRead.remaining < READ_RESERVE_DOCUMENTS ||
+    bytesWritten.remaining < WRITE_RESERVE_BYTES ||
+    documentsWritten.remaining < WRITE_RESERVE_DOCUMENTS
   )
 }
 
@@ -221,10 +239,29 @@ async function misfit(
   return checked.ok ? null : checked.message
 }
 
+/** Records after `after` in `_creationTime` order, at most `limit`. */
+function recordsAfter(
+  ctx: QueryCtx,
+  collectionId: Id<"collections">,
+  after: number | null,
+  limit: number
+) {
+  return ctx.db
+    .query("collectionRecords")
+    .withIndex("by_collection", (q) =>
+      after === null
+        ? q.eq("collectionId", collectionId)
+        : q.eq("collectionId", collectionId).gt("_creationTime", after)
+    )
+    .take(limit)
+}
+
 /**
- * Checks one page of records after `after`, then schedules the next page. A
- * step whose `after` no longer matches the stored state is a duplicate or
- * belongs to a cancelled run, and does nothing.
+ * Checks one page of records after `after` for a dry run or a validation,
+ * then schedules the next page. A step whose `after` no longer matches the
+ * stored state is a duplicate or belongs to a cancelled run, and does
+ * nothing. A validation that finds no misfit starts the backfill; one that
+ * finds a misfit releases the lock and reports it.
  */
 export const dryRunStep = internalMutation({
   args: {
@@ -235,31 +272,29 @@ export const dryRunStep = internalMutation({
   handler: async (ctx, { migrationId, after }) => {
     const migration = await ctx.db.get(migrationId)
     const state = migration?.state
-    if (!migration || state?.kind !== "dryRunning" || state.after !== after)
+    if (
+      !migration ||
+      (state?.kind !== "dryRunning" && state?.kind !== "validating") ||
+      state.after !== after
+    )
       return null
     const collection = await ctx.db.get(migration.collectionId)
     if (
       !collection ||
       collection.definition.version !== migration.source.version
     ) {
+      // Only an unlocked dry run can see a schema change.
       await ctx.db.patch(migrationId, { state: { kind: "planned" } })
       return null
     }
-    const page = await ctx.db
-      .query("collectionRecords")
-      .withIndex("by_collection", (q) =>
-        after === null
-          ? q.eq("collectionId", collection._id)
-          : q.eq("collectionId", collection._id).gt("_creationTime", after)
-      )
-      .take(DRY_RUN_PAGE)
+    const page = await recordsAfter(ctx, collection._id, after, DRY_RUN_PAGE)
     let { misfitCount } = state
     const misfits = [...state.misfits]
     const checked: Array<Doc<"collectionRecords">> = []
-    let budgetLow = false
+    let stopped = false
     for (const record of page) {
-      budgetLow = checked.length > 0 && (await readBudgetLow(ctx))
-      if (budgetLow) break
+      stopped = checked.length > 0 && (await budgetLow(ctx))
+      if (stopped) break
       const message = await misfit(ctx, collection, migration, record)
       checked.push(record)
       if (message !== null) {
@@ -274,18 +309,186 @@ export const dryRunStep = internalMutation({
       misfits,
     }
     const last = checked.at(-1)
-    if ((!budgetLow && page.length < DRY_RUN_PAGE) || !last) {
+    if (last && (stopped || page.length === DRY_RUN_PAGE)) {
       await ctx.db.patch(migrationId, {
-        state: { kind: "checked", ...progress },
+        state: { kind: state.kind, after: last._creationTime, ...progress },
+      })
+      await ctx.scheduler.runAfter(0, internal.schemaMigrations.dryRunStep, {
+        migrationId,
+        after: last._creationTime,
       })
       return null
     }
+    if (state.kind === "dryRunning" || misfitCount > 0) {
+      await ctx.db.patch(migrationId, {
+        state: { kind: "checked", ...progress },
+      })
+      if (state.kind === "validating")
+        await ctx.db.patch(collection._id, { migrationLock: undefined })
+      return null
+    }
     await ctx.db.patch(migrationId, {
-      state: { kind: "dryRunning", after: last._creationTime, ...progress },
+      state: { kind: "backfilling", after: null, written: 0, error: null },
+    })
+    await ctx.scheduler.runAfter(0, internal.schemaMigrations.backfillStep, {
+      migrationId,
+      after: null,
+    })
+    return null
+  },
+})
+
+/**
+ * Starts a migration whose dry run found no misfit: it locks the collection,
+ * checks every record again, writes the target values, and then activates
+ * the target definition. For a migration whose step stopped, it schedules
+ * the step again from the stored cursor.
+ */
+export const start = mutation({
+  args: { migrationId: v.id("schemaMigrations") },
+  returns: v.null(),
+  handler: async (ctx, { migrationId }) => {
+    const { migration, collection, member } = await readMigration(
+      ctx,
+      migrationId,
+      "write"
+    )
+    const { state } = migration
+    const lockedByThis = collection.migrationLock?.migrationId === migration._id
+    if (state.kind === "validating" && lockedByThis) {
+      await ctx.scheduler.runAfter(0, internal.schemaMigrations.dryRunStep, {
+        migrationId,
+        after: state.after,
+      })
+      return null
+    }
+    if (state.kind === "backfilling" && lockedByThis) {
+      await ctx.db.patch(migrationId, { state: { ...state, error: null } })
+      await ctx.scheduler.runAfter(0, internal.schemaMigrations.backfillStep, {
+        migrationId,
+        after: state.after,
+      })
+      return null
+    }
+    if (state.kind !== "checked")
+      throw new Error("Dry run the migration before it starts")
+    if (state.misfitCount > 0)
+      throw new Error(
+        `${state.misfitCount} records do not fit the target schema; change them and dry run again`
+      )
+    if (collection.definition.version !== migration.source.version)
+      throw new Error(
+        "The collection schema changed after this plan; plan the migration again"
+      )
+    if (collection.migrationLock)
+      throw new Error(migratingMessage(collection.migrationLock))
+    await ctx.db.patch(collection._id, {
+      migrationLock: {
+        migrationId,
+        targetVersion: migration.target.version,
+      },
+    })
+    await ctx.db.patch(migrationId, {
+      state: {
+        kind: "validating",
+        after: null,
+        checked: 0,
+        misfitCount: 0,
+        misfits: [],
+      },
     })
     await ctx.scheduler.runAfter(0, internal.schemaMigrations.dryRunStep, {
       migrationId,
-      after: last._creationTime,
+      after: null,
+    })
+    await recordAuditEvent(
+      ctx,
+      collection.workspaceId,
+      { kind: "user", userId: member.userId },
+      {
+        operation: "collection.startMigration",
+        collectionId: collection._id,
+        migrationId,
+      }
+    )
+    return null
+  },
+})
+
+/**
+ * Writes the target values of one page of records after `after`, then
+ * schedules the next page. After the last page it activates the target
+ * definition and releases the lock. A duplicate step does nothing, and each
+ * step is one transaction, so a retried step cannot write a record twice.
+ */
+export const backfillStep = internalMutation({
+  args: {
+    migrationId: v.id("schemaMigrations"),
+    after: v.union(v.number(), v.null()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { migrationId, after }) => {
+    const migration = await ctx.db.get(migrationId)
+    const state = migration?.state
+    if (
+      !migration ||
+      state?.kind !== "backfilling" ||
+      state.after !== after ||
+      state.error !== null
+    )
+      return null
+    const collection = await ctx.db.get(migration.collectionId)
+    if (!collection || collection.migrationLock?.migrationId !== migrationId)
+      return null
+    const target = { ...collection, definition: migration.target }
+    const page = await recordsAfter(ctx, collection._id, after, BACKFILL_PAGE)
+    let last: Doc<"collectionRecords"> | undefined
+    let written = state.written
+    let stopped = false
+    for (const record of page) {
+      stopped = last !== undefined && (await budgetLow(ctx))
+      if (stopped) break
+      const migrated = migrateValues(
+        migration.source.fields,
+        migration.target.fields,
+        migration.defaults,
+        record.values
+      )
+      const checked = migrated.ok
+        ? await checkRecord(ctx, target, migrated.value)
+        : migrated
+      if (!checked.ok) {
+        // The lock keeps records from changing after the validation, so
+        // this needs a fix in the data or the plan. The cursor keeps the
+        // records written before this one, so a resume does not write them
+        // again.
+        await ctx.db.patch(migrationId, {
+          state: {
+            ...state,
+            after: last?._creationTime ?? after,
+            written,
+            error: `Record ${record._id}: ${checked.message}`,
+          },
+        })
+        return null
+      }
+      await migrateRecord(ctx, target, record, checked.value)
+      last = record
+      written += 1
+    }
+    if (last && (stopped || page.length === BACKFILL_PAGE)) {
+      await ctx.db.patch(migrationId, {
+        state: { ...state, after: last._creationTime, written },
+      })
+      await ctx.scheduler.runAfter(0, internal.schemaMigrations.backfillStep, {
+        migrationId,
+        after: last._creationTime,
+      })
+      return null
+    }
+    await activateDefinition(ctx, collection, migration.target, migrationId)
+    await ctx.db.patch(migrationId, {
+      state: { kind: "active", written, activatedAt: Date.now() },
     })
     return null
   },
@@ -301,7 +504,10 @@ export const cancel = mutation({
       migrationId,
       "write"
     )
-    if (migration.state.kind === "cancelled") return null
+    const { kind } = migration.state
+    if (kind === "cancelled") return null
+    if (kind !== "planned" && kind !== "dryRunning" && kind !== "checked")
+      throw new Error(`A ${kind} migration cannot be cancelled`)
     await ctx.db.patch(migrationId, { state: { kind: "cancelled" } })
     await recordAuditEvent(
       ctx,

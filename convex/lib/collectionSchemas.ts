@@ -11,7 +11,11 @@ import {
 } from "./collectionDomain"
 import { EMPTY_RECORD_COUNT } from "./recordCounts"
 import { resolveFields } from "./references"
-import { checkDefaults, fieldChanges } from "./schemaMigrations"
+import {
+  checkDefaults,
+  fieldChanges,
+  migratingMessage,
+} from "./schemaMigrations"
 
 /**
  * True when every value of `previous` is valid for `next`: the same type,
@@ -58,6 +62,8 @@ export async function publishCompatibleSchema(
   const current = await ctx.db.get(collection._id)
   if (!current || current.definition.version !== collection.definition.version)
     throw new Error("Schema revision conflict")
+  if (current.migrationLock)
+    throw new Error(migratingMessage(current.migrationLock))
   if (
     !Number.isSafeInteger(definition.version) ||
     definition.version !== current.definition.version + 1
@@ -83,7 +89,22 @@ export async function publishCompatibleSchema(
       !field.optional
     )
       throw new Error("New fields must be optional")
+  await activateDefinition(ctx, current, {
+    version: definition.version,
+    fields: checked.value.fields,
+  })
+}
 
+/**
+ * Stores `definition` in the history and makes it active. `migrationId`
+ * names the migration that activates it. Callers check the definition.
+ */
+export async function activateDefinition(
+  ctx: MutationCtx,
+  current: Doc<"collections">,
+  definition: CollectionDefinition,
+  migrationId?: Id<"schemaMigrations">
+) {
   const previous = await ctx.db
     .query("collectionSchemaVersions")
     .withIndex("by_collectionId_and_version", (q) =>
@@ -101,11 +122,24 @@ export async function publishCompatibleSchema(
     })
   await ctx.db.insert("collectionSchemaVersions", {
     collectionId: current._id,
-    definition: { version: definition.version, fields: checked.value.fields },
+    definition,
+    migrationId,
   })
-  await ctx.db.patch(current._id, {
-    definition: { version: definition.version, fields: checked.value.fields },
-  })
+  await ctx.db.patch(current._id, { definition, migrationLock: undefined })
+}
+
+/**
+ * Why a saved query revision pinned to `schemaVersion` cannot run on
+ * `collection`, or null. Saved queries, report counts, and pages share it.
+ */
+export function pinnedSchemaProblem(
+  collection: Doc<"collections">,
+  schemaVersion: number
+): string | null {
+  if (collection.migrationLock)
+    return migratingMessage(collection.migrationLock)
+  if (collection.definition.version === schemaVersion) return null
+  return `Query schema is stale: this query revision uses schema version ${schemaVersion}, and the collection is at version ${collection.definition.version}. Save a new query revision`
 }
 
 /**
@@ -128,6 +162,8 @@ export async function planMigration(
     collection.definition.version !== args.expectedVersion
   )
     throw new Error("Schema revision conflict")
+  if (collection.migrationLock)
+    throw new Error(migratingMessage(collection.migrationLock))
   const resolved = await resolveFields(ctx, collection.workspaceId, args.fields)
   if (!resolved.ok) throw new Error(resolved.message)
   // A lowered budget must not block a plan that keeps the existing indexes.

@@ -32,6 +32,7 @@ export const history = query({
       _creationTime: v.number(),
       collectionId: v.id("collections"),
       definition: collectionDefinitionValidator,
+      migrationId: v.optional(v.id("schemaMigrations")),
     })
   ),
   handler: async (ctx, { collectionId, paginationOpts }) => {

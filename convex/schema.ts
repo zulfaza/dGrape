@@ -22,7 +22,10 @@ import { recordCountValidator } from "./lib/recordCounts"
 import { auditEventFields } from "./lib/auditEvents"
 import { operationFields } from "./lib/operations"
 import { recipeTables } from "./lib/recipeState"
-import { schemaMigrationFields } from "./lib/schemaMigrations"
+import {
+  migrationLockValidator,
+  schemaMigrationFields,
+} from "./lib/schemaMigrations"
 import { secretFields, connectionFields } from "./lib/secretDomain"
 import { sourceSyncFields } from "./lib/sourceSync"
 import {
@@ -171,10 +174,14 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     name: v.string(),
     definition: collectionDefinitionValidator,
+    /** Set while a schema migration changes the records. */
+    migrationLock: v.optional(migrationLockValidator),
   }).index("by_workspace", ["workspaceId"]),
   collectionSchemaVersions: defineTable({
     collectionId: v.id("collections"),
     definition: collectionDefinitionValidator,
+    /** The migration that activated this version, if any. */
+    migrationId: v.optional(v.id("schemaMigrations")),
   }).index("by_collectionId_and_version", [
     "collectionId",
     "definition.version",

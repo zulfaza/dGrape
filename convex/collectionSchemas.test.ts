@@ -431,6 +431,163 @@ test("migration plans report changes, and dry runs report the records that do no
   vi.useRealTimers()
 })
 
+test("a started migration validates under a lock, backfills, and activates the target", async () => {
+  vi.useFakeTimers()
+  const { t, owner, workspaceId } = await fixture()
+  const collectionId = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Deals",
+    fields: [
+      { id: "name", label: "Name", type: "text", indexed: true },
+      { id: "amount", label: "Amount", type: "text", optional: true },
+      { id: "note", label: "Note", type: "text", optional: true },
+    ],
+  })
+  const a = await owner.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { name: "A", amount: "12", note: "dropped" },
+  })
+  const b = await owner.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { name: "B", amount: "7" },
+  })
+  const saved = await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "All",
+    query: { fieldId: "name", order: "asc" },
+  })
+  const runSaved = () =>
+    owner.query(api.savedQueries.run, {
+      queryId: saved.queryId,
+      expectedRevision: saved.revision,
+      paginationOpts: {
+        numItems: 10,
+        cursor: null,
+        maximumRowsRead: 100,
+        maximumBytesRead: 1_000_000,
+      },
+    })
+  const migrationId = await owner.mutation(api.schemaMigrations.plan, {
+    collectionId,
+    expectedVersion: 1,
+    fields: [
+      { id: "name", label: "Name", type: "text", indexed: true },
+      { id: "amount", label: "Amount", type: "number", indexed: true },
+      { id: "stage", label: "Stage", type: "select", options: ["new", "won"] },
+    ],
+    defaults: { stage: "new" },
+  })
+  await expect(
+    owner.mutation(api.schemaMigrations.start, { migrationId })
+  ).rejects.toThrow("Dry run the migration")
+  await owner.mutation(api.schemaMigrations.dryRun, { migrationId })
+  await t.finishAllScheduledFunctions(() => vi.runAllTimers())
+  await owner.mutation(api.schemaMigrations.start, { migrationId })
+
+  // The lock blocks record writes and schema changes, and pinned queries
+  // say why they cannot run.
+  await expect(
+    owner.mutation(api.workspaces.createRecord, {
+      collectionId,
+      values: { name: "C" },
+    })
+  ).rejects.toThrow("migrating to schema version 2")
+  await expect(
+    owner.mutation(api.workspaces.addField, {
+      collectionId,
+      field: { id: "late", label: "Late", type: "text" },
+    })
+  ).rejects.toThrow("migrating to schema version 2")
+  await expect(runSaved()).rejects.toThrow("migrating to schema version 2")
+  await expect(
+    owner.query(api.reportCounts.read, {
+      queryId: saved.queryId,
+      expectedRevision: saved.revision,
+    })
+  ).rejects.toThrow("migrating to schema version 2")
+  await expect(
+    owner.mutation(api.schemaMigrations.cancel, { migrationId })
+  ).rejects.toThrow("cannot be cancelled")
+
+  await t.finishAllScheduledFunctions(() => vi.runAllTimers())
+  expect(
+    (await owner.query(api.schemaMigrations.get, { migrationId })).state
+  ).toMatchObject({ kind: "active", written: 2 })
+  const collection = await owner.query(api.workspaces.getCollection, {
+    collectionId,
+  })
+  expect(collection.definition.version).toBe(2)
+  expect(collection.migrationLock).toBeUndefined()
+  expect(
+    await owner.query(api.workspaces.getRecord, { collectionId, recordId: a })
+  ).toMatchObject({
+    schemaVersion: 2,
+    revision: 2,
+    values: { name: "A", amount: 12, stage: "new" },
+  })
+  // The new index holds the converted values.
+  expect(
+    (
+      await owner.query(api.workspaces.queryRecords, {
+        collectionId,
+        query: { fieldId: "amount", order: "asc" },
+        paginationOpts: { numItems: 10, cursor: null },
+      })
+    ).page.map((row) => row._id)
+  ).toEqual([b, a])
+  const history = await owner.query(api.collectionSchemas.history, {
+    collectionId,
+    paginationOpts: { numItems: 10, cursor: null },
+  })
+  expect(
+    history.page.map((row) => [row.definition.version, row.migrationId])
+  ).toEqual([
+    [2, migrationId],
+    [1, undefined],
+  ])
+  await expect(runSaved()).rejects.toThrow(
+    "uses schema version 1, and the collection is at version 2"
+  )
+
+  // A record that changes after a clean dry run fails the locked
+  // validation; the lock is released and no record is written.
+  const second = await owner.mutation(api.schemaMigrations.plan, {
+    collectionId,
+    expectedVersion: 2,
+    fields: [
+      { id: "name", label: "Name", type: "select", options: ["A", "B"] },
+      { id: "amount", label: "Amount", type: "number", indexed: true },
+      { id: "stage", label: "Stage", type: "select", options: ["new", "won"] },
+    ],
+    defaults: {},
+  })
+  await owner.mutation(api.schemaMigrations.dryRun, { migrationId: second })
+  await t.finishAllScheduledFunctions(() => vi.runAllTimers())
+  await owner.mutation(api.workspaces.updateRecord, {
+    collectionId,
+    recordId: b,
+    expectedRevision: 2,
+    values: { name: "Z", amount: 7, stage: "won" },
+  })
+  await owner.mutation(api.schemaMigrations.start, { migrationId: second })
+  await t.finishAllScheduledFunctions(() => vi.runAllTimers())
+  expect(
+    (await owner.query(api.schemaMigrations.get, { migrationId: second })).state
+  ).toMatchObject({ kind: "checked", checked: 2, misfitCount: 1 })
+  const after = await owner.query(api.workspaces.getCollection, {
+    collectionId,
+  })
+  expect([after.definition.version, after.migrationLock]).toEqual([
+    2,
+    undefined,
+  ])
+  expect(
+    (await owner.query(api.workspaces.getRecord, { collectionId, recordId: a }))
+      .revision
+  ).toBe(2)
+  vi.useRealTimers()
+})
+
 // The first HTTP call loads the router, which can be slow on a busy runner.
 test("agent discovery reports capabilities by scope and describes one collection", async () => {
   const { t, collectionId, workspaceId } = await fixture()
