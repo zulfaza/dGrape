@@ -147,6 +147,8 @@ export const start = mutation({
     if (!version) throw new Error("Query revision mismatch")
     if (version.schemaVersion !== collection.definition.version)
       throw new Error("Query schema mismatch; save a new revision")
+    if (version.query.aggregate !== undefined)
+      throw new Error("Report counts need a record query, not an aggregate")
     const previous = await ctx.db
       .query("reportCounts")
       .withIndex("by_queryId_and_revision", (q) =>

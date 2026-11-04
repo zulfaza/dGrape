@@ -2,9 +2,12 @@
 import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
 import { Schema } from "effect"
+import { ConvexError } from "convex/values"
 import schema from "./schema"
 import { api, internal } from "./_generated/api"
 import * as Queries from "./lib/agentQueryTransport"
+import type { SavedQuery } from "./lib/queryAggregate"
+import { asQueryTooExpensive } from "./lib/queryErrors"
 import type { RecordQuery } from "./lib/recordQuery"
 import type { RecordValues } from "./lib/collectionDomain"
 import { insertRecord } from "./lib/records"
@@ -687,4 +690,213 @@ test("saved queries filter by an in list and by residual filters, and select fie
         query,
       })
     ).rejects.toThrow(message)
+})
+
+test("saved aggregates group by date buckets within one bounded read", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const { workspaceId, collectionId } = await t.run(async (ctx) => {
+    const workspaceId = await ctx.db.insert("workspaces", { name: "Mine" })
+    await ctx.db.insert("workspaceMembers", {
+      workspaceId,
+      userId: "owner",
+      role: "owner",
+    })
+    const id = await ctx.db.insert("collections", {
+      workspaceId,
+      name: "Payments",
+      definition: {
+        version: 1,
+        fields: [
+          { id: "day", label: "Day", type: "date", indexed: true },
+          { id: "at", label: "At", type: "timestamp" },
+          { id: "amount", label: "Amount", type: "integer", optional: true },
+          { id: "stage", label: "Stage", type: "select", options: ["a", "b"] },
+        ],
+      },
+    })
+    const collection = await ctx.db.get(id)
+    if (!collection) throw new Error("Missing fixture")
+    const rows: RecordValues[] = [
+      // 2026-11-02 is a Monday.
+      {
+        day: "2026-11-02",
+        at: Date.UTC(2026, 10, 2, 9),
+        amount: 10,
+        stage: "a",
+      },
+      {
+        day: "2026-11-08",
+        at: Date.UTC(2026, 10, 8, 23),
+        amount: 30,
+        stage: "b",
+      },
+      { day: "2026-11-09", at: Date.UTC(2026, 10, 9), stage: "a" },
+      { day: "2026-12-01", at: Date.UTC(2026, 11, 1), amount: 5, stage: "a" },
+    ]
+    for (const values of rows) await insertRecord(ctx, collection, values)
+    return { workspaceId, collectionId: id }
+  })
+  const aggregate = async (query: SavedQuery) => {
+    const saved = await owner.mutation(api.savedQueries.save, {
+      collectionId,
+      name: "Totals",
+      query,
+    })
+    return owner.query(api.savedQueries.aggregate, {
+      queryId: saved.queryId,
+      expectedRevision: 1,
+    })
+  }
+  const weekly = await aggregate({
+    fieldId: "day",
+    order: "asc",
+    aggregate: {
+      groupBy: { fieldId: "day", bucket: "week" },
+      measures: [
+        { op: "count" },
+        { op: "sum", fieldId: "amount" },
+        { op: "average", fieldId: "amount" },
+        { op: "max", fieldId: "at" },
+      ],
+    },
+  })
+  expect(
+    weekly.resultSchema.fields.map((field) => [field.id, field.type])
+  ).toEqual([
+    ["day", "date"],
+    ["count", "integer"],
+    ["sum_amount", "number"],
+    ["average_amount", "number"],
+    ["max_at", "timestamp"],
+  ])
+  expect(weekly.rows.map((row) => row.values)).toEqual([
+    {
+      day: "2026-11-02",
+      count: 2,
+      sum_amount: 40,
+      average_amount: 20,
+      max_at: Date.UTC(2026, 10, 8, 23),
+    },
+    {
+      day: "2026-11-09",
+      count: 1,
+      sum_amount: 0,
+      max_at: Date.UTC(2026, 10, 9),
+    },
+    {
+      day: "2026-11-30",
+      count: 1,
+      sum_amount: 5,
+      average_amount: 5,
+      max_at: Date.UTC(2026, 11, 1),
+    },
+  ])
+  expect(weekly).toMatchObject({ completeness: "complete", rowsRead: 4 })
+  const monthly = await aggregate({
+    fieldId: "day",
+    order: "desc",
+    where: { lower: { value: "2026-11-08", inclusive: true } },
+    filters: [{ fieldId: "stage", op: "eq", value: "a" }],
+    aggregate: {
+      groupBy: { fieldId: "at", bucket: "month" },
+      measures: [{ op: "count" }, { op: "min", fieldId: "amount" }],
+    },
+  })
+  expect(monthly.rows.map((row) => row.values)).toEqual([
+    { at: Date.UTC(2026, 11, 1), count: 1, min_amount: 5 },
+    { at: Date.UTC(2026, 10, 1), count: 1 },
+  ])
+  const invalidAggregates: Array<[SavedQuery, string]> = [
+    [
+      {
+        fieldId: "day",
+        order: "asc",
+        aggregate: {
+          groupBy: { fieldId: "stage", bucket: "day" },
+          measures: [{ op: "count" }],
+        },
+      },
+      "has no date buckets",
+    ],
+    [
+      {
+        fieldId: "day",
+        order: "asc",
+        aggregate: { measures: [{ op: "sum", fieldId: "stage" }] },
+      },
+      "needs a number or integer field",
+    ],
+    [
+      { fieldId: "day", order: "asc", aggregate: { measures: [] } },
+      "1 to 5 measures",
+    ],
+    [
+      {
+        fieldId: "day",
+        order: "asc",
+        select: ["day"],
+        aggregate: { measures: [{ op: "count" }] },
+      },
+      "has no select",
+    ],
+  ]
+  for (const [query, message] of invalidAggregates)
+    await expect(
+      owner.mutation(api.savedQueries.save, {
+        collectionId,
+        name: "Bad",
+        query,
+      })
+    ).rejects.toThrow(message)
+  const records = await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "Rows",
+    query: { fieldId: "day", order: "asc" },
+  })
+  await expect(
+    owner.query(api.savedQueries.aggregate, {
+      queryId: records.queryId,
+      expectedRevision: 1,
+    })
+  ).rejects.toThrow("has no aggregate")
+  const counted = await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "Count",
+    query: {
+      fieldId: "day",
+      order: "asc",
+      aggregate: { measures: [{ op: "count" }] },
+    },
+  })
+  await expect(
+    owner.query(api.savedQueries.run, {
+      queryId: counted.queryId,
+      expectedRevision: 1,
+      paginationOpts: {
+        numItems: 50,
+        cursor: null,
+        maximumRowsRead: 100,
+        maximumBytesRead: 1_000_000,
+      },
+    })
+  ).rejects.toThrow("read it with the aggregate operation")
+  await t.run((ctx) =>
+    ctx.db.patch(workspaceId, { budgets: { queryRowsRead: 3 } })
+  )
+  const failure = await owner
+    .query(api.savedQueries.aggregate, {
+      queryId: counted.queryId,
+      expectedRevision: 1,
+    })
+    .then(
+      () => null,
+      (error: Error) => error
+    )
+  if (!(failure instanceof ConvexError)) throw new Error("Expected ConvexError")
+  expect(asQueryTooExpensive(failure)).toMatchObject({
+    budget: "rowsRead",
+    limit: 3,
+    hint: expect.stringContaining("summary collection"),
+  })
 })

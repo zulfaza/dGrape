@@ -23,9 +23,14 @@ export function PageLiveBlock({
     return <p role="alert">{live.problem ?? "Live values unavailable"}</p>
   const result = live.result
   const partial = result.completeness === "partial"
+  // An aggregate result has one row per group; its key is unique.
+  const rows =
+    result.kind === "records"
+      ? result.page
+      : result.rows.map((row) => ({ _id: row.key, values: row.values }))
   const numbers =
     block.kind === "metric"
-      ? result.page.flatMap((row) => {
+      ? rows.flatMap((row) => {
           const value = row.values[block.field]
           // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Stored numeric values require validation before arithmetic.
           return typeof value === "number" && Number.isFinite(value)
@@ -52,21 +57,21 @@ export function PageLiveBlock({
       <p>
         <SourceFreshness source={result.source} />
       </p>
-      {block.kind !== "table" && result.page.length === 0 && (
+      {block.kind !== "table" && rows.length === 0 && (
         <p>No matching records.</p>
       )}
       {/* oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- JSX follows the serializable block discriminant. */}
       {block.kind === "chart" ? (
         <PageChart
           block={block}
-          rows={result.page}
+          rows={rows}
           fields={result.resultSchema.fields}
         />
       ) : block.kind === "table" ? (
         <div className="overflow-auto">
           <table className="w-full text-left">
             <caption>
-              {block.title} · {result.page.length} rows
+              {block.title} · {rows.length} rows
               {partial ? " (partial)" : ""}
             </caption>
             <thead>
@@ -81,7 +86,7 @@ export function PageLiveBlock({
               </tr>
             </thead>
             <tbody>
-              {result.page.map((row) => (
+              {rows.map((row) => (
                 <tr key={row._id}>
                   {block.fields.map((field) => (
                     <td key={field} className="border-t p-2">
@@ -94,13 +99,13 @@ export function PageLiveBlock({
               ))}
             </tbody>
           </table>
-          {result.page.length === 0 && <p>No matching records.</p>}
+          {rows.length === 0 && <p>No matching records.</p>}
         </div>
       ) : (
         <>
           <p className="text-2xl">
             {block.operation === "count"
-              ? result.page.length
+              ? rows.length
               : numbers.length === 0
                 ? "No numeric values"
                 : Number.isFinite(sum)
@@ -111,8 +116,8 @@ export function PageLiveBlock({
           <p>
             {partial ? "Sample " : ""}
             {block.operation === "count" ? "record count" : "sum"}
-            {block.operation === "sum" && numbers.length < result.page.length
-              ? ` · ${result.page.length - numbers.length} missing or invalid numeric values excluded`
+            {block.operation === "sum" && numbers.length < rows.length
+              ? ` · ${rows.length - numbers.length} missing or invalid numeric values excluded`
               : ""}
           </p>
         </>

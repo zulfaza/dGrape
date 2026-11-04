@@ -3,7 +3,7 @@ import { pageFields, pageVersionFields } from "./lib/pageDomain"
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
-import { recordQueryValidator } from "./lib/recordQuery"
+import { savedQueryValidator } from "./lib/queryAggregate"
 import { storedScopesValidator } from "./lib/agentScope"
 import { artifactCreatorValidator } from "./lib/artifactDomain"
 import {
@@ -205,7 +205,7 @@ export default defineSchema({
     revision: v.number(),
     schemaVersion: v.number(),
     resultSchema: collectionDefinitionValidator,
-    query: recordQueryValidator,
+    query: savedQueryValidator,
   }).index("by_queryId_and_revision", ["queryId", "revision"]),
   recordIdentities: defineTable({
     collectionId: v.id("collections"),
