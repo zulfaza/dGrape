@@ -334,7 +334,15 @@ test("workspace roles limit viewers to reads and editors to data changes", async
     })
   ).rejects.toThrow(denied)
 
-  // Reads: every role.
+  // Reads: every role. Each caller sees their own role.
+  for (const [member, role] of [
+    [owner, "owner"],
+    [editor, "editor"],
+    [viewer, "viewer"],
+  ] as const)
+    expect((await member.query(api.workspaces.get, { workspaceId })).role).toBe(
+      role
+    )
   const rows = await viewer.query(api.workspaces.listRecords, {
     collectionId,
     paginationOpts: page,
