@@ -792,7 +792,7 @@ test("saved aggregates group by date buckets within one bounded read", async () 
       max_at: Date.UTC(2026, 11, 1),
     },
   ])
-  expect(weekly).toMatchObject({ completeness: "complete", rowsRead: 4 })
+  expect(weekly).toMatchObject({ completeness: "complete", matched: 4 })
   const monthly = await aggregate({
     fieldId: "day",
     order: "desc",

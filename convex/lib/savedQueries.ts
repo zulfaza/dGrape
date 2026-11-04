@@ -269,7 +269,8 @@ async function runnableRevision(
 /**
  * The groups of an aggregate query with its source freshness. It is always
  * complete: a query that matches more records than one bounded read fails
- * with QueryTooExpensive instead. `rowsRead` is the index rows it read.
+ * with QueryTooExpensive instead. `matched` is the records that matched the
+ * query, before grouping.
  */
 export const savedAggregateValidator = v.object({
   kind: v.literal("aggregate"),
@@ -277,7 +278,7 @@ export const savedAggregateValidator = v.object({
   revision: v.number(),
   resultSchema: collectionDefinitionValidator,
   rows: v.array(v.object({ key: v.string(), values: recordValuesValidator })),
-  rowsRead: v.number(),
+  matched: v.number(),
   completeness: v.literal("complete"),
   evaluatedAt: v.number(),
   dataAsOf: v.union(v.number(), v.null()),
@@ -289,7 +290,7 @@ export type SavedAggregate = {
   revision: number
   resultSchema: Doc<"collections">["definition"]
   rows: AggregateRow[]
-  rowsRead: number
+  matched: number
   completeness: "complete"
   evaluatedAt: number
   dataAsOf: number | null
@@ -353,7 +354,7 @@ export async function runSavedAggregateInWorkspace(
       version.query.order,
       page.map((record) => record.values)
     ),
-    rowsRead: page.length,
+    matched: page.length,
     completeness: "complete",
     evaluatedAt: Date.now(),
     dataAsOf: dataAsOf(source.freshness),
