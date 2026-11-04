@@ -392,6 +392,24 @@ test("owners invite members, change roles and always keep one owner", async () =
   })
   expect(await redeem("guest@example.com")).toEqual({ status: "invalid" })
 
+  // Expired invites do not block new ones.
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 50; i++)
+      await ctx.db.insert("workspaceInvites", {
+        workspaceId,
+        email: `old${i}@example.com`,
+        role: "viewer",
+        tokenDigest: `old${i}`,
+        invitedBy: "owner",
+        expiresAt: 0,
+      })
+  })
+  await owner.action(api.invites.create, {
+    workspaceId,
+    email: "new@example.com",
+    role: "editor",
+  })
+
   // A viewer cannot manage members or invite.
   await expect(
     guest.query(api.members.list, { workspaceId, paginationOpts: page })

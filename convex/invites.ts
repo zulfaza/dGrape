@@ -84,7 +84,11 @@ export const insert = internalMutation({
           q.eq("workspaceId", args.workspaceId)
         )
         .take(MAX_PENDING_INVITES)
-      if (pending.length >= MAX_PENDING_INVITES)
+      // Expired invites do not count. Delete them to make room.
+      const now = Date.now()
+      const expired = pending.filter((invite) => invite.expiresAt <= now)
+      for (const invite of expired) await ctx.db.delete(invite._id)
+      if (pending.length - expired.length >= MAX_PENDING_INVITES)
         throw new Error(
           `A workspace has at most ${MAX_PENDING_INVITES} pending invites`
         )
