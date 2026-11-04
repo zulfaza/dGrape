@@ -1,12 +1,17 @@
-import type { Doc } from "../_generated/dataModel"
+import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
+import { workspaceBudgets } from "./budgets"
 import {
   checkCollection,
   isChoiceField,
+  type AgentField,
   type CollectionDefinition,
   type CollectionField,
+  type RecordValues,
 } from "./collectionDomain"
 import { EMPTY_RECORD_COUNT } from "./recordCounts"
+import { resolveFields } from "./references"
+import { checkDefaults, fieldChanges } from "./schemaMigrations"
 
 /**
  * True when every value of `previous` is valid for `next`: the same type,
@@ -100,5 +105,54 @@ export async function publishCompatibleSchema(
   })
   await ctx.db.patch(current._id, {
     definition: { version: definition.version, fields: checked.value.fields },
+  })
+}
+
+/**
+ * Stores a plan to change the active definition of `collection` to `fields`,
+ * with `defaults` for records that have no value for a target field. The plan
+ * is pinned to `expectedVersion`; a later schema change makes it outdated.
+ * Callers authorize access before invoking this transaction-local helper.
+ */
+export async function planMigration(
+  ctx: MutationCtx,
+  collection: Doc<"collections">,
+  args: {
+    expectedVersion: number
+    fields: ReadonlyArray<AgentField>
+    defaults: RecordValues
+  }
+): Promise<Id<"schemaMigrations">> {
+  if (
+    !Number.isSafeInteger(args.expectedVersion) ||
+    collection.definition.version !== args.expectedVersion
+  )
+    throw new Error("Schema revision conflict")
+  const resolved = await resolveFields(ctx, collection.workspaceId, args.fields)
+  if (!resolved.ok) throw new Error(resolved.message)
+  // A lowered budget must not block a plan that keeps the existing indexes.
+  const budgets = await workspaceBudgets(ctx, collection.workspaceId)
+  const maxIndexed = Math.max(
+    budgets.indexedFieldsPerCollection,
+    collection.definition.fields.filter((field) => field.indexed).length
+  )
+  const checked = checkCollection(collection.name, resolved.value, maxIndexed)
+  if (!checked.ok) throw new Error(checked.message)
+  if (
+    fieldChanges(collection.definition.fields, checked.value.fields).length ===
+    0
+  )
+    throw new Error("The plan changes no field")
+  const defaults = checkDefaults(checked.value.fields, args.defaults)
+  if (!defaults.ok) throw new Error(defaults.message)
+  return ctx.db.insert("schemaMigrations", {
+    collectionId: collection._id,
+    source: collection.definition,
+    target: {
+      version: collection.definition.version + 1,
+      fields: checked.value.fields,
+    },
+    defaults: defaults.value,
+    state: { kind: "planned" },
   })
 }

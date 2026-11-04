@@ -22,6 +22,7 @@ import { recordCountValidator } from "./lib/recordCounts"
 import { auditEventFields } from "./lib/auditEvents"
 import { operationFields } from "./lib/operations"
 import { recipeTables } from "./lib/recipeState"
+import { schemaMigrationFields } from "./lib/schemaMigrations"
 import { secretFields, connectionFields } from "./lib/secretDomain"
 import { sourceSyncFields } from "./lib/sourceSync"
 import {
@@ -178,6 +179,11 @@ export default defineSchema({
     "collectionId",
     "definition.version",
   ]),
+  /** Plans for incompatible schema changes; see convex/lib/schemaMigrations.ts. */
+  schemaMigrations: defineTable(schemaMigrationFields).index(
+    "by_collectionId",
+    ["collectionId"]
+  ),
   collectionRecords: defineTable({
     collectionId: v.id("collections"),
     /** The collection's definition version when this record was last written. */

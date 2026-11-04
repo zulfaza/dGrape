@@ -25,6 +25,8 @@ const READ_SCOPE: Record<AuditEvent["operation"], AgentScope | null> = {
   "collection.create": "data.read",
   "collection.addField": "data.read",
   "collection.renameField": "data.read",
+  "collection.planMigration": "data.read",
+  "collection.cancelMigration": "data.read",
   "record.create": "data.read",
   "record.update": "data.read",
   "record.delete": "data.read",
