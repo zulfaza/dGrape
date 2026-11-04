@@ -27,6 +27,8 @@ import {
 export const MAX_IN_VALUES = 20
 /** The most residual filters of one query. */
 export const MAX_FILTERS = 5
+/** The most fields of one selection; a collection has at most 50 fields. */
+const MAX_SELECT = 50
 
 const boundValidator = v.object({
   value: indexValueValidator,
@@ -88,6 +90,11 @@ export const recordQueryValidator = v.object({
   ),
   /** At most MAX_FILTERS; a record must match all of them. */
   filters: v.optional(v.array(residualFilterValidator)),
+  /**
+   * The fields that results contain, in this order: 1 to 50 different
+   * fields. No `select` returns every field. Filters can use other fields.
+   */
+  select: v.optional(v.array(v.string())),
 })
 
 export type RecordQuery = Infer<typeof recordQueryValidator>
@@ -141,7 +148,51 @@ export function checkQuery(
     const checked = checkFilter(fields, filter)
     if (!checked.ok) return checked
   }
+  if (query.select !== undefined) {
+    const checked = checkSelect(fields, query.select)
+    if (!checked.ok) return checked
+  }
   return { ok: true, value: query }
+}
+
+function checkSelect(
+  fields: ReadonlyArray<CollectionField>,
+  select: ReadonlyArray<string>
+): Checked<null> {
+  if (select.length < 1 || select.length > MAX_SELECT)
+    return invalid(`A selection has 1 to ${MAX_SELECT} fields`)
+  if (new Set(select).size !== select.length)
+    return invalid("A selection lists each field once")
+  const unknown = select.find((id) => !fields.some((f) => f.id === id))
+  return unknown === undefined
+    ? { ok: true, value: null }
+    : invalid(
+        `Unknown selected field "${unknown}". Fields: ${fields.map((f) => f.id).join(", ")}`
+      )
+}
+
+/** The fields of the results of a checked query, in their order. */
+export function selectedFields(
+  fields: ReadonlyArray<CollectionField>,
+  query: RecordQuery
+): CollectionField[] {
+  const { select } = query
+  if (select === undefined) return [...fields]
+  return select.flatMap((id) => fields.filter((f) => f.id === id))
+}
+
+/** The values of `values` for the selected fields only. */
+function selectValues(
+  values: RecordValues,
+  select: ReadonlyArray<string> | undefined
+): RecordValues {
+  if (select === undefined) return values
+  const selected: RecordValues = {}
+  for (const id of select) {
+    const value = values[id]
+    if (value !== undefined) selected[id] = value
+  }
+  return selected
 }
 
 /** Checks that `value` is a valid value of `field` (an option of a choice). */
@@ -272,7 +323,10 @@ export async function queryRecords(
     // The write path deletes entries with their record; skip a stale one.
     if (!record) continue
     if (filters.every((filter) => matchesFilter(filter, record.values)))
-      page.push(record)
+      page.push({
+        ...record,
+        values: selectValues(record.values, checked.value.select),
+      })
   }
   return { ok: true, value: { ...entries, page } }
 }

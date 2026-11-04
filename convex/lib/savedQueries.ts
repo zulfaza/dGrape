@@ -14,7 +14,12 @@ import {
   collectionRecordValidator,
 } from "./collectionDomain"
 import { queryTooExpensive } from "./queryErrors"
-import { checkQuery, queryRecords, type RecordQuery } from "./recordQuery"
+import {
+  checkQuery,
+  queryRecords,
+  selectedFields,
+  type RecordQuery,
+} from "./recordQuery"
 import {
   dataAsOf,
   readSourceStatus,
@@ -95,7 +100,10 @@ export async function saveQueryInWorkspace(
     queryId,
     revision,
     schemaVersion: collection.definition.version,
-    resultSchema: collection.definition,
+    resultSchema: {
+      version: collection.definition.version,
+      fields: selectedFields(collection.definition.fields, checked.value),
+    },
     query: checked.value,
   })
   await recordAuditEvent(ctx, collection.workspaceId, actor, {
