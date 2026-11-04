@@ -782,3 +782,117 @@ test("agent writes over HTTP return the first result for a retried idempotency k
       .status
   ).toBe(400)
 }, 20_000)
+
+test("agent credentials plan, dry run, and start a migration; writes during the lock fail clearly", async () => {
+  vi.useFakeTimers()
+  const { t, owner, collectionId, workspaceId } = await fixture()
+  const recordId = await owner.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { name: "7" },
+  })
+  const { digestToken } = await import("./agentAccess")
+  const writer = "e".repeat(64)
+  const reader = "f".repeat(64)
+  await t.run(async (ctx) => {
+    for (const [bearer, scope] of [
+      [writer, "readwrite"],
+      [reader, "readonly"],
+    ] as const)
+      await ctx.db.insert("agentGrants", {
+        workspaceId,
+        owner: "owner",
+        digest: await digestToken(bearer),
+        scope,
+        state: "active",
+        expiresAt: Date.now() + 60_000,
+      })
+  })
+  /** `body` is JSON text. */
+  const post = (bearer: string, path: string, body: string) =>
+    t.fetch(path, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${bearer}`,
+        "Content-Type": "application/json",
+      },
+      body,
+    })
+  const plan = {
+    collectionId,
+    expectedVersion: 1,
+    fields: [{ id: "name", label: "Name", type: "number", indexed: true }],
+  }
+  expect(
+    (await post(reader, "/agent/migrations/plan", JSON.stringify(plan))).status
+  ).toBe(403)
+  const planned = await post(
+    writer,
+    "/agent/migrations/plan",
+    JSON.stringify(plan)
+  )
+  expect(planned.status).toBe(200)
+  const { migrationId } = await planned.json()
+  expect(
+    (
+      await post(
+        writer,
+        "/agent/migrations/start",
+        JSON.stringify({ migrationId })
+      )
+    ).status
+  ).toBe(400)
+  expect(
+    (
+      await post(
+        writer,
+        "/agent/migrations/dryRun",
+        JSON.stringify({ migrationId })
+      )
+    ).status
+  ).toBe(200)
+  await t.finishAllScheduledFunctions(() => vi.runAllTimers())
+  expect(
+    await (
+      await post(
+        reader,
+        "/agent/migrations/get",
+        JSON.stringify({ migrationId })
+      )
+    ).json()
+  ).toMatchObject({
+    target: { version: 2 },
+    state: { kind: "checked", checked: 1, misfitCount: 0 },
+    outdated: false,
+  })
+  expect(
+    (
+      await post(
+        writer,
+        "/agent/migrations/start",
+        JSON.stringify({ migrationId })
+      )
+    ).status
+  ).toBe(200)
+  const locked = await post(
+    writer,
+    "/agent/records",
+    JSON.stringify({ collectionId, values: { name: 8 } })
+  )
+  expect(locked.status).toBe(400)
+  expect((await locked.json()).error).toContain("migrating to schema version 2")
+  await t.finishAllScheduledFunctions(() => vi.runAllTimers())
+  expect(
+    await (
+      await post(
+        reader,
+        "/agent/migrations/get",
+        JSON.stringify({ migrationId })
+      )
+    ).json()
+  ).toMatchObject({ state: { kind: "active", written: 1 } })
+  expect(
+    (await owner.query(api.workspaces.getRecord, { collectionId, recordId }))
+      .values
+  ).toEqual({ name: 7 })
+  vi.useRealTimers()
+}, 30_000)

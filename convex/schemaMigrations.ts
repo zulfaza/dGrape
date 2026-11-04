@@ -2,7 +2,7 @@ import {
   paginationOptsValidator,
   paginationResultValidator,
 } from "convex/server"
-import { v, type Infer } from "convex/values"
+import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
 import {
@@ -23,14 +23,12 @@ import { activateDefinition, planMigration } from "./lib/collectionSchemas"
 import { migrateRecord } from "./lib/records"
 import { checkRecord } from "./lib/references"
 import {
-  fieldChangeValidator,
-  fieldChanges,
-  MAX_REPORTED_MISFITS,
-  migratingMessage,
-  migrateValues,
-  rollbackLimitations,
-  schemaMigrationFields,
-} from "./lib/schemaMigrations"
+  migrationView,
+  migrationViewValidator,
+  startDryRun,
+  startMigration,
+} from "./lib/schemaMigrationRuns"
+import { MAX_REPORTED_MISFITS, migrateValues } from "./lib/schemaMigrations"
 
 /**
  * Schema migrations for signed-in members: plan an incompatible schema
@@ -49,30 +47,6 @@ const DRY_RUN_PAGE = 25
  * index entries and references.
  */
 const BACKFILL_PAGE = 25
-
-/** A migration as queries return it, with its derived report. */
-const migrationViewValidator = v.object({
-  _id: v.id("schemaMigrations"),
-  _creationTime: v.number(),
-  ...schemaMigrationFields,
-  changes: v.array(fieldChangeValidator),
-  rollbackLimitations: v.array(v.string()),
-  /** True when the active schema changed after the plan; plan again. */
-  outdated: v.boolean(),
-})
-
-function view(
-  migration: Doc<"schemaMigrations">,
-  collection: Doc<"collections">
-): Infer<typeof migrationViewValidator> {
-  const changes = fieldChanges(migration.source.fields, migration.target.fields)
-  return {
-    ...migration,
-    changes,
-    rollbackLimitations: rollbackLimitations(changes),
-    outdated: collection.definition.version !== migration.source.version,
-  }
-}
 
 /** The migration and its collection, after a membership check. */
 async function readMigration(
@@ -119,7 +93,7 @@ export const get = query({
       migrationId,
       "read"
     )
-    return view(migration, collection)
+    return migrationView(migration, collection)
   },
 })
 
@@ -147,7 +121,9 @@ export const list = query({
       .paginate(paginationOpts)
     return {
       ...result,
-      page: result.page.map((migration) => view(migration, collection)),
+      page: result.page.map((migration) =>
+        migrationView(migration, collection)
+      ),
     }
   },
 })
@@ -165,28 +141,7 @@ export const dryRun = mutation({
       migrationId,
       "write"
     )
-    if (collection.definition.version !== migration.source.version)
-      throw new Error(
-        "The collection schema changed after this plan; plan the migration again"
-      )
-    if (
-      migration.state.kind !== "planned" &&
-      migration.state.kind !== "checked"
-    )
-      throw new Error(`A ${migration.state.kind} migration cannot dry run`)
-    await ctx.db.patch(migrationId, {
-      state: {
-        kind: "dryRunning",
-        after: null,
-        checked: 0,
-        misfitCount: 0,
-        misfits: [],
-      },
-    })
-    await ctx.scheduler.runAfter(0, internal.schemaMigrations.dryRunStep, {
-      migrationId,
-      after: null,
-    })
+    await startDryRun(ctx, migration, collection)
     return null
   },
 })
@@ -353,64 +308,10 @@ export const start = mutation({
       migrationId,
       "write"
     )
-    const { state } = migration
-    const lockedByThis = collection.migrationLock?.migrationId === migration._id
-    if (state.kind === "validating" && lockedByThis) {
-      await ctx.scheduler.runAfter(0, internal.schemaMigrations.dryRunStep, {
-        migrationId,
-        after: state.after,
-      })
-      return null
-    }
-    if (state.kind === "backfilling" && lockedByThis) {
-      await ctx.db.patch(migrationId, { state: { ...state, error: null } })
-      await ctx.scheduler.runAfter(0, internal.schemaMigrations.backfillStep, {
-        migrationId,
-        after: state.after,
-      })
-      return null
-    }
-    if (state.kind !== "checked")
-      throw new Error("Dry run the migration before it starts")
-    if (state.misfitCount > 0)
-      throw new Error(
-        `${state.misfitCount} records do not fit the target schema; change them and dry run again`
-      )
-    if (collection.definition.version !== migration.source.version)
-      throw new Error(
-        "The collection schema changed after this plan; plan the migration again"
-      )
-    if (collection.migrationLock)
-      throw new Error(migratingMessage(collection.migrationLock))
-    await ctx.db.patch(collection._id, {
-      migrationLock: {
-        migrationId,
-        targetVersion: migration.target.version,
-      },
+    await startMigration(ctx, migration, collection, {
+      kind: "user",
+      userId: member.userId,
     })
-    await ctx.db.patch(migrationId, {
-      state: {
-        kind: "validating",
-        after: null,
-        checked: 0,
-        misfitCount: 0,
-        misfits: [],
-      },
-    })
-    await ctx.scheduler.runAfter(0, internal.schemaMigrations.dryRunStep, {
-      migrationId,
-      after: null,
-    })
-    await recordAuditEvent(
-      ctx,
-      collection.workspaceId,
-      { kind: "user", userId: member.userId },
-      {
-        operation: "collection.startMigration",
-        collectionId: collection._id,
-        migrationId,
-      }
-    )
     return null
   },
 })

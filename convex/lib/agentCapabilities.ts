@@ -25,12 +25,14 @@ const CAPABILITIES = [
   {
     id: "collections.read",
     scopes: ["data.read"],
-    description: "Describe one collection, its fields, and schema version.",
+    description:
+      "Describe one collection, its fields, and schema version, and read its schema migrations.",
   },
   {
     id: "collections.write",
     scopes: ["data.write"],
-    description: "Create collections, add fields, and rename field labels.",
+    description:
+      "Create collections, add fields, rename field labels, and plan, dry run, and start schema migrations.",
   },
   {
     id: "records.read",

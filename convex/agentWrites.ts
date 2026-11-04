@@ -28,6 +28,7 @@ import {
   replaceRecordValues,
 } from "./lib/records"
 import { callerKey, runOnce } from "./lib/operations"
+import { migratingMessage } from "./lib/schemaMigrations"
 
 /**
  * Writes made with an agent credential that has the `data.write` scope. convex/http.ts calls these
@@ -79,13 +80,17 @@ async function writableWorkspace(
   }
 }
 
-/** Finds a collection in the credential's workspace. */
+/**
+ * Finds a collection in the credential's workspace that no schema migration
+ * locks.
+ */
 async function writableCollection(
   ctx: MutationCtx,
   digest: string,
   rawCollectionId: string
 ): Promise<
   | Denied
+  | Invalid
   | {
       status: "ok"
       collection: Doc<"collections">
@@ -99,6 +104,8 @@ async function writableCollection(
   const collection = collectionId && (await ctx.db.get(collectionId))
   if (!collection || collection.workspaceId !== workspace.workspaceId)
     return deny("The collection does not exist in this workspace.")
+  if (collection.migrationLock)
+    return reject(migratingMessage(collection.migrationLock))
   return {
     status: "ok",
     collection,
@@ -352,6 +359,7 @@ export const updateRecord = internalMutation({
 
 const deleteRecordResult = v.union(
   denied,
+  invalid,
   v.object({ status: v.literal("conflict"), revision: v.number() }),
   v.object({
     status: v.literal("referenced"),

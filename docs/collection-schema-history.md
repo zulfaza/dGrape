@@ -64,7 +64,13 @@ Saved query revisions and page bindings pinned to an older schema version fail
 with the pinned and active versions in the message; save and bind a new query
 revision.
 
-Remaining implementation scope: HTTP/MCP and UI for migrations; richer typed values and authorized record/artifact/secret references
+Agent credentials use `POST /agent/migrations/plan`, `get`, `dryRun` and `start`
+(MCP: `migrations_plan`, `migrations_get`, `migrations_dry_run`,
+`migrations_start`). Plan, dry run and start need `data.write`; get needs
+`data.read`. While a lock is held, agent record writes and field additions
+return 400 with the migration message, not 503.
+
+Remaining implementation scope: UI for migrations; richer typed values and authorized record/artifact/secret references
 (coordinate with secret/recipe siblings); exact minor-unit money and currency
 metadata with job/transaction templates; materialized summaries and bounded,
 retry-safe correction/deletion rebuilds with freshness/completeness/error state;

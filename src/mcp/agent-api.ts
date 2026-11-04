@@ -2,6 +2,7 @@ import * as Activity from "../../convex/lib/agentActivityTransport.ts"
 import * as Collections from "../../convex/lib/agentCollectionTransport.ts"
 import * as ArtifactLinks from "../../convex/lib/agentArtifactLinkTransport.ts"
 import * as Exports from "../../convex/lib/agentExportTransport.ts"
+import * as Migrations from "../../convex/lib/agentMigrationTransport.ts"
 import * as Pages from "../../convex/lib/agentPageTransport.ts"
 import * as Queries from "../../convex/lib/agentQueryTransport.ts"
 import * as Recipes from "../../convex/lib/agentRecipeTransport.ts"
@@ -377,6 +378,18 @@ export class AgentApi extends Context.Service<
     readonly recipeSetRunAccess: (
       input: typeof Recipes.AccessInput.Type
     ) => Call<typeof Schema.Null.Type>
+    readonly migrationPlan: (
+      input: typeof Migrations.PlanInput.Type
+    ) => Call<typeof Migrations.Planned.Type>
+    readonly migrationGet: (
+      input: typeof Migrations.MigrationInput.Type
+    ) => Call<typeof Migrations.Migration.Type>
+    readonly migrationDryRun: (
+      input: typeof Migrations.MigrationInput.Type
+    ) => Call<typeof Schema.Null.Type>
+    readonly migrationStart: (
+      input: typeof Migrations.MigrationInput.Type
+    ) => Call<typeof Schema.Null.Type>
     readonly querySave: (
       input: typeof Queries.SaveInput.Type
     ) => Call<typeof Queries.Saved.Type>
@@ -600,6 +613,29 @@ export const layer = (baseUrl: string) =>
               HttpClientRequest.post(url("/agent/recipes/setRunAccess")),
               input
             ),
+            Schema.Null
+          ),
+        migrationPlan: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/migrations/plan")), input),
+            Migrations.Planned
+          ),
+        migrationGet: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/migrations/get")), input),
+            Migrations.Migration
+          ),
+        migrationDryRun: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/migrations/dryRun")),
+              input
+            ),
+            Schema.Null
+          ),
+        migrationStart: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/migrations/start")), input),
             Schema.Null
           ),
         querySave: (input) =>
