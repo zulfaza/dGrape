@@ -77,10 +77,14 @@ const Page = Schema.Struct({
   publishedRevision: Schema.NullOr(Schema.Number),
 })
 
+/** An optional idempotency key; see convex/lib/operations.ts. */
+const OperationKey = { idempotencyKey: Schema.optionalKey(Schema.String) }
+
 export const SaveDraftInput = Schema.Struct({
   pageId: Schema.optionalKey(Schema.String),
   expectedRevision: Schema.optionalKey(Revision),
   definition: Definition,
+  ...OperationKey,
 })
 
 export const SavedDraft = Schema.Struct({
@@ -93,6 +97,7 @@ export const PublishInput = Schema.Struct({
   revision: Revision,
   expectedRevision: Revision,
   expectedPublishedRevision: Schema.NullOr(Revision),
+  ...OperationKey,
 })
 
 export const Published = Page

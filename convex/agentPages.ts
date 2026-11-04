@@ -15,11 +15,13 @@ import {
 } from "./lib/pageDomain"
 import { getPage, listPages, publishPage, savePageDraft } from "./pages"
 import { auditActor } from "./lib/auditEvents"
+import { agentOperation, runOnce } from "./lib/operations"
 
 /**
  * Page operations for agent credentials. convex/http.ts calls these after it
  * decodes the request with convex/lib/agentPageTransport.ts. The credential
- * check and the operation share one transaction (withGrant).
+ * check and the operation share one transaction (withGrant). Writes take an
+ * optional `idempotencyKey` (see convex/lib/operations.ts).
  */
 
 /** Turns the agent's ID strings into typed IDs, or names the bad block. */
@@ -67,33 +69,43 @@ function summary(page: Doc<"pages">) {
   }
 }
 
+const savedDraft = v.object({ pageId: v.id("pages"), revision: v.number() })
+
 export const saveDraft = internalMutation({
   args: {
     digest: v.string(),
     pageId: v.optional(v.string()),
     expectedRevision: v.optional(v.number()),
     definition: agentPageDefinitionValidator,
+    idempotencyKey: v.optional(v.string()),
   },
-  returns: v.object({ pageId: v.id("pages"), revision: v.number() }),
-  handler: (ctx, args) =>
-    withGrant(ctx, args.digest, Date.now(), ["pages.write"], async (grant) => {
-      const pageId =
-        args.pageId === undefined
-          ? undefined
-          : ctx.db.normalizeId("pages", args.pageId)
-      if (args.pageId !== undefined && !pageId)
-        throw new Error("Page access denied")
-      return savePageDraft(
+  returns: savedDraft,
+  handler: (ctx, { digest, idempotencyKey, ...args }) =>
+    withGrant(ctx, digest, Date.now(), ["pages.write"], (grant) =>
+      runOnce(
         ctx,
-        grant.workspaceId,
-        auditActor(grant.owner, grant),
-        {
-          pageId: pageId ?? undefined,
-          expectedRevision: args.expectedRevision,
-          definition: resolvePageIds(ctx, args.definition),
+        agentOperation(grant, "pages.saveDraft", idempotencyKey, args),
+        savedDraft,
+        async () => {
+          const pageId =
+            args.pageId === undefined
+              ? undefined
+              : ctx.db.normalizeId("pages", args.pageId)
+          if (args.pageId !== undefined && !pageId)
+            throw new Error("Page access denied")
+          return savePageDraft(
+            ctx,
+            grant.workspaceId,
+            auditActor(grant.owner, grant),
+            {
+              pageId: pageId ?? undefined,
+              expectedRevision: args.expectedRevision,
+              definition: resolvePageIds(ctx, args.definition),
+            }
+          )
         }
       )
-    }),
+    ),
 })
 
 export const publish = internalMutation({
@@ -103,23 +115,32 @@ export const publish = internalMutation({
     revision: v.number(),
     expectedRevision: v.number(),
     expectedPublishedRevision: v.union(v.number(), v.null()),
+    idempotencyKey: v.optional(v.string()),
   },
   returns: pageSummary,
-  handler: (ctx, { digest, pageId, ...args }) =>
-    withGrant(ctx, digest, Date.now(), ["pages.write"], async (grant) => {
-      const id = ctx.db.normalizeId("pages", pageId)
-      if (!id) throw new Error("Page access denied")
-      await publishPage(
+  handler: (ctx, { digest, idempotencyKey, ...input }) =>
+    withGrant(ctx, digest, Date.now(), ["pages.write"], (grant) =>
+      runOnce(
         ctx,
-        grant.workspaceId,
-        auditActor(grant.owner, grant),
-        { ...args, pageId: id },
-        "either"
+        agentOperation(grant, "pages.publish", idempotencyKey, input),
+        pageSummary,
+        async () => {
+          const { pageId, ...args } = input
+          const id = ctx.db.normalizeId("pages", pageId)
+          if (!id) throw new Error("Page access denied")
+          await publishPage(
+            ctx,
+            grant.workspaceId,
+            auditActor(grant.owner, grant),
+            { ...args, pageId: id },
+            "either"
+          )
+          const page = await ctx.db.get(id)
+          if (!page) throw new Error("Page access denied")
+          return summary(page)
+        }
       )
-      const page = await ctx.db.get(id)
-      if (!page) throw new Error("Page access denied")
-      return summary(page)
-    }),
+    ),
 })
 
 export const get = internalQuery({

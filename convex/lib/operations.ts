@@ -136,3 +136,19 @@ export async function runOnce<V extends GenericValidator>(
   })
   return value
 }
+
+/** The request of an agent write made with `grant`; see callerKey. */
+export function agentOperation(
+  grant: Grant,
+  operation: string,
+  key: string | undefined,
+  input: Value
+): OperationRequest {
+  return {
+    workspaceId: grant.workspaceId,
+    caller: callerKey(grant),
+    operation,
+    key,
+    input,
+  }
+}

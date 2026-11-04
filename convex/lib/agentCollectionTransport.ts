@@ -12,6 +12,8 @@ export const RenameFieldInput = Schema.Struct({
   fieldId: Schema.String,
   label: Schema.String,
   expectedVersion: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  /** See convex/lib/operations.ts. */
+  idempotencyKey: Schema.optionalKey(Schema.String),
 })
 
 export const RenamedField = Schema.Struct({ version: Schema.Number })

@@ -103,6 +103,8 @@ export const SaveInput = Schema.Struct({
   query: Query,
   queryId: Schema.optionalKey(Schema.String),
   expectedRevision: Schema.optionalKey(Schema.Int),
+  /** See convex/lib/operations.ts. */
+  idempotencyKey: Schema.optionalKey(Schema.String),
 })
 
 export const Saved = Schema.Struct({
