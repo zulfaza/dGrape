@@ -1,8 +1,10 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test"
 import { expect, test, vi } from "vitest"
+import { ConvexError } from "convex/values"
 import schema from "./schema"
 import { api, internal } from "./_generated/api"
+import { asQueryTooExpensive } from "./lib/queryErrors"
 import { insertRecord, replaceRecordValues, deleteRecord } from "./lib/records"
 const modules = import.meta.glob("./**/*.ts")
 
@@ -125,6 +127,25 @@ test("byte budget failures are stored", async () => {
     query: { fieldId: "name", order: "asc" },
   })
   const args = { queryId: saved.queryId, expectedRevision: 1 }
+  const failure = await owner
+    .query(api.savedQueries.run, {
+      ...args,
+      paginationOpts: {
+        numItems: 50,
+        cursor: null,
+        maximumRowsRead: 100,
+        maximumBytesRead: 1_000_000,
+      },
+    })
+    .then(
+      () => null,
+      (error: Error) => error
+    )
+  if (!(failure instanceof ConvexError)) throw new Error("Expected ConvexError")
+  expect(asQueryTooExpensive(failure)).toMatchObject({
+    budget: "resultBytes",
+    limit: 1_000_000,
+  })
   await owner.mutation(api.reportCounts.rebuild, args)
   expect(await owner.query(api.reportCounts.read, args)).toMatchObject({
     state: "failed",

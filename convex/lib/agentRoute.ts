@@ -13,7 +13,13 @@ const headers = {
 const failure = Schema.Struct({
   status: Schema.Literals([400, 403, 409]),
   message: Schema.String,
+  /** A typed failure, such as QueryTooExpensive (convex/lib/queryErrors.ts). */
+  kind: Schema.optionalKey(Schema.String),
+  hint: Schema.optionalKey(Schema.String),
 })
+
+/** The JSON body of a refused agent operation. */
+type AgentFailureBody = { error: string; code?: string; hint?: string }
 
 /**
  * The status and reason of a refused operation: a ConvexError with
@@ -30,6 +36,7 @@ export function agentFailure(error: ConvexError<Value>) {
  * body is JSON that decodes with `schema`; `operate` gets the credential
  * digest. A ConvexError with `{ status, message }` (see withGrant in
  * convex/lib/agentGrant.ts) becomes that status with `{ error: message }`.
+ * Its optional `kind` and `hint` become `code` and `hint` in the body.
  */
 export function agentRoute<A, B>(
   router: ReturnType<typeof httpRouter>,
@@ -100,11 +107,13 @@ export function agentRoute<A, B>(
       } catch (error) {
         const refused =
           error instanceof ConvexError ? agentFailure(error) : null
-        if (refused)
-          return Response.json(
-            { error: refused.message },
-            { status: refused.status, headers }
-          )
+        if (refused) {
+          const { status, message, kind, hint } = refused
+          const body: AgentFailureBody = { error: message }
+          if (kind !== undefined) body.code = kind
+          if (hint !== undefined) body.hint = hint
+          return Response.json(body, { status, headers })
+        }
         return Response.json(
           { error: "Service unavailable" },
           { status: 503, headers }

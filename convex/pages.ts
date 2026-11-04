@@ -1,6 +1,6 @@
 import { collectionFieldValidator } from "./lib/collectionDomain"
 import { paginationOptsValidator, type PaginationOptions } from "convex/server"
-import { v, type Infer } from "convex/values"
+import { ConvexError, v, type Infer } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 import {
   mutation,
@@ -10,6 +10,7 @@ import {
 } from "./_generated/server"
 import { requireMembership } from "./lib/auth"
 import { workspaceBudgets } from "./lib/budgets"
+import { asQueryTooExpensive } from "./lib/queryErrors"
 import {
   firstPageWithinBudget,
   runSavedQuery,
@@ -423,10 +424,13 @@ export const liveBlock = query({
         ),
       })
       return { problem: null, result }
-    } catch {
+    } catch (error) {
+      const expensive =
+        error instanceof ConvexError ? asQueryTooExpensive(error) : null
       return {
-        problem:
-          "Live query could not be read within its budget. Check the source and binding.",
+        problem: expensive
+          ? `${expensive.message}. ${expensive.hint}`
+          : "Live query could not be read within its budget. Check the source and binding.",
         result: null,
       }
     }

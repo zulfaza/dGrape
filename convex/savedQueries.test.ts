@@ -258,6 +258,21 @@ test("agent credentials save, list, and run queries in their own workspace", asy
   expect(
     await call("run", { queryId, revision: 1, cursor: run.body.continueCursor })
   ).toMatchObject({ status: 200, body: { completeness: "complete" } })
+  await t.run(async (ctx) => {
+    const collection = await ctx.db.get(collectionId)
+    if (!collection) throw new Error("Missing fixture")
+    await ctx.db.patch(collection.workspaceId, {
+      budgets: { queryBytesRead: 10 },
+    })
+  })
+  expect(await call("run", { queryId, revision: 1 }, reader)).toMatchObject({
+    status: 400,
+    body: {
+      error: "Query result byte budget exceeded (limit 10)",
+      code: "QueryTooExpensive",
+      hint: expect.stringContaining("summary collection"),
+    },
+  })
   expect(await call("run", { queryId, revision: 9 })).toEqual({
     status: 400,
     body: { error: "Query revision mismatch" },

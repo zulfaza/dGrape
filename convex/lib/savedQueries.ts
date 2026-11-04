@@ -13,6 +13,7 @@ import {
   collectionDefinitionValidator,
   collectionRecordValidator,
 } from "./collectionDomain"
+import { queryTooExpensive } from "./queryErrors"
 import { checkQuery, queryRecords, type RecordQuery } from "./recordQuery"
 import {
   dataAsOf,
@@ -206,7 +207,7 @@ export async function runSavedQueryInWorkspace(
     JSON.stringify(result.value.page)
   ).length
   if (resultBytes > opts.maximumBytesRead)
-    throw new Error("Query result byte budget exceeded; reduce page size")
+    throw queryTooExpensive("resultBytes", opts.maximumBytesRead)
   const source = await readSourceStatus(ctx, collection)
   return {
     queryId: saved._id,
