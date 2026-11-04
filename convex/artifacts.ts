@@ -156,6 +156,45 @@ export const deleteUpload = internalMutation({
   },
 })
 
+/**
+ * Time after `expiresAt` before the sweep removes an upload. It lets a
+ * completion that passed its expiry check finish first.
+ */
+const SWEEP_GRACE_MS = 60 * 60 * 1000
+/** Uploads per sweep transaction. Each one queues one R2 delete. */
+const SWEEP_PAGE = 100
+
+/**
+ * Removes pending uploads that expired before `now - SWEEP_GRACE_MS` and
+ * deletes their R2 objects, then schedules the next page. The hourly cron in
+ * convex/crons.ts starts it.
+ *
+ * Safe to retry or overlap: the row delete and the queued object delete are
+ * in one transaction, so an object is deleted only by the transaction that
+ * removed its upload. Finalized artifacts are not touched, because
+ * `insertArtifact` removes the upload in the same transaction that inserts
+ * the artifact. Pending uploads do not count in `workspaceUsage`, so the
+ * usage does not change. The R2 component retries the object delete.
+ */
+export const sweepExpiredUploads = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const cutoff = Date.now() - SWEEP_GRACE_MS
+    const expired = await ctx.db
+      .query("artifactUploads")
+      .withIndex("by_expiresAt", (q) => q.lt("expiresAt", cutoff))
+      .take(SWEEP_PAGE)
+    for (const upload of expired) {
+      await ctx.db.delete(upload._id)
+      await r2.deleteObject(ctx, upload.key)
+    }
+    if (expired.length === SWEEP_PAGE)
+      await ctx.scheduler.runAfter(0, internal.artifacts.sweepExpiredUploads)
+    return null
+  },
+})
+
 const completeResult = v.union(
   v.object({ status: v.literal("invalid"), message: v.string() }),
   v.object({ status: v.literal("completed"), artifactId: v.id("artifacts") })
