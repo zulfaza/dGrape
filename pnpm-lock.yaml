@@ -14,6 +14,9 @@ importers:
       '@convex-dev/r2':
         specifier: 0.10.4
         version: 0.10.4(convex@1.49.0(react@19.3.1))(prettier@3.9.10)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(supports-color@10.2.2)(typescript@7.0.2)(zod@4.6.6)
+      '@convex-dev/rate-limiter':
+        specifier: 0.4.2
+        version: 0.4.2(convex@1.49.0(react@19.3.1))(prettier@3.9.10)(react@19.3.1)(typescript@7.0.2)(zod@4.6.6)
       '@convex-dev/react-query':
         specifier: ^0.1.0
         version: 0.1.0(@tanstack/react-query@5.105.1(@types/react@19.3.0)(react@19.3.1))(convex@1.49.0(react@19.3.1))
@@ -541,6 +544,11 @@ packages:
     peerDependencies:
       convex: ^1.24.8
 
+  '@convex-dev/batch-worker@0.3.5':
+    resolution: {integrity: sha512-kTxLGy1TXRN6WLcENcoRWWnvPshv1sIZp2EpPqGqCB4FxDI7m8tEHUr+jCLdhGtSZT1UHkWtb1w8YYuEzTxHWQ==}
+    peerDependencies:
+      convex: ^1.43.0
+
   '@convex-dev/r2@0.10.4':
     resolution: {integrity: sha512-F9s1Jv6ClXY7XJYMuQopZl3QBf0v8CeybBdhQ0mOXPIlArWu1ab1fLLLItNv9KJ+2Ps2Fob8he75FBkCqmDg5Q==}
     peerDependencies:
@@ -563,6 +571,15 @@ packages:
       svelte:
         optional: true
       vue:
+        optional: true
+
+  '@convex-dev/rate-limiter@0.4.2':
+    resolution: {integrity: sha512-njheoDd//MZgxtw+0PP3LL47PVMkvOKZmXDjYglDKSu5IdrfJtGmz/EHd6px9UcALuk/w7LTo83YwQ3bTGsMIg==}
+    peerDependencies:
+      convex: ^1.43.0
+      react: ^18.2.0 || ^19.0.0
+    peerDependenciesMeta:
+      react:
         optional: true
 
   '@convex-dev/react-query@0.1.0':
@@ -5668,6 +5685,18 @@ snapshots:
     dependencies:
       convex: 1.49.0(react@19.3.1)
 
+  '@convex-dev/batch-worker@0.3.5(convex@1.49.0(react@19.3.1))(prettier@3.9.10)(react@19.3.1)(typescript@7.0.2)(zod@4.6.6)':
+    dependencies:
+      convex: 1.49.0(react@19.3.1)
+      convex-helpers: 0.1.133(convex@1.49.0(react@19.3.1))(prettier@3.9.10)(react@19.3.1)(typescript@7.0.2)(zod@4.6.6)
+    transitivePeerDependencies:
+      - '@standard-schema/spec'
+      - hono
+      - prettier
+      - react
+      - typescript
+      - zod
+
   '@convex-dev/r2@0.10.4(convex@1.49.0(react@19.3.1))(prettier@3.9.10)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(supports-color@10.2.2)(typescript@7.0.2)(zod@4.6.6)':
     dependencies:
       '@aws-sdk/client-s3': 3.1161.0
@@ -5685,6 +5714,19 @@ snapshots:
       - hono
       - prettier
       - supports-color
+      - typescript
+      - zod
+
+  '@convex-dev/rate-limiter@0.4.2(convex@1.49.0(react@19.3.1))(prettier@3.9.10)(react@19.3.1)(typescript@7.0.2)(zod@4.6.6)':
+    dependencies:
+      '@convex-dev/batch-worker': 0.3.5(convex@1.49.0(react@19.3.1))(prettier@3.9.10)(react@19.3.1)(typescript@7.0.2)(zod@4.6.6)
+      convex: 1.49.0(react@19.3.1)
+    optionalDependencies:
+      react: 19.3.1
+    transitivePeerDependencies:
+      - '@standard-schema/spec'
+      - hono
+      - prettier
       - typescript
       - zod
 

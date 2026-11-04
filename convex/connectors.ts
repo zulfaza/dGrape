@@ -4,10 +4,12 @@ import {
 } from "convex/server"
 import { Effect } from "effect"
 import { v, type Infer } from "convex/values"
-import { internal } from "./_generated/api"
+import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter"
+import { components, internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
 import {
   internalAction,
+  internalMutation,
   internalQuery,
   mutation,
   query,
@@ -26,7 +28,12 @@ import {
   safeLabel,
 } from "./lib/secretDomain"
 import { configuredSecretLayer } from "./lib/secretService"
-import { fetchConnectorPage, httpRoutes } from "./lib/connectorFetch"
+import { workspaceBudgets } from "./lib/budgets"
+import {
+  fetchConnectorPage,
+  httpRoutes,
+  RequestBudget,
+} from "./lib/connectorFetch"
 import {
   githubHeaders,
   githubOrigin,
@@ -134,6 +141,34 @@ export const executionConfig = internalQuery({
     }
   },
 })
+const rateLimiter = new RateLimiter(components.rateLimiter)
+/**
+ * Uses one request of the connection's per-minute budget
+ * (`connectionRequestsPerMinute`). Returns null, or the wait in ms until a
+ * request is free. The budget is read at each call, so a change applies now.
+ */
+export const takeRequest = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    connectionId: v.id("connections"),
+  },
+  returns: v.union(v.number(), v.null()),
+  handler: async (ctx, args) => {
+    const { connectionRequestsPerMinute: rate } = await workspaceBudgets(
+      ctx,
+      args.workspaceId
+    )
+    const { ok, retryAfter } = await rateLimiter.limit(
+      ctx,
+      "connectionRequests",
+      {
+        key: args.connectionId,
+        config: { kind: "token bucket", rate, period: MINUTE },
+      }
+    )
+    return ok ? null : (retryAfter ?? MINUTE)
+  },
+})
 export const fetchPage = internalAction({
   args: {
     ...useArgs,
@@ -182,7 +217,15 @@ export const fetchPage = internalAction({
           }
     return Effect.runPromise(
       fetchConnectorPage(config, args).pipe(
-        Effect.provide(configuredSecretLayer())
+        Effect.provide(configuredSecretLayer()),
+        Effect.provideService(RequestBudget, {
+          take: Effect.promise(() =>
+            ctx.runMutation(internal.connectors.takeRequest, {
+              workspaceId: args.workspaceId,
+              connectionId: args.connectionId,
+            })
+          ),
+        })
       )
     )
   },

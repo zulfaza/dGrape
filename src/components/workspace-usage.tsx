@@ -81,6 +81,7 @@ function usedFor(key: BudgetKey, usage: Usage): Used {
     case "queryBytesRead":
     case "artifactFileBytes":
     case "runRetentionDays":
+    case "connectionRequestsPerMinute":
       return null
   }
 }
