@@ -6,7 +6,8 @@ import type { FetchRoute } from "./connectorFetch"
  * the connector boundary and only sent as a Bearer header to this origin.
  *
  * Recipes name a read by its `id`. Each read pages with the Link header, so a
- * cursor is a GitHub `rel="next"` URL on the same route.
+ * cursor is a GitHub `rel="next"` URL on the same route. Nested fields come
+ * out with `_` for `.`: `user.login` is the row key `user_login`.
  */
 export const githubOrigin = "https://api.github.com"
 export const githubHeaders = {
@@ -26,6 +27,8 @@ const issueFields = [
   "created_at",
   "updated_at",
   "closed_at",
+  "user.login",
+  "pull_request.merged_at",
 ]
 /**
  * `@me` makes GitHub resolve the token owner, so no user name is stored.
