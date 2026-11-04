@@ -700,6 +700,13 @@ test("templates create valid collections through HTTP and MCP contracts", async 
       github_pull_requests: () => githubRow(template, String(collectionId)),
     }
     const values = examples[template.id]()
+    if (template.fields.some((field) => field.id === "date"))
+      await expect(
+        owner.mutation(api.workspaces.createRecord, {
+          collectionId,
+          values: { ...values, date: "03/11/2026" },
+        })
+      ).rejects.toThrow("date")
     const recordId = await owner.mutation(api.workspaces.createRecord, {
       collectionId,
       values,
