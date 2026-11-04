@@ -276,7 +276,7 @@ export const save = mutation({
   },
   returns: v.object({ pageId: v.id("pages"), revision: v.number() }),
   handler: async (ctx, { workspaceId, ...args }) => {
-    const member = await requireMembership(ctx, workspaceId)
+    const member = await requireMembership(ctx, workspaceId, "write")
     return savePageDraft(
       ctx,
       workspaceId,
@@ -301,7 +301,7 @@ async function selectRevision(
 ) {
   const page = await ctx.db.get(args.pageId)
   if (!page) throw new Error("Page access denied")
-  const member = await requireMembership(ctx, page.workspaceId)
+  const member = await requireMembership(ctx, page.workspaceId, "write")
   return publishPage(
     ctx,
     page.workspaceId,
@@ -333,7 +333,7 @@ export const get = query({
   handler: async (ctx, args) => {
     const page = await ctx.db.get(args.pageId)
     if (!page) throw new Error("Page access denied")
-    await requireMembership(ctx, page.workspaceId)
+    await requireMembership(ctx, page.workspaceId, "read")
     return getPage(ctx, page.workspaceId, page._id, args.revision)
   },
 })
@@ -349,7 +349,7 @@ export const list = query({
     continueCursor: v.string(),
   }),
   handler: async (ctx, args) => {
-    await requireMembership(ctx, args.workspaceId)
+    await requireMembership(ctx, args.workspaceId, "read")
     return listPages(ctx, args.workspaceId, args.paginationOpts)
   },
 })
@@ -364,7 +364,7 @@ export const history = query({
   handler: async (ctx, args) => {
     const page = await ctx.db.get(args.pageId)
     if (!page) throw new Error("Page access denied")
-    await requireMembership(ctx, page.workspaceId)
+    await requireMembership(ctx, page.workspaceId, "read")
     if (
       !Number.isSafeInteger(args.paginationOpts.numItems) ||
       args.paginationOpts.numItems < 1 ||
@@ -394,7 +394,7 @@ export const liveBlock = query({
   handler: async (ctx, args) => {
     const page = await ctx.db.get(args.pageId)
     if (!page) throw new Error("Page access denied")
-    await requireMembership(ctx, page.workspaceId)
+    await requireMembership(ctx, page.workspaceId, "read")
     if (
       !Number.isSafeInteger(args.revision) ||
       args.revision < 1 ||
@@ -445,7 +445,7 @@ export const sources = query({
   ),
   args: { workspaceId: v.id("workspaces") },
   handler: async (ctx, args) => {
-    await requireMembership(ctx, args.workspaceId)
+    await requireMembership(ctx, args.workspaceId, "read")
     const saved = await ctx.db
       .query("queryDefinitions")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))

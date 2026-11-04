@@ -37,7 +37,7 @@ export const history = query({
   handler: async (ctx, { collectionId, paginationOpts }) => {
     const collection = await ctx.db.get(collectionId)
     if (!collection) throw new Error("Collection access denied")
-    await requireMembership(ctx, collection.workspaceId)
+    await requireMembership(ctx, collection.workspaceId, "read")
     if (
       !Number.isInteger(paginationOpts.numItems) ||
       paginationOpts.numItems < 1 ||
@@ -61,7 +61,7 @@ export const get = query({
   handler: async (ctx, { collectionId, version }) => {
     const collection = await ctx.db.get(collectionId)
     if (!collection) throw new Error("Collection access denied")
-    await requireMembership(ctx, collection.workspaceId)
+    await requireMembership(ctx, collection.workspaceId, "read")
     if (!Number.isSafeInteger(version) || version < 1)
       throw new Error("Invalid version")
     const stored = await ctx.db
@@ -124,7 +124,7 @@ export const renameField = mutation({
   handler: async (ctx, { collectionId, ...rename }) => {
     const collection = await ctx.db.get(collectionId)
     if (!collection) throw new Error("Collection access denied")
-    const member = await requireMembership(ctx, collection.workspaceId)
+    const member = await requireMembership(ctx, collection.workspaceId, "write")
     return renameFieldLabel(
       ctx,
       collection,

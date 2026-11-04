@@ -17,6 +17,7 @@ import {
   publishSnapshot,
 } from "./lib/recordPublication"
 import { recordSyncOutcome } from "./lib/sourceSync"
+import { memberWithAccess } from "./lib/auth"
 
 export const executionArgs = {
   runId: v.id("recipeRuns"),
@@ -87,12 +88,12 @@ export const commit = internalMutation({
       throw new Error("Step attempt is stale")
     const step = version.recipe.steps[args.step]
     if (!step) throw new Error("Invalid recipe step")
-    const member = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", run.workspaceId).eq("userId", version.createdBy)
-      )
-      .unique()
+    const member = await memberWithAccess(
+      ctx,
+      run.workspaceId,
+      version.createdBy,
+      "write"
+    )
     if (!member) throw new Error("Recipe owner no longer has access")
     if (step.kind === "upsert" || step.kind === "snapshot") {
       const id = ctx.db.normalizeId("collections", step.collectionId)

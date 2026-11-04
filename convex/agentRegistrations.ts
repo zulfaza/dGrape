@@ -14,7 +14,7 @@ import {
   grantedScopes,
   parseRequestedScopes,
 } from "./lib/agentScope"
-import { requireMembership, requireUserId } from "./lib/auth"
+import { memberWithAccess, requireMembership, requireUserId } from "./lib/auth"
 import { recordAuditEvent } from "./lib/auditEvents"
 import {
   ACCESS_TOKEN_LIFETIME_MS,
@@ -186,13 +186,13 @@ export const completeClaim = internalMutation({
       await ctx.db.patch(attempt._id, { failedTries, state: "locked" })
       return "locked"
     }
-    const member = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", args.workspaceId).eq("userId", args.owner)
-      )
-      .unique()
-    if (!member || member.role !== "owner") return "no_workspace_access"
+    const member = await memberWithAccess(
+      ctx,
+      args.workspaceId,
+      args.owner,
+      "manage"
+    )
+    if (!member) return "no_workspace_access"
     await ctx.db.patch(attempt._id, { state: "completed" })
     await ctx.db.replace(registration._id, {
       status: "claimed",
@@ -499,7 +499,7 @@ export const listForWorkspace = query({
   },
   returns: paginationResultValidator(connectedAgentValidator),
   handler: async (ctx, { workspaceId, paginationOpts }) => {
-    const member = await requireMembership(ctx, workspaceId)
+    const member = await requireMembership(ctx, workspaceId, "manage")
     if (
       !Number.isInteger(paginationOpts.numItems) ||
       paginationOpts.numItems < 1 ||
@@ -554,7 +554,7 @@ export const revokeRegistration = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { workspaceId, registrationId }) => {
-    const member = await requireMembership(ctx, workspaceId)
+    const member = await requireMembership(ctx, workspaceId, "manage")
     const registration = await ctx.db.get(registrationId)
     if (
       !registration ||

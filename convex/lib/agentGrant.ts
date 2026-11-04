@@ -1,5 +1,6 @@
 import { ConvexError } from "convex/values"
 import type { QueryCtx } from "../_generated/server"
+import { memberWithAccess } from "./auth"
 import {
   grantedScopes,
   missingScopeMessage,
@@ -22,13 +23,14 @@ export async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
     const registration = await ctx.db.get(grant.registrationId)
     if (registration?.status !== "claimed") return null
   }
-  const member = await ctx.db
-    .query("workspaceMembers")
-    .withIndex("by_workspace_user", (q) =>
-      q.eq("workspaceId", grant.workspaceId).eq("userId", grant.owner)
-    )
-    .unique()
-  if (!member || member.role !== "owner") return null
+  // Agent credentials need the role that may manage them: owner.
+  const member = await memberWithAccess(
+    ctx,
+    grant.workspaceId,
+    grant.owner,
+    "manage"
+  )
+  if (!member) return null
   return {
     grantId: grant._id,
     owner: grant.owner,

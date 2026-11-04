@@ -19,7 +19,7 @@ export async function requireSecretOwner(
   ctx: QueryCtx,
   secret: Doc<"secretRefs">
 ) {
-  await requireMembership(ctx, secret.workspaceId)
+  await requireMembership(ctx, secret.workspaceId, "manage")
   if (secret.createdBy !== (await requireUserId(ctx)))
     throw new Error("Secret access denied")
 }
@@ -44,7 +44,7 @@ export const list = query({
     })
   ),
   handler: async (ctx, { workspaceId, paginationOpts }) => {
-    const member = await requireMembership(ctx, workspaceId)
+    const member = await requireMembership(ctx, workspaceId, "manage")
     if (
       !Number.isInteger(paginationOpts.numItems) ||
       paginationOpts.numItems < 1 ||
@@ -82,7 +82,7 @@ export const prepare = mutation({
   },
   returns: v.id("secretRefs"),
   handler: async (ctx, args) => {
-    const member = await requireMembership(ctx, args.workspaceId)
+    const member = await requireMembership(ctx, args.workspaceId, "manage")
     const id = await ctx.db.insert("secretRefs", {
       workspaceId: args.workspaceId,
       label: safeLabel(args.label),

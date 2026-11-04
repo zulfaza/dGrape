@@ -19,7 +19,7 @@ export const definitions = query({
   args: { workspaceId: v.id("workspaces"), now: v.number() },
   returns: workspaceExportResultValidator,
   handler: async (ctx, { workspaceId, now }) => {
-    await requireMembership(ctx, workspaceId)
+    await requireMembership(ctx, workspaceId, "read")
     return exportWorkspace(ctx, workspaceId, now)
   },
 })

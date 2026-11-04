@@ -17,7 +17,7 @@ import {
   type QueryCtx,
 } from "./_generated/server"
 import { resolveScopedGrant } from "./lib/agentGrant"
-import { requireMembership, requireUserId } from "./lib/auth"
+import { memberWithAccess, requireMembership, requireUserId } from "./lib/auth"
 import { recordAuditEvent } from "./lib/auditEvents"
 import {
   checkOrigin,
@@ -54,12 +54,13 @@ export async function requireConnectionUse(
     principalUserId: string
   }
 ) {
-  const member = await ctx.db
-    .query("workspaceMembers")
-    .withIndex("by_workspace_user", (q) =>
-      q.eq("workspaceId", args.workspaceId).eq("userId", args.principalUserId)
-    )
-    .unique()
+  // Using a credential runs a recipe, which changes workspace data.
+  const member = await memberWithAccess(
+    ctx,
+    args.workspaceId,
+    args.principalUserId,
+    "write"
+  )
   const connection = await ctx.db.get(args.connectionId)
   if (!member || !connection || connection.workspaceId !== args.workspaceId)
     throw new Error("Connection access denied")
@@ -409,7 +410,7 @@ export const list = query({
   },
   returns: paginationResultValidator(listedConnection),
   handler: async (ctx, { workspaceId, paginationOpts }) => {
-    const member = await requireMembership(ctx, workspaceId)
+    const member = await requireMembership(ctx, workspaceId, "write")
     if (
       !Number.isInteger(paginationOpts.numItems) ||
       paginationOpts.numItems < 1 ||
@@ -439,7 +440,7 @@ async function requireOwnSecret(
   workspaceId: Id<"workspaces">,
   secretRef: Id<"secretRefs">
 ) {
-  const member = await requireMembership(ctx, workspaceId)
+  const member = await requireMembership(ctx, workspaceId, "manage")
   const secret = await ctx.db.get(secretRef)
   if (
     !secret ||
@@ -520,7 +521,7 @@ export const grantUse = mutation({
   handler: async (ctx, args) => {
     const connection = await ctx.db.get(args.connectionId)
     if (!connection) throw new Error("Connection access denied")
-    await requireMembership(ctx, connection.workspaceId)
+    await requireMembership(ctx, connection.workspaceId, "manage")
     if (connection.createdBy !== (await requireUserId(ctx)))
       throw new Error("Connection access denied")
     const existing = await ctx.db
@@ -561,7 +562,7 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const connection = await ctx.db.get(args.connectionId)
     if (!connection) throw new Error("Connection access denied")
-    await requireMembership(ctx, connection.workspaceId)
+    await requireMembership(ctx, connection.workspaceId, "manage")
     if (connection.createdBy !== (await requireUserId(ctx)))
       throw new Error("Connection access denied")
     await ctx.db.delete(connection._id)
