@@ -5,7 +5,8 @@ import {
   redirect,
   useRouterState,
 } from "@tanstack/react-router"
-import { Fragment } from "react"
+import { useConvexAuth } from "convex/react"
+import { Fragment, type ReactNode } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { NotFound } from "@/components/not-found"
 import {
@@ -78,9 +79,48 @@ function DashboardLayout() {
             </Breadcrumb>
           </div>
         </header>
-        <Outlet />
+        <ConvexAuthGate pathname={pathname}>
+          <Outlet />
+        </ConvexAuthGate>
       </SidebarInset>
     </SidebarProvider>
+  )
+}
+
+/**
+ * Renders dashboard pages only after Convex accepts the WorkOS token.
+ *
+ * On a full page load, AuthKit gets the session from the server after
+ * hydration. Queries that start before that run without a token and fail
+ * with "Unauthenticated", so the pages must wait for this gate.
+ */
+function ConvexAuthGate({
+  pathname,
+  children,
+}: {
+  pathname: string
+  children: ReactNode
+}) {
+  const { isLoading, isAuthenticated } = useConvexAuth()
+  if (isAuthenticated) return children
+  if (isLoading) {
+    return (
+      <p role="status" className="p-6 text-muted-foreground">
+        Loading…
+      </p>
+    )
+  }
+  return (
+    <main className="p-6">
+      Your session ended.{" "}
+      <a
+        className="underline"
+        href={`/sign-in?returnPathname=${encodeURIComponent(pathname)}`}
+      >
+        Sign in again
+      </a>
+      .
+    </main>
   )
 }
 
