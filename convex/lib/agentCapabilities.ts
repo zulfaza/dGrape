@@ -80,12 +80,13 @@ const CAPABILITIES = [
     id: "queries.read",
     scopes: ["data.read"],
     description:
-      "List saved queries with their result fields, and run a saved query revision.",
+      "List saved queries with their result fields, run a saved query revision, and read the groups of a saved aggregate.",
   },
   {
     id: "queries.write",
     scopes: ["data.write"],
-    description: "Save records queries as new immutable revisions.",
+    description:
+      "Save records queries and aggregates as new immutable revisions.",
   },
   {
     id: "pages.read",

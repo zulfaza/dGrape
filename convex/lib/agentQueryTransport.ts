@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import type { RecordQuery } from "./recordQuery"
+import type { SavedQuery } from "./queryAggregate"
 
 /**
  * Wire contract of the agent saved-query operations. The HTTP routes
@@ -86,31 +86,96 @@ const Limit = Schema.Int.check(
 )
 const Cursor = Schema.String.check(Schema.isMaxLength(MAX_CURSOR_LENGTH))
 
-/** An indexed field filter, as records_query takes it. */
+/** A residual filter; convex/lib/recordQuery.ts has its rules. */
+const Filter = Schema.Union([
+  Schema.Struct({
+    fieldId: Schema.String,
+    op: Schema.Literals(["eq", "neq", "lt", "lte", "gt", "gte"]),
+    value: Value,
+  }),
+  Schema.Struct({
+    fieldId: Schema.String,
+    op: Schema.Literal("in"),
+    values: Schema.Array(Value),
+  }),
+])
+
+/** An aggregate; convex/lib/queryAggregate.ts has its rules. */
+const Aggregate = Schema.Struct({
+  groupBy: Schema.optionalKey(
+    Schema.Struct({
+      fieldId: Schema.String,
+      bucket: Schema.optionalKey(
+        Schema.Literals(["day", "week", "month", "year"])
+      ),
+    })
+  ),
+  measures: Schema.Array(
+    Schema.Union([
+      Schema.Struct({ op: Schema.Literal("count") }),
+      Schema.Struct({
+        op: Schema.Literals(["sum", "min", "max", "average"]),
+        fieldId: Schema.String,
+      }),
+    ])
+  ),
+})
+
+/** A saved query, as queries_save takes it. */
 export const Query = Schema.Struct({
   fieldId: Schema.String,
   order: Schema.optionalKey(Schema.Literals(["asc", "desc"])),
   where: Schema.optionalKey(
     Schema.Union([
       Schema.Struct({ eq: Value }),
+      Schema.Struct({ in: Schema.Array(Value) }),
       Schema.Struct({
         lower: Schema.optionalKey(Bound),
         upper: Schema.optionalKey(Bound),
       }),
     ])
   ),
+  filters: Schema.optionalKey(Schema.Array(Filter)),
+  select: Schema.optionalKey(Schema.Array(Schema.String)),
+  aggregate: Schema.optionalKey(Aggregate),
 })
 
 /** Adds the defaults: "asc" order and inclusive bounds. */
-export function toRecordQuery(query: typeof Query.Type): RecordQuery {
-  const recordQuery: RecordQuery = {
+export function toSavedQuery(query: typeof Query.Type): SavedQuery {
+  const saved: SavedQuery = {
     fieldId: query.fieldId,
     order: query.order ?? "asc",
   }
-  const { where } = query
-  if (where === undefined) return recordQuery
-  if ("eq" in where) return { ...recordQuery, where: { eq: where.eq } }
-  const range: NonNullable<RecordQuery["where"]> = {}
+  const { where, filters, select, aggregate } = query
+  if (where !== undefined) saved.where = toWhere(where)
+  if (filters !== undefined)
+    saved.filters = filters.map((filter) =>
+      filter.op === "in"
+        ? { fieldId: filter.fieldId, op: "in", values: [...filter.values] }
+        : { fieldId: filter.fieldId, op: filter.op, value: filter.value }
+    )
+  if (select !== undefined) saved.select = [...select]
+  if (aggregate !== undefined) {
+    const measures = aggregate.measures.map((measure) =>
+      measure.op === "count"
+        ? { op: measure.op }
+        : { op: measure.op, fieldId: measure.fieldId }
+    )
+    const { groupBy } = aggregate
+    saved.aggregate =
+      groupBy === undefined
+        ? { measures }
+        : { measures, groupBy: { ...groupBy } }
+  }
+  return saved
+}
+
+function toWhere(
+  where: NonNullable<typeof Query.Type.where>
+): NonNullable<SavedQuery["where"]> {
+  if ("eq" in where) return { eq: where.eq }
+  if ("in" in where) return { in: [...where.in] }
+  const range: NonNullable<SavedQuery["where"]> = {}
   if (where.lower)
     range.lower = {
       value: where.lower.value,
@@ -121,7 +186,7 @@ export function toRecordQuery(query: typeof Query.Type): RecordQuery {
       value: where.upper.value,
       inclusive: where.upper.inclusive ?? true,
     }
-  return { ...recordQuery, where: range }
+  return range
 }
 
 export const SaveInput = Schema.Struct({
@@ -188,6 +253,13 @@ const SourceFreshness = Schema.Union([
   }),
 ])
 
+/** Mirrors sourceStatusValidator in convex/lib/sourceSync.ts. */
+const Source = Schema.Struct({
+  collectionId: Schema.String,
+  name: Schema.String,
+  freshness: SourceFreshness,
+})
+
 export const RunPage = Schema.Struct({
   queryId: Schema.String,
   revision: Schema.Number,
@@ -208,9 +280,32 @@ export const RunPage = Schema.Struct({
   completeness: Schema.Literals(["complete", "partial"]),
   evaluatedAt: Schema.Number,
   dataAsOf: Schema.NullOr(Schema.Number),
-  source: Schema.Struct({
-    collectionId: Schema.String,
-    name: Schema.String,
-    freshness: SourceFreshness,
+  source: Source,
+})
+
+export const AggregateInput = Schema.Struct({
+  queryId: Schema.String,
+  revision: Schema.Int,
+})
+
+/** Mirrors savedAggregateValidator in convex/lib/savedQueries.ts. */
+export const AggregateResult = Schema.Struct({
+  kind: Schema.Literal("aggregate"),
+  queryId: Schema.String,
+  revision: Schema.Number,
+  resultSchema: Schema.Struct({
+    version: Schema.Number,
+    fields: Schema.Array(Field),
   }),
+  rows: Schema.Array(
+    Schema.Struct({
+      key: Schema.String,
+      values: Schema.Record(Schema.String, RecordValue),
+    })
+  ),
+  rowsRead: Schema.Number,
+  completeness: Schema.Literal("complete"),
+  evaluatedAt: Schema.Number,
+  dataAsOf: Schema.NullOr(Schema.Number),
+  source: Source,
 })

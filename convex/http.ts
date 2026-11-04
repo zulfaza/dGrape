@@ -168,7 +168,7 @@ agentRoute(
   (ctx, digest, input) =>
     ctx.runMutation(internal.agentQueries.save, {
       ...input,
-      query: Queries.toRecordQuery(input.query),
+      query: Queries.toSavedQuery(input.query),
       digest,
     })
 )
@@ -193,6 +193,18 @@ agentRoute(http, "/agent/queries/run", Queries.RunInput, (ctx, digest, input) =>
     numItems: input.limit ?? Queries.MAX_PAGE_SIZE,
     cursor: input.cursor ?? null,
   })
+)
+agentRoute(
+  http,
+  "/agent/queries/aggregate",
+  Queries.AggregateInput,
+  (ctx, digest, input) =>
+    ctx.runQuery(internal.agentQueries.aggregate, {
+      digest,
+      now: Date.now(),
+      queryId: input.queryId,
+      revision: input.revision,
+    })
 )
 registerAgentDiscoveryRoutes(http)
 agentRoute(

@@ -265,7 +265,11 @@ export const ConnectionPage = Schema.Struct({
   continueCursor: Schema.String,
 })
 
-const ErrorBody = Schema.Struct({ error: Schema.String })
+/** A refused request; `hint` says how to fix it (see convex/lib/agentRoute.ts). */
+const ErrorBody = Schema.Struct({
+  error: Schema.String,
+  hint: Schema.optionalKey(Schema.String),
+})
 
 export interface ListRecordsInput {
   readonly collectionId: string
@@ -382,6 +386,9 @@ export class AgentApi extends Context.Service<
     readonly queryRun: (
       input: typeof Queries.RunInput.Type
     ) => Call<typeof Queries.RunPage.Type>
+    readonly queryAggregate: (
+      input: typeof Queries.AggregateInput.Type
+    ) => Call<typeof Queries.AggregateResult.Type>
     readonly pageSaveDraft: (
       input: typeof Pages.SaveDraftInput.Type
     ) => Call<typeof Pages.SavedDraft.Type>
@@ -490,7 +497,11 @@ export const layer = (baseUrl: string) =>
           const reason = yield* HttpClientResponse.schemaBodyJson(ErrorBody)(
             response
           ).pipe(
-            Effect.map((body) => body.error),
+            Effect.map((body) =>
+              body.hint === undefined
+                ? body.error
+                : `${body.error}. ${body.hint}`
+            ),
             Effect.orElseSucceed(() => statusMessage(response.status))
           )
           return yield* new AgentApiError({ message: reason })
@@ -605,6 +616,14 @@ export const layer = (baseUrl: string) =>
           send(
             json(HttpClientRequest.post(url("/agent/queries/run")), input),
             Queries.RunPage
+          ),
+        queryAggregate: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/queries/aggregate")),
+              input
+            ),
+            Queries.AggregateResult
           ),
         pageSaveDraft: (input) =>
           send(
