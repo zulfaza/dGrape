@@ -18,11 +18,6 @@ export async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
     .withIndex("by_digest", (q) => q.eq("digest", digest))
     .unique()
   if (!grant || grant.state !== "active" || grant.expiresAt <= now) return null
-  if (grant.registrationId) {
-    // Revoking a registration stops every token issued to it.
-    const registration = await ctx.db.get(grant.registrationId)
-    if (registration?.status !== "claimed") return null
-  }
   // Agent credentials need the role that may manage them: owner.
   const member = await memberWithAccess(
     ctx,
@@ -31,6 +26,15 @@ export async function resolveGrant(ctx: QueryCtx, digest: string, now: number) {
     "manage"
   )
   if (!member) return null
+  // A role change replaces the membership row (convex/members.ts). Agent
+  // access made before the current row stops working.
+  if (grant._creationTime < member._creationTime) return null
+  if (grant.registrationId) {
+    // Revoking a registration stops every token issued to it.
+    const registration = await ctx.db.get(grant.registrationId)
+    if (registration?.status !== "claimed") return null
+    if (registration.claimedAt < member._creationTime) return null
+  }
   return {
     grantId: grant._id,
     owner: grant.owner,

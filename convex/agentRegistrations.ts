@@ -219,7 +219,7 @@ export const completeClaim = internalMutation({
 })
 
 /** Reads the verified email of a WorkOS user, or null when it is not verified. */
-async function verifiedEmail(userId: string): Promise<string | null> {
+export async function verifiedEmail(userId: string): Promise<string | null> {
   const response = await fetch(
     `https://api.workos.com/user_management/users/${encodeURIComponent(userId)}`,
     { headers: { Authorization: `Bearer ${workosApiKey()}` } }

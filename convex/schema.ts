@@ -24,7 +24,10 @@ import { operationFields } from "./lib/operations"
 import { recipeTables } from "./lib/recipeState"
 import { secretFields, connectionFields } from "./lib/secretDomain"
 import { sourceSyncFields } from "./lib/sourceSync"
-import { workspaceRoleValidator } from "./lib/workspaceRoles"
+import {
+  inviteRoleValidator,
+  workspaceRoleValidator,
+} from "./lib/workspaceRoles"
 
 export default defineSchema({
   ...recipeTables,
@@ -123,9 +126,25 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     userId: v.string(),
     role: workspaceRoleValidator,
+    /** The verified email of a member who joined by invite. */
+    email: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
-    .index("by_workspace_user", ["workspaceId", "userId"]),
+    .index("by_workspace_user", ["workspaceId", "userId"])
+    .index("by_workspace_role", ["workspaceId", "role"]),
+  /** A pending invite. Accepting or revoking it deletes the row. */
+  workspaceInvites: defineTable({
+    workspaceId: v.id("workspaces"),
+    /** Lowercase. Only a user with this verified email can accept. */
+    email: v.string(),
+    role: inviteRoleValidator,
+    /** SHA-256 of the invite token. The token is shown once. */
+    tokenDigest: v.string(),
+    invitedBy: v.string(),
+    expiresAt: v.number(),
+  })
+    .index("by_tokenDigest", ["tokenDigest"])
+    .index("by_workspaceId_and_email", ["workspaceId", "email"]),
   reportCounts: defineTable({
     queryId: v.id("queryDefinitions"),
     revision: v.number(),
