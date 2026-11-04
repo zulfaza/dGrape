@@ -197,6 +197,7 @@ test("agent credentials save, list, and run queries in their own workspace", asy
     | typeof Queries.SaveInput.Type
     | typeof Queries.ListInput.Type
     | typeof Queries.RunInput.Type
+    | typeof Queries.AggregateInput.Type
   const call = async (operation: string, body: Body, token = writer) => {
     const response = await t.fetch(`/agent/queries/${operation}`, {
       method: "POST",
@@ -264,6 +265,32 @@ test("agent credentials save, list, and run queries in their own workspace", asy
   expect(
     await call("run", { queryId, revision: 1, cursor: run.body.continueCursor })
   ).toMatchObject({ status: 200, body: { completeness: "complete" } })
+  const totals = await call("save", {
+    collectionId,
+    name: "Totals",
+    query: {
+      fieldId: "name",
+      where: { in: ["a", "c"] },
+      filters: [{ fieldId: "name", op: "neq", value: "c" }],
+      aggregate: { groupBy: { fieldId: "name" }, measures: [{ op: "count" }] },
+    },
+  })
+  expect(totals).toMatchObject({ status: 200, body: { revision: 1 } })
+  const aggregate = await call(
+    "aggregate",
+    { queryId: totals.body.queryId, revision: 1 },
+    reader
+  )
+  expect(aggregate.status).toBe(200)
+  expect(
+    Schema.decodeUnknownSync(Queries.AggregateResult)(aggregate.body)
+  ).toMatchObject({
+    completeness: "complete",
+    rows: [{ values: { name: "a", count: 1 } }],
+  })
+  expect(
+    await call("run", { queryId: totals.body.queryId, revision: 1 })
+  ).toMatchObject({ status: 400 })
   await t.run(async (ctx) => {
     const collection = await ctx.db.get(collectionId)
     if (!collection) throw new Error("Missing fixture")
@@ -271,6 +298,9 @@ test("agent credentials save, list, and run queries in their own workspace", asy
       budgets: { queryBytesRead: 10 },
     })
   })
+  expect(
+    await call("aggregate", { queryId: totals.body.queryId, revision: 1 })
+  ).toMatchObject({ status: 400, body: { code: "QueryTooExpensive" } })
   expect(await call("run", { queryId, revision: 1 }, reader)).toMatchObject({
     status: 400,
     body: {

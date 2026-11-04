@@ -412,7 +412,7 @@ const RecipeSetRunAccess = Tool.make("recipes_set_run_access", {
 
 const QuerySave = Tool.make("queries_save", {
   description:
-    `Save a records query so pages can show its results. \`query\` has the records_query shape: \`fieldId\` (an indexed field), \`order\`, and \`where\`. Each save makes a new immutable revision. To change a saved query, pass its \`queryId\` and its current \`revision\` as \`expectedRevision\`; if it changed since you read it, the call fails and you must list it again. Returns \`queryId\` and \`revision\`. Needs the data.write scope.` +
+    `Save a records query so pages can show its results. \`query\` has the records_query shape: \`fieldId\` (an indexed field), \`order\`, and \`where\`; \`where\` can also be \`{ in: [values] }\` (1 to 20 values, not for a multiSelect field). Optional: \`filters\`, up to 5 of \`{ fieldId, op, value }\` (op "eq", "neq", "lt", "lte", "gt", "gte"; ranges only on text, number, integer, timestamp and date fields) or \`{ fieldId, op: "in", values }\` on any field, checked after the indexed read, so a page can have fewer records than its limit; \`select\`, 1 to 50 field IDs that results contain; \`aggregate\`: \`{ measures, groupBy? }\` with 1 to 5 measures \`{ op: "count" }\` or \`{ op: "sum" | "average" | "min" | "max", fieldId }\` and \`groupBy: { fieldId, bucket? }\` (bucket "day", "week", "month" or "year" in UTC, for date and timestamp fields). Result fields of an aggregate are the group field, "count" and "<op>_<fieldId>". Read an aggregate with queries_aggregate, not queries_run. Each save makes a new immutable revision. To change a saved query, pass its \`queryId\` and its current \`revision\` as \`expectedRevision\`; if it changed since you read it, the call fails and you must list it again. Returns \`queryId\` and \`revision\`. Needs the data.write scope.` +
     OperationKeyDescription,
   parameters: Queries.SaveInput,
   success: Queries.Saved,
@@ -428,6 +428,14 @@ const QueryList = Tool.make("queries_list", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Readonly, true)
 
+const QueryAggregate = Tool.make("queries_aggregate", {
+  description: `Read the groups of one revision of a saved aggregate query. It reads at most the workspace's query row budget of records in one bounded read, so the result is always complete. When more records match, it fails with QueryTooExpensive and a hint: narrow the query, or run a recipe with an aggregate step that writes a summary collection, then query that collection.`,
+  parameters: Queries.AggregateInput,
+  success: Queries.AggregateResult,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
 const QueryRun = Tool.make("queries_run", {
   description: `Run one revision of a saved query. Returns up to \`limit\` records (1 to ${Queries.MAX_PAGE_SIZE}), the result schema, and \`completeness\` ("partial" when more pages remain or the read budget stopped the page). When \`isDone\` is false, pass \`continueCursor\` as \`cursor\`.`,
   parameters: Queries.RunInput,
@@ -438,7 +446,7 @@ const QueryRun = Tool.make("queries_run", {
 
 const PageSaveDraft = Tool.make("pages_save_draft", {
   description:
-    `Save a page definition as a new draft revision. A draft is not visible on the published page until pages_publish. \`definition\` has a \`title\` and up to 20 \`blocks\`: markdown \`{ kind, text }\`, artifact \`{ kind, title, artifactId }\`, htmlReport \`{ kind, title, artifactId }\` (an HTML file with a report data timestamp, shown as a sandboxed static snapshot), and live blocks bound to a saved query revision (\`binding: { queryId, revision }\` from queries_list): table \`{ fields }\`, metric \`{ field, unit, operation: "sum" | "count" }\`, chart \`{ chart: { type: "bar" | "line" | "area" | "pie", labelField, valueField, unit } }\` or \`{ chart: { type: "scatter", labelField, xField, xUnit, valueField, unit } }\`. Bound fields must be in the query result, and sum and chart values (and the scatter \`xField\`) must be number fields. Pie values must be zero or more. An invalid block fails with its block number and the result fields. Omit \`pageId\` to create a page. To change a page, pass its \`pageId\` and its current \`revision\` as \`expectedRevision\`. Needs the pages.write scope.` +
+    `Save a page definition as a new draft revision. A draft is not visible on the published page until pages_publish. \`definition\` has a \`title\` and up to 20 \`blocks\`: markdown \`{ kind, text }\`, artifact \`{ kind, title, artifactId }\`, htmlReport \`{ kind, title, artifactId }\` (an HTML file with a report data timestamp, shown as a sandboxed static snapshot), and live blocks bound to a saved query revision (\`binding: { queryId, revision }\` from queries_list): table \`{ fields }\`, metric \`{ field, unit, operation: "sum" | "count" }\`, chart \`{ chart: { type: "bar" | "line" | "area" | "pie", labelField, valueField, unit } }\` or \`{ chart: { type: "scatter", labelField, xField, xUnit, valueField, unit } }\`. Bound fields must be in the query result, and sum and chart values (and the scatter \`xField\`) must be number or integer fields. An aggregate query binds like any query: bind its group field as a label and its measures as values. Pie values must be zero or more. An invalid block fails with its block number and the result fields. Omit \`pageId\` to create a page. To change a page, pass its \`pageId\` and its current \`revision\` as \`expectedRevision\`. Needs the pages.write scope.` +
     OperationKeyDescription,
   parameters: Pages.SaveDraftInput,
   success: Pages.SavedDraft,
@@ -500,6 +508,7 @@ const DfeToolkit = Toolkit.make(
   QuerySave,
   QueryList,
   QueryRun,
+  QueryAggregate,
   PageSaveDraft,
   PagePublish,
   PageGet,
@@ -550,6 +559,7 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       queries_save: (input) => api.querySave(input),
       queries_list: (input) => api.queryList(input),
       queries_run: (input) => api.queryRun(input),
+      queries_aggregate: (input) => api.queryAggregate(input),
       pages_save_draft: (input) => api.pageSaveDraft(input),
       pages_publish: (input) => api.pagePublish(input),
       pages_get: (input) => api.pageGet(input),
@@ -607,7 +617,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, collections_rename_field, records_create, records_update, and records_delete change data, and records_link_artifact and records_unlink_artifact link files to records. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. workspace_export returns every definition (collections, saved queries, recipes, schedules, and pages) as one JSON document, without records or secret values. " +
+      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, collections_rename_field, records_create, records_update, and records_delete change data, and records_link_artifact and records_unlink_artifact link files to records. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, queries_run reads one revision, and queries_aggregate reads the groups of an aggregate revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. workspace_export returns every definition (collections, saved queries, recipes, schedules, and pages) as one JSON document, without records or secret values. " +
       "Recipes fetch and transform data without a model. A recipe fetch step uses a connection: connections_list and connections_describe show each connection's origin, routes, and credential status, never secret values. A person adds credentials in the dashboard. recipes_publish saves an immutable recipe version (fetch, map, filter, join, aggregate, upsert, snapshot, and artifact steps); recipes_versions lists versions. recipes_trigger starts a run (reuse its idempotencyKey to retry), recipes_runs lists runs, recipes_history lists the attempts of one run, and recipes_cancel stops a run. recipes_schedule creates a UTC schedule, recipes_schedules lists schedules, recipes_set_enabled turns one on or off, and recipes_set_run_access lets another user run a recipe. Only the recipe creator manages schedules and run access.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)

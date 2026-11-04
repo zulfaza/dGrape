@@ -8,10 +8,12 @@ import {
   collectionFieldValidator,
   recordValuesValidator,
 } from "./lib/collectionDomain"
-import { recordQueryValidator } from "./lib/recordQuery"
+import { savedQueryValidator } from "./lib/queryAggregate"
 import {
   listSavedQueries,
+  runSavedAggregateInWorkspace,
   runSavedQueryInWorkspace,
+  savedAggregateValidator,
   saveQueryInWorkspace,
 } from "./lib/savedQueries"
 import { sourceStatusValidator } from "./lib/sourceSync"
@@ -34,7 +36,7 @@ export const save = internalMutation({
     digest: v.string(),
     collectionId: v.string(),
     name: v.string(),
-    query: recordQueryValidator,
+    query: savedQueryValidator,
     queryId: v.optional(v.string()),
     expectedRevision: v.optional(v.number()),
     idempotencyKey: v.optional(v.string()),
@@ -170,5 +172,24 @@ export const run = internalQuery({
         dataAsOf: result.dataAsOf,
         source: result.source,
       }
+    }),
+})
+
+export const aggregate = internalQuery({
+  args: {
+    digest: v.string(),
+    now: v.number(),
+    queryId: v.string(),
+    revision: v.number(),
+  },
+  returns: savedAggregateValidator,
+  handler: (ctx, args) =>
+    withGrant(ctx, args.digest, args.now, ["data.read"], async (grant) => {
+      const queryId = ctx.db.normalizeId("queryDefinitions", args.queryId)
+      if (!queryId) throw new Error("Query access denied")
+      return runSavedAggregateInWorkspace(ctx, grant.workspaceId, {
+        queryId,
+        expectedRevision: args.revision,
+      })
     }),
 })
