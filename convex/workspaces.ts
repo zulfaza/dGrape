@@ -248,7 +248,7 @@ export const referenceLabel = query({
   args: { collectionId: v.id("collections"), id: v.string() },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, { collectionId, id }) => {
-    const collection = await collectionForRecords(ctx, collectionId)
+    const collection = await collectionForRecords(ctx, collectionId, "read")
     return readReferenceLabel(ctx, collection.workspaceId, id)
   },
 })
