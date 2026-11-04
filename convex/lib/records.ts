@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
 import { indexEntries, type RecordValues } from "./collectionDomain"
+import { migratingMessage } from "./schemaMigrations"
 import {
   countAfterDelete,
   countAfterInsert,
@@ -19,8 +20,15 @@ import {
  * entries (the recordIndexEntries table), references (see
  * convex/lib/references.ts), and the collection's record count in step with
  * its values. Callers check access and validate `values` with `checkRecord`
- * first.
+ * first. While a schema migration holds the collection lock, only
+ * `migrateRecord` writes.
  */
+
+/** Throws when a schema migration holds the lock of `collection`. */
+function requireUnlocked(collection: Doc<"collections">) {
+  if (collection.migrationLock)
+    throw new Error(migratingMessage(collection.migrationLock))
+}
 
 async function replaceIndexEntries(
   ctx: MutationCtx,
@@ -57,6 +65,7 @@ export async function insertRecord(
   // Re-read: a caller that inserts several records passes the same document.
   const current = await ctx.db.get(collection._id)
   if (!current) throw new Error("Collection missing")
+  requireUnlocked(current)
   const problem = await recordBudgetProblem(ctx, current)
   if (problem) throw new Error(problem)
   const recordId = await ctx.db.insert("collectionRecords", {
@@ -78,6 +87,31 @@ export async function insertRecord(
 
 /** Replaces the values and returns the new revision. */
 export async function replaceRecordValues(
+  ctx: MutationCtx,
+  collection: Doc<"collections">,
+  record: Doc<"collectionRecords">,
+  values: RecordValues
+) {
+  const current = await ctx.db.get(collection._id)
+  if (!current) throw new Error("Collection missing")
+  requireUnlocked(current)
+  return writeValues(ctx, current, record, values)
+}
+
+/**
+ * Writes the target values of a schema migration. `collection` carries the
+ * target definition, which is not active yet; the migration holds the lock.
+ */
+export async function migrateRecord(
+  ctx: MutationCtx,
+  collection: Doc<"collections">,
+  record: Doc<"collectionRecords">,
+  values: RecordValues
+) {
+  return writeValues(ctx, collection, record, values)
+}
+
+async function writeValues(
   ctx: MutationCtx,
   collection: Doc<"collections">,
   record: Doc<"collectionRecords">,
@@ -107,6 +141,7 @@ export async function deleteRecord(
   if (!record) throw new Error("Record missing")
   const collection = await ctx.db.get(record.collectionId)
   if (!collection) throw new Error("Collection missing")
+  requireUnlocked(collection)
   const referencedBy = await referencingRecord(ctx, recordId)
   if (referencedBy) return referencedBy
   await advanceDataRevision(ctx, collection._id, (state) =>

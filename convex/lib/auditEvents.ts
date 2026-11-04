@@ -68,6 +68,10 @@ export const auditEventValidator = v.union(
     collectionId: v.id("collections"),
     migrationId: v.id("schemaMigrations"),
   }),
+  op("collection.startMigration", {
+    collectionId: v.id("collections"),
+    migrationId: v.id("schemaMigrations"),
+  }),
   op("collection.cancelMigration", {
     collectionId: v.id("collections"),
     migrationId: v.id("schemaMigrations"),

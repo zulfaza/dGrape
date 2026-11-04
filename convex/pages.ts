@@ -14,6 +14,7 @@ import {
 import { requireMembership } from "./lib/auth"
 import { workspaceBudgets } from "./lib/budgets"
 import { asQueryTooExpensive } from "./lib/queryErrors"
+import { pinnedSchemaProblem } from "./lib/collectionSchemas"
 import {
   firstPageWithinBudget,
   readSavedResult,
@@ -82,8 +83,8 @@ async function bindingProblem(
   const collection = await ctx.db.get(saved.collectionId)
   if (!collection || collection.workspaceId !== workspaceId)
     return "Source collection is unavailable"
-  if (collection.definition.version !== version.schemaVersion)
-    return "Query schema is stale; save and bind a new query revision"
+  const schemaProblem = pinnedSchemaProblem(collection, version.schemaVersion)
+  if (schemaProblem) return schemaProblem
   // Page blocks never show or group by a secret reference.
   const fields = version.resultSchema.fields.filter(
     (field) => field.type !== "secretRef"

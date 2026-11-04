@@ -33,6 +33,8 @@ function describe(event: AuditEvent): string {
       return `renamed a field (schema version ${event.version})`
     case "collection.planMigration":
       return "planned a schema migration"
+    case "collection.startMigration":
+      return "started a schema migration"
     case "collection.cancelMigration":
       return "cancelled a schema migration"
     case "record.create":

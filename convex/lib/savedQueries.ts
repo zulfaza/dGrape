@@ -22,6 +22,7 @@ import {
   type SavedQuery,
 } from "./queryAggregate"
 import { queryTooExpensive } from "./queryErrors"
+import { pinnedSchemaProblem } from "./collectionSchemas"
 import { queryRecords } from "./recordQuery"
 import {
   dataAsOf,
@@ -261,8 +262,8 @@ async function runnableRevision(
   const collection = await ctx.db.get(saved.collectionId)
   if (!collection || collection.workspaceId !== saved.workspaceId)
     throw new Error("Collection access denied")
-  if (version.schemaVersion !== collection.definition.version)
-    throw new Error("Query schema mismatch; save a new revision")
+  const schemaProblem = pinnedSchemaProblem(collection, version.schemaVersion)
+  if (schemaProblem) throw new Error(schemaProblem)
   return { saved, version, collection }
 }
 
