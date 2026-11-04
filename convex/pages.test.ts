@@ -3,6 +3,8 @@ import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
 import schema from "./schema"
 import { api } from "./_generated/api"
+import { Schema } from "effect"
+import * as Exports from "./lib/agentExportTransport"
 import * as Pages from "./lib/agentPageTransport"
 const modules = import.meta.glob("./**/*.ts")
 
@@ -703,5 +705,204 @@ test("agent credentials draft, publish, get and list pages with clear binding er
   expect(await call("publish", publishOnce)).toEqual(published)
   expect(await call("list", { limit: 20 }, reader)).toMatchObject({
     body: { page: { length: 4 } },
+  })
+}, 30_000)
+
+test("workspace exports keep every definition version and stable IDs, without user IDs, and need each read scope", async () => {
+  const { t, owner, other, workspaceId } = await fixture()
+  const collectionId = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Numbers",
+    fields: [{ id: "amount", label: "Amount", type: "number", indexed: true }],
+  })
+  await owner.mutation(api.workspaces.addField, {
+    collectionId,
+    field: { id: "note", label: "Note", type: "text" },
+  })
+  const first = await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "Amounts",
+    query: { fieldId: "amount", order: "asc" },
+  })
+  await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "Amounts",
+    queryId: first.queryId,
+    expectedRevision: 1,
+    query: { fieldId: "amount", order: "desc" },
+  })
+  const page = await owner.mutation(api.pages.save, {
+    workspaceId,
+    definition: {
+      title: "Numbers",
+      blocks: [{ kind: "markdown", text: "One" }],
+    },
+  })
+  await owner.mutation(api.pages.save, {
+    workspaceId,
+    pageId: page.pageId,
+    expectedRevision: 1,
+    definition: {
+      title: "Numbers",
+      blocks: [
+        {
+          kind: "table",
+          title: "Rows",
+          binding: first,
+          fields: ["amount"],
+        },
+      ],
+    },
+  })
+  await owner.mutation(api.pages.publish, {
+    ...page,
+    expectedRevision: 2,
+    expectedPublishedRevision: null,
+  })
+  const { digestToken } = await import("./agentAccess")
+  const reader = "c".repeat(64)
+  const narrow = "d".repeat(64)
+  const recipe = {
+    steps: [
+      // Stored join rows can hold string arrays; the MCP schema keeps them.
+      {
+        kind: "join" as const,
+        field: "a",
+        rightField: "b",
+        prefix: "p",
+        rows: [{ b: "x", tags: ["one"] }],
+      },
+      { kind: "snapshot" as const, collectionId },
+    ],
+    limits: { rows: 10, bytes: 1000, durationMs: 1000, attempts: 1 },
+  }
+  const { versionId, scheduleId } = await t.run(async (ctx) => {
+    const grant = { workspaceId, owner: "owner", state: "active" as const }
+    await ctx.db.insert("agentGrants", {
+      ...grant,
+      digest: await digestToken(reader),
+      scope: "readonly",
+      expiresAt: Date.now() + 60000,
+    })
+    await ctx.db.insert("agentGrants", {
+      ...grant,
+      digest: await digestToken(narrow),
+      scope: ["data.read", "pages.read"],
+      expiresAt: Date.now() + 60000,
+    })
+    await ctx.db.insert("secretRefs", {
+      workspaceId,
+      createdBy: "owner",
+      owner: { kind: "workspace" },
+      label: "SECRET_LABEL",
+      revision: 1,
+      state: { kind: "ready", name: "SECRET_NAME", objectId: "SECRET_OBJECT" },
+    })
+    const versionId = await ctx.db.insert("recipeVersions", {
+      workspaceId,
+      name: "Snapshot",
+      recipe,
+      createdBy: "owner",
+    })
+    const scheduleId = await ctx.db.insert("recipeSchedules", {
+      workspaceId,
+      versionId,
+      timing: { kind: "cron", expression: "0 * * * *" },
+      enabled: true,
+      nextAt: 5,
+    })
+    return { versionId, scheduleId }
+  })
+
+  const result = await owner.query(api.workspaceExport.definitions, {
+    workspaceId,
+    now: 0,
+  })
+  if (result.kind !== "ok") throw new Error(result.kind)
+  const exported = result.document
+  expect(exported).toMatchObject({
+    format: "dfe.workspace-definitions",
+    formatVersion: 1,
+    exportedAt: "1970-01-01T00:00:00.000Z",
+    workspace: { id: workspaceId, name: "Pages" },
+    collections: [
+      {
+        id: collectionId,
+        name: "Numbers",
+        definition: { version: 2 },
+        history: [{ version: 1 }, { version: 2 }],
+      },
+    ],
+    savedQueries: [
+      {
+        id: first.queryId,
+        collectionId,
+        revision: 2,
+        revisions: [
+          { revision: 1, query: { order: "asc" } },
+          { revision: 2, query: { order: "desc" } },
+        ],
+      },
+    ],
+    recipes: {
+      versions: [{ id: versionId, name: "Snapshot", recipe }],
+      schedules: [
+        {
+          id: scheduleId,
+          versionId,
+          timing: { kind: "cron", expression: "0 * * * *" },
+          enabled: true,
+          revision: 0,
+        },
+      ],
+    },
+    pages: [
+      {
+        id: page.pageId,
+        revision: 2,
+        publishedRevision: 1,
+        versions: [
+          { revision: 1 },
+          { revision: 2, definition: { blocks: [{ binding: first }] } },
+        ],
+      },
+    ],
+  })
+  const text = JSON.stringify(exported)
+  for (const absent of [
+    "owner",
+    "createdBy",
+    "SECRET_LABEL",
+    "SECRET_NAME",
+    "SECRET_OBJECT",
+    "nextAt",
+  ])
+    expect(text).not.toContain(absent)
+
+  await expect(
+    other.query(api.workspaceExport.definitions, { workspaceId, now: 0 })
+  ).rejects.toThrow("access denied")
+
+  const call = async (token: string) => {
+    const response = await t.fetch("/agent/workspace/export", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    })
+    return { status: response.status, body: await response.json() }
+  }
+  const agent = await call(reader)
+  expect(agent.status).toBe(200)
+  expect({ ...agent.body, exportedAt: exported.exportedAt }).toEqual(exported)
+  // The MCP tool decodes the same body without loss.
+  expect(Schema.decodeUnknownSync(Exports.WorkspaceExport)(agent.body)).toEqual(
+    agent.body
+  )
+  expect(await call(narrow)).toEqual({
+    status: 403,
+    body: { error: expect.stringContaining("jobs.read") },
   })
 }, 30_000)

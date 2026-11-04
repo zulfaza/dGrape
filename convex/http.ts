@@ -6,6 +6,7 @@ import { agentFailure, agentRoute } from "./lib/agentRoute"
 import * as Activity from "./lib/agentActivityTransport"
 import * as Collections from "./lib/agentCollectionTransport"
 import * as ArtifactLinks from "./lib/agentArtifactLinkTransport"
+import * as Exports from "./lib/agentExportTransport"
 import * as Pages from "./lib/agentPageTransport"
 import * as Queries from "./lib/agentQueryTransport"
 import { httpRouter } from "convex/server"
@@ -194,6 +195,16 @@ agentRoute(http, "/agent/queries/run", Queries.RunInput, (ctx, digest, input) =>
   })
 )
 registerAgentDiscoveryRoutes(http)
+agentRoute(
+  http,
+  "/agent/workspace/export",
+  Exports.ExportInput,
+  (ctx, digest) =>
+    ctx.runQuery(internal.workspaceExport.agentDefinitions, {
+      digest,
+      now: Date.now(),
+    })
+)
 agentRoute(
   http,
   "/agent/pages/saveDraft",
