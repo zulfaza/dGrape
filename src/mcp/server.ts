@@ -2,6 +2,7 @@ import * as Activity from "../../convex/lib/agentActivityTransport"
 import * as Collections from "../../convex/lib/agentCollectionTransport"
 import * as ArtifactLinks from "../../convex/lib/agentArtifactLinkTransport"
 import * as Exports from "../../convex/lib/agentExportTransport"
+import * as Migrations from "../../convex/lib/agentMigrationTransport"
 import * as Pages from "../../convex/lib/agentPageTransport"
 import * as Queries from "../../convex/lib/agentQueryTransport"
 import * as Recipes from "../../convex/lib/agentRecipeTransport"
@@ -196,6 +197,42 @@ const RenameField = Tool.make("collections_rename_field", {
   failure: AgentApi.AgentApiError,
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Destructive, false)
+
+const PlanMigration = Tool.make("migrations_plan", {
+  description:
+    "Plan a schema change that collections_add_field cannot make: change a field type, make a field required or optional, remove options, change indexes, or remove a field. Pass the collection's current schema `version` (from collections_describe) as `expectedVersion`, and the complete target `fields` (same shape as collections_create; keep each field id that stays). `defaults` gives a value, keyed by field id, for records that have no value for a target field (not for reference fields). Values convert when they can: numbers and booleans to text, text to a number when it parses, the text true or false to a boolean, a value to a select option. Returns `migrationId`. Then call migrations_dry_run. Needs the data.write scope.",
+  parameters: Migrations.PlanInput,
+  success: Migrations.Planned,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const GetMigration = Tool.make("migrations_get", {
+  description:
+    'Get a migration: its `source` and `target` definitions, `state`, `rollbackLimitations` (what a later change cannot undo), and `outdated` (true when the schema changed after the plan; plan again). `state.kind` is "planned", "dryRunning", "checked" (with `misfitCount` and up to 20 `misfits`: record IDs and reasons), "validating", "backfilling" (with `error` when a step stopped), "active", or "cancelled". The dry run and the migration run in the background: call this again to see progress.',
+  parameters: Migrations.MigrationInput,
+  success: Migrations.Migration,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
+const DryRunMigration = Tool.make("migrations_dry_run", {
+  description:
+    'Check every record against the target of a planned migration, in the background. It changes nothing. Call migrations_get until `state.kind` is "checked", then fix the records in `misfits` (or plan again) until `misfitCount` is 0. Needs the data.write scope.',
+  parameters: Migrations.MigrationInput,
+  success: Schema.Null,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const StartMigration = Tool.make("migrations_start", {
+  description:
+    'Run a migration whose dry run found no misfit. It locks the collection (record writes, schema changes, saved queries and pages fail with a message until it ends), checks every record again, writes the converted values, and makes the target schema active. If a record does not fit, it unlocks and returns to "checked". You cannot cancel or undo it; read `rollbackLimitations` first. Call it again to resume after a `state.error`. Saved queries and pages keep the old schema version: save and bind new query revisions after. Needs the data.write scope.',
+  parameters: Migrations.MigrationInput,
+  success: Schema.Null,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, true)
 
 const CreateRecord = Tool.make("records_create", {
   description:
@@ -531,6 +568,10 @@ const DfeToolkit = Toolkit.make(
   CreateCollection,
   AddField,
   RenameField,
+  PlanMigration,
+  GetMigration,
+  DryRunMigration,
+  StartMigration,
   CreateRecord,
   UpdateRecord,
   DeleteRecord,
@@ -581,6 +622,10 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       collections_create: (input) => api.createCollection(input),
       collections_add_field: (input) => api.addField(input),
       collections_rename_field: (input) => api.renameField(input),
+      migrations_plan: (input) => api.migrationPlan(input),
+      migrations_get: (input) => api.migrationGet(input),
+      migrations_dry_run: (input) => api.migrationDryRun(input),
+      migrations_start: (input) => api.migrationStart(input),
       records_create: (input) => api.createRecord(input),
       records_update: (input) => api.updateRecord(input),
       records_delete: (input) => api.deleteRecord(input),
@@ -617,7 +662,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, collections_rename_field, records_create, records_update, and records_delete change data, and records_link_artifact and records_unlink_artifact link files to records. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, queries_run reads one revision, and queries_aggregate reads the groups of an aggregate revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. workspace_export returns every definition (collections, saved queries, recipes, schedules, and pages) as one JSON document, without records or secret values. " +
+      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, collections_rename_field, records_create, records_update, and records_delete change data, and records_link_artifact and records_unlink_artifact link files to records. Incompatible schema changes use a migration: migrations_plan, migrations_dry_run, migrations_get, then migrations_start. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, queries_run reads one revision, and queries_aggregate reads the groups of an aggregate revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. workspace_export returns every definition (collections, saved queries, recipes, schedules, and pages) as one JSON document, without records or secret values. " +
       "Recipes fetch and transform data without a model. A recipe fetch step uses a connection: connections_list and connections_describe show each connection's origin, routes, and credential status, never secret values. A person adds credentials in the dashboard. recipes_publish saves an immutable recipe version (fetch, map, filter, join, aggregate, upsert, snapshot, and artifact steps); recipes_versions lists versions. recipes_trigger starts a run (reuse its idempotencyKey to retry), recipes_runs lists runs, recipes_history lists the attempts of one run, and recipes_cancel stops a run. recipes_schedule creates a UTC schedule, recipes_schedules lists schedules, recipes_set_enabled turns one on or off, and recipes_set_run_access lets another user run a recipe. Only the recipe creator manages schedules and run access.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)

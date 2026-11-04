@@ -7,6 +7,7 @@ import * as Activity from "./lib/agentActivityTransport"
 import * as Collections from "./lib/agentCollectionTransport"
 import * as ArtifactLinks from "./lib/agentArtifactLinkTransport"
 import * as Exports from "./lib/agentExportTransport"
+import * as Migrations from "./lib/agentMigrationTransport"
 import * as Pages from "./lib/agentPageTransport"
 import * as Queries from "./lib/agentQueryTransport"
 import { httpRouter } from "convex/server"
@@ -206,6 +207,38 @@ agentRoute(
       revision: input.revision,
     })
 )
+agentRoute(
+  http,
+  "/agent/migrations/plan",
+  Migrations.PlanInput,
+  (ctx, digest, input) =>
+    ctx.runMutation(internal.agentMigrations.plan, { ...input, digest })
+)
+agentRoute(
+  http,
+  "/agent/migrations/get",
+  Migrations.MigrationInput,
+  (ctx, digest, input) =>
+    ctx.runQuery(internal.agentMigrations.get, {
+      ...input,
+      digest,
+      now: Date.now(),
+    })
+)
+agentRoute(
+  http,
+  "/agent/migrations/dryRun",
+  Migrations.MigrationInput,
+  (ctx, digest, input) =>
+    ctx.runMutation(internal.agentMigrations.dryRun, { ...input, digest })
+)
+agentRoute(
+  http,
+  "/agent/migrations/start",
+  Migrations.MigrationInput,
+  (ctx, digest, input) =>
+    ctx.runMutation(internal.agentMigrations.start, { ...input, digest })
+)
 registerAgentDiscoveryRoutes(http)
 agentRoute(
   http,
@@ -371,7 +404,8 @@ http.route({
         digest: await digestToken(token),
         ...body,
       })
-      if (result.status === "denied") return writeFailure(result)
+      if (result.status === "denied" || result.status === "invalid")
+        return writeFailure(result)
       if (result.status === "conflict")
         return replyJson(409, {
           error: `The record changed. Its revision is now ${result.revision}. Read it again before you delete it.`,
