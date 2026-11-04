@@ -2,6 +2,7 @@ import { Schema } from "effect"
 
 const Value = Schema.Union([Schema.String, Schema.Number, Schema.Boolean])
 const Values = Schema.Record(Schema.String, Value)
+const Bound = Schema.Union([Schema.String, Schema.Number])
 const StoredValues = Schema.Record(
   Schema.String,
   Schema.Union([Value, Schema.Array(Schema.String)])
@@ -31,6 +32,19 @@ const recipe = <V extends typeof Values | typeof StoredValues>(values: V) =>
             equals: Value,
           }),
           Schema.Struct({
+            kind: Schema.Literal("filter"),
+            field: Schema.String,
+            in: Schema.mutable(Schema.Array(Value)),
+          }),
+          Schema.Struct({
+            kind: Schema.Literal("filter"),
+            field: Schema.String,
+            range: Schema.Struct({
+              min: Schema.optionalKey(Bound),
+              max: Schema.optionalKey(Bound),
+            }),
+          }),
+          Schema.Struct({
             kind: Schema.Literal("join"),
             field: Schema.String,
             rightField: Schema.String,
@@ -40,7 +54,13 @@ const recipe = <V extends typeof Values | typeof StoredValues>(values: V) =>
           Schema.Struct({
             kind: Schema.Literal("aggregate"),
             groupBy: Schema.String,
-            operation: Schema.Literals(["count", "sum"]),
+            operation: Schema.Literals([
+              "count",
+              "sum",
+              "min",
+              "max",
+              "average",
+            ]),
             field: Schema.optionalKey(Schema.String),
             output: Schema.String,
           }),
