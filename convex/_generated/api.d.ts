@@ -49,6 +49,7 @@ import type * as lib_collectionDomain from "../lib/collectionDomain.js";
 import type * as lib_collectionSchemas from "../lib/collectionSchemas.js";
 import type * as lib_collectionTemplates from "../lib/collectionTemplates.js";
 import type * as lib_connectorFetch from "../lib/connectorFetch.js";
+import type * as lib_githubConnector from "../lib/githubConnector.js";
 import type * as lib_identityAssertion from "../lib/identityAssertion.js";
 import type * as lib_pageDomain from "../lib/pageDomain.js";
 import type * as lib_r2 from "../lib/r2.js";
@@ -129,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   "lib/collectionSchemas": typeof lib_collectionSchemas;
   "lib/collectionTemplates": typeof lib_collectionTemplates;
   "lib/connectorFetch": typeof lib_connectorFetch;
+  "lib/githubConnector": typeof lib_githubConnector;
   "lib/identityAssertion": typeof lib_identityAssertion;
   "lib/pageDomain": typeof lib_pageDomain;
   "lib/r2": typeof lib_r2;
