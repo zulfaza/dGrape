@@ -1,8 +1,11 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test"
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 import schema from "./schema"
-import { api } from "./_generated/api"
+import { api, internal } from "./_generated/api"
+import type { Doc } from "./_generated/dataModel"
+import { changeArtifactUsage, usageRow } from "./lib/artifactUsage"
+import { r2 } from "./lib/r2"
 const modules = import.meta.glob("./**/*.ts")
 test("file links authorize identity and workspace, retry safely, enforce MIME and cap, survive deletion", async () => {
   const t = convexTest(schema, modules)
@@ -200,4 +203,77 @@ test("saved artifact pages retain definitions and report deleted references", as
   expect((await owner.query(api.pages.get, { ...page })).bindings[0]).toContain(
     "unavailable"
   )
+})
+
+test("the upload sweep removes expired uploads only and keeps artifacts and usage", async () => {
+  const deleted = vi.spyOn(r2, "deleteObject").mockResolvedValue()
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const workspaceId = await owner.mutation(api.workspaces.create, {
+    name: "Sweep",
+  })
+  const now = Date.now()
+  const hour = 60 * 60 * 1000
+  const createdBy: Doc<"artifactUploads">["createdBy"] = {
+    kind: "user",
+    userId: "owner",
+  }
+  const expiresAt = [now - 3 * hour, now - 2 * hour, now - 30 * 60 * 1000]
+  await t.run(async (ctx) => {
+    for (const [i, at] of expiresAt.entries())
+      await ctx.db.insert("artifactUploads", {
+        workspaceId,
+        key: `upload-${i}`,
+        name: "a.txt",
+        createdBy,
+        expiresAt: at,
+      })
+    const artifactId = await ctx.db.insert("artifacts", {
+      workspaceId,
+      key: "kept",
+      name: "kept.txt",
+      contentType: "text/plain",
+      size: 10,
+      createdBy,
+    })
+    const artifact = await ctx.db.get(artifactId)
+    if (!artifact) throw new Error("Artifact missing")
+    await changeArtifactUsage(ctx, artifact, 1)
+  })
+  const usage = () =>
+    t.run(async (ctx) => (await usageRow(ctx, workspaceId))?.artifacts)
+  const before = await usage()
+  await t.mutation(internal.artifacts.sweepExpiredUploads)
+  // A retry or an overlapping run finds nothing more to delete.
+  await t.mutation(internal.artifacts.sweepExpiredUploads)
+  await t.run(async (ctx) => {
+    const uploads = await ctx.db.query("artifactUploads").take(10)
+    // The upload inside the grace period stays.
+    expect(uploads.map((u) => u.key)).toEqual(["upload-2"])
+    expect(
+      (await ctx.db.query("artifacts").take(10)).map((a) => a.key)
+    ).toEqual(["kept"])
+  })
+  expect(await usage()).toEqual(before)
+  expect(deleted.mock.calls.map(([, key]) => key)).toEqual([
+    "upload-0",
+    "upload-1",
+  ])
+  // One run deletes at most 100 uploads and schedules the next page.
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 150; i++)
+      await ctx.db.insert("artifactUploads", {
+        workspaceId,
+        key: `old-${i}`,
+        name: "a.txt",
+        createdBy,
+        expiresAt: now - 2 * hour,
+      })
+  })
+  deleted.mockClear()
+  await t.mutation(internal.artifacts.sweepExpiredUploads)
+  expect(deleted).toHaveBeenCalledTimes(100)
+  await t.mutation(internal.artifacts.sweepExpiredUploads)
+  expect(deleted).toHaveBeenCalledTimes(150)
+  deleted.mockRestore()
 })

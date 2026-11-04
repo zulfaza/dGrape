@@ -86,7 +86,9 @@ export default defineSchema({
     name: v.string(),
     createdBy: artifactCreatorValidator,
     expiresAt: v.number(),
-  }).index("by_key", ["key"]),
+  })
+    .index("by_key", ["key"])
+    .index("by_expiresAt", ["expiresAt"]),
   /** Private files in R2, with their provenance. */
   artifacts: defineTable({
     workspaceId: v.id("workspaces"),
