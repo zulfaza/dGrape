@@ -3,11 +3,14 @@ import {
   Cable,
   CalendarClock,
   Code,
+  GitBranch,
   KeyRound,
   LayoutDashboard,
+  PackageOpen,
   Paperclip,
   RefreshCw,
   ShieldCheck,
+  Users,
   type LucideIcon,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -55,9 +58,6 @@ const shipped: ReadonlyArray<Feature> = [
     icon: ShieldCheck,
     body: "Credentials for other services use secret references, so records never show their values.",
   },
-]
-
-const planned: ReadonlyArray<Feature> = [
   {
     title: "Custom reports",
     icon: Code,
@@ -66,7 +66,25 @@ const planned: ReadonlyArray<Feature> = [
   {
     title: "Know your data is fresh",
     icon: RefreshCw,
-    body: "See when each source was last refreshed, and which data is out of date.",
+    body: "See when each source was last refreshed, and which sources failed to refresh.",
+  },
+]
+
+const planned: ReadonlyArray<Feature> = [
+  {
+    title: "Work as a team",
+    icon: Users,
+    body: "Invite editors and viewers to a workspace. Viewers can read but cannot change data.",
+  },
+  {
+    title: "Change schemas safely",
+    icon: GitBranch,
+    body: "Do a dry run of a schema change, fix the records that do not fit, then make it active.",
+  },
+  {
+    title: "Take your workspace with you",
+    icon: PackageOpen,
+    body: "Export collection schemas, saved queries, recipes, and pages, not only records.",
   },
 ]
 
