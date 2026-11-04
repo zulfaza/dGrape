@@ -2,13 +2,14 @@ import { registerAgentDiscoveryRoutes } from "./agentDiscoveryHttp"
 import { registerAgentRecipeRoutes } from "./agentRecipeHttp"
 import { collectionTemplates } from "./lib/collectionTemplates"
 import { registerRecipeRoutes } from "./recipeHttp"
-import { agentRoute } from "./lib/agentRoute"
+import { agentFailure, agentRoute } from "./lib/agentRoute"
 import * as Activity from "./lib/agentActivityTransport"
 import * as Collections from "./lib/agentCollectionTransport"
 import * as ArtifactLinks from "./lib/agentArtifactLinkTransport"
 import * as Pages from "./lib/agentPageTransport"
 import * as Queries from "./lib/agentQueryTransport"
 import { httpRouter } from "convex/server"
+import { ConvexError } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 import { httpAction, type ActionCtx } from "./_generated/server"
 import { downloadUrl } from "./artifacts"
@@ -77,6 +78,16 @@ type WriteFailure = { status: "denied" | "invalid"; message: string }
 /** Maps a refused write to 403 or 400 with the reason. */
 function writeFailure({ status, message }: WriteFailure) {
   return replyJson(status === "denied" ? 403 : 400, { error: message })
+}
+
+/**
+ * A refused idempotency key (see convex/lib/operations.ts) keeps its status
+ * and reason. Any other error is 503.
+ */
+function errorReply(refused: ReturnType<typeof agentFailure>) {
+  return refused
+    ? replyJson(refused.status, { error: refused.message })
+    : reply(503, "Service unavailable")
 }
 
 type ReadRequest = {
@@ -298,7 +309,7 @@ http.route({
     if (!body)
       return replyJson(400, {
         error:
-          "Send JSON: { collectionId, recordId, expectedRevision, values }. expectedRevision is a positive integer.",
+          "Send JSON: { collectionId, recordId, expectedRevision, values, idempotencyKey? }. expectedRevision is a positive integer.",
       })
     try {
       const result = await ctx.runMutation(internal.agentWrites.updateRecord, {
@@ -313,8 +324,10 @@ http.route({
           revision: result.revision,
         })
       return replyJson(200, result)
-    } catch {
-      return reply(503, "Service unavailable")
+    } catch (error) {
+      return errorReply(
+        error instanceof ConvexError ? agentFailure(error) : null
+      )
     }
   }),
 })
@@ -328,7 +341,7 @@ http.route({
     if (!body)
       return replyJson(400, {
         error:
-          "Send JSON: { collectionId, recordId, expectedRevision }. expectedRevision is a positive integer.",
+          "Send JSON: { collectionId, recordId, expectedRevision, idempotencyKey? }. expectedRevision is a positive integer.",
       })
     try {
       const result = await ctx.runMutation(internal.agentWrites.deleteRecord, {
@@ -347,8 +360,10 @@ http.route({
           recordId: result.recordId,
         })
       return replyJson(200, result)
-    } catch {
-      return reply(503, "Service unavailable")
+    } catch (error) {
+      return errorReply(
+        error instanceof ConvexError ? agentFailure(error) : null
+      )
     }
   }),
 })
@@ -405,7 +420,7 @@ http.route({
     if (!body)
       return replyJson(400, {
         error:
-          'Send JSON: { name, fields: [{ id, label, type }] }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", "multiSelect", "recordReference", or "artifactReference". Select and multiSelect fields need options: an array of 1 to 100 texts. A recordReference field needs collectionId.',
+          'Send JSON: { name, fields: [{ id, label, type }], idempotencyKey? }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", "multiSelect", "recordReference", or "artifactReference". Select and multiSelect fields need options: an array of 1 to 100 texts. A recordReference field needs collectionId.',
       })
     try {
       const result = await ctx.runMutation(
@@ -414,8 +429,10 @@ http.route({
       )
       if (result.status !== "created") return writeFailure(result)
       return replyJson(201, result)
-    } catch {
-      return reply(503, "Service unavailable")
+    } catch (error) {
+      return errorReply(
+        error instanceof ConvexError ? agentFailure(error) : null
+      )
     }
   }),
 })
@@ -434,7 +451,7 @@ http.route({
     if (!body)
       return replyJson(400, {
         error:
-          'Send JSON: { collectionId, field: { id, label, type } }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", "multiSelect", "recordReference", or "artifactReference". Select and multiSelect fields need options: an array of 1 to 100 texts. A recordReference field needs collectionId.',
+          'Send JSON: { collectionId, field: { id, label, type }, idempotencyKey? }. type is "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since the epoch), "date" (YYYY-MM-DD), "select", "multiSelect", "recordReference", or "artifactReference". Select and multiSelect fields need options: an array of 1 to 100 texts. A recordReference field needs collectionId.',
       })
     try {
       const result = await ctx.runMutation(internal.agentWrites.addField, {
@@ -443,8 +460,10 @@ http.route({
       })
       if (result.status !== "added") return writeFailure(result)
       return replyJson(201, result)
-    } catch {
-      return reply(503, "Service unavailable")
+    } catch (error) {
+      return errorReply(
+        error instanceof ConvexError ? agentFailure(error) : null
+      )
     }
   }),
 })

@@ -278,12 +278,17 @@ export interface QueryRecordsInput {
   readonly cursor?: string | undefined
 }
 
-export interface CreateCollectionInput {
+/** See convex/lib/operations.ts. */
+interface OperationKey {
+  readonly idempotencyKey?: string | undefined
+}
+
+export interface CreateCollectionInput extends OperationKey {
   readonly name: string
   readonly fields: ReadonlyArray<typeof Field.Type>
 }
 
-export interface AddFieldInput {
+export interface AddFieldInput extends OperationKey {
   readonly collectionId: string
   readonly field: Omit<typeof Field.Type, "optional">
 }
@@ -294,14 +299,14 @@ export interface CreateRecordInput {
   readonly idempotencyKey?: string | undefined
 }
 
-export interface UpdateRecordInput {
+export interface UpdateRecordInput extends OperationKey {
   readonly collectionId: string
   readonly recordId: string
   readonly expectedRevision: number
   readonly values: typeof RecordValues.Type
 }
 
-export interface DeleteRecordInput {
+export interface DeleteRecordInput extends OperationKey {
   readonly collectionId: string
   readonly recordId: string
   readonly expectedRevision: number

@@ -1,4 +1,4 @@
-import { ConvexError } from "convex/values"
+import { ConvexError, type Value } from "convex/values"
 import { Result, Schema } from "effect"
 import type { httpRouter } from "convex/server"
 import { httpAction, type ActionCtx } from "../_generated/server"
@@ -14,6 +14,16 @@ const failure = Schema.Struct({
   status: Schema.Literals([400, 403, 409]),
   message: Schema.String,
 })
+
+/**
+ * The status and reason of a refused operation: a ConvexError with
+ * `{ status, message }`, as withGrant (convex/lib/agentGrant.ts) and runOnce
+ * (convex/lib/operations.ts) throw it. Null for another ConvexError.
+ */
+export function agentFailure(error: ConvexError<Value>) {
+  const decoded = Schema.decodeUnknownResult(failure)(error.data)
+  return Result.isSuccess(decoded) ? decoded.success : null
+}
 
 /**
  * Registers `POST path` (and its CORS preflight) for an agent operation. The
@@ -88,14 +98,13 @@ export function agentRoute<A, B>(
         const result = await operate(ctx, await digestToken(token), body)
         return Response.json(result, { headers })
       } catch (error) {
-        if (error instanceof ConvexError) {
-          const decoded = Schema.decodeUnknownResult(failure)(error.data)
-          if (Result.isSuccess(decoded))
-            return Response.json(
-              { error: decoded.success.message },
-              { status: decoded.success.status, headers }
-            )
-        }
+        const refused =
+          error instanceof ConvexError ? agentFailure(error) : null
+        if (refused)
+          return Response.json(
+            { error: refused.message },
+            { status: refused.status, headers }
+          )
         return Response.json(
           { error: "Service unavailable" },
           { status: 503, headers }
