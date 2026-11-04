@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { NO_OPTION } from "../../convex/lib/collectionDomain"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import {
@@ -9,9 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-
-/** Select value for "no option" in an optional select field. */
-const NO_OPTION = "__none"
 
 /** One choice of a select input: the stored value and the text people see. */
 export type SelectItemOption = {

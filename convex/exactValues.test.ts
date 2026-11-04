@@ -172,7 +172,7 @@ test("collections reject bad options and multi-select queries find each chosen o
   const workspaceId = await owner.mutation(api.workspaces.create, {
     name: "Jobs",
   })
-  for (const options of [[], ["a", " a "], ["", "b"]])
+  for (const options of [[], ["a", " a "], ["", "b"], ["__none"], [" __any "]])
     await expect(
       owner.mutation(api.workspaces.createCollection, {
         workspaceId,

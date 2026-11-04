@@ -179,6 +179,10 @@ const MAX_RECORD_TEXT = 50_000
 const MAX_REFERENCE_LENGTH = 100
 export const MAX_OPTIONS = 100
 export const MAX_OPTION_LENGTH = 100
+/** The select value of the record form for "no value". It is not an option. */
+export const NO_OPTION = "__none"
+/** The select value of the record filter for "all options". It is not an option. */
+export const ANY_OPTION = "__any"
 const FIELD_ID = /^[a-z][a-z0-9_]{0,63}$/
 /** The range of a JavaScript `Date`, in milliseconds from the epoch. */
 const MAX_TIMESTAMP = 8_640_000_000_000_000
@@ -205,7 +209,11 @@ export type Checked<A> =
 
 const invalid = (message: string): Checked<never> => ({ ok: false, message })
 
-/** Trims the options, and checks that there are 1 to 100 different ones. */
+/**
+ * Trims the options, and checks that there are 1 to 100 different ones. An
+ * option cannot be `NO_OPTION` or `ANY_OPTION`, because the UI selects use
+ * these values.
+ */
 function checkOptions(
   id: string,
   options: ReadonlyArray<string>
@@ -219,6 +227,10 @@ function checkOptions(
     )
   if (new Set(trimmed).size !== trimmed.length)
     return invalid(`Field "${id}" has the same option twice`)
+  if (trimmed.some((option) => option === NO_OPTION || option === ANY_OPTION))
+    return invalid(
+      `Field "${id}" cannot use "${NO_OPTION}" or "${ANY_OPTION}" as an option`
+    )
   return { ok: true, value: trimmed }
 }
 
