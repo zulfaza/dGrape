@@ -210,6 +210,24 @@ const connectionBase = {
   }),
   usable: Schema.Boolean,
 }
+/**
+ * Where rows and the next page are in a route's JSON response. `rows` is a key
+ * path to the row array; an empty path means the body is the array. `next` is
+ * `none` (one page), `body` (a string at `path`, sent back as query `param`),
+ * or `link` (the `rel="next"` URL of the Link header).
+ */
+const ResponseMapping = Schema.Struct({
+  rows: Schema.Array(Schema.String),
+  next: Schema.Union([
+    Schema.Struct({ kind: Schema.Literal("none") }),
+    Schema.Struct({
+      kind: Schema.Literal("body"),
+      path: Schema.Array(Schema.String),
+      param: Schema.String,
+    }),
+    Schema.Struct({ kind: Schema.Literal("link") }),
+  ]),
+})
 /** An HTTP connection has stored routes. A GitHub connection names its read IDs. */
 export const Connection = Schema.Union([
   Schema.Struct({
@@ -222,6 +240,8 @@ export const Connection = Schema.Union([
         method: Schema.Literals(["GET", "POST"]),
         queryKeys: Schema.Array(Schema.String),
         fields: Schema.Array(Schema.String),
+        /** Absent means `{ rows, nextCursor }` with the `cursor` query key. */
+        response: Schema.optionalKey(ResponseMapping),
       })
     ),
   }),
