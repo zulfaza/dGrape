@@ -1,13 +1,16 @@
 import { ArtifactPreview } from "./artifact-preview"
-import { useAction, useMutation, usePaginatedQuery } from "convex/react"
+import {
+  useAction,
+  useMutation,
+  usePaginatedQuery,
+  useQuery,
+} from "convex/react"
 import { Download, Eye, Trash2, Upload } from "lucide-react"
 import { useRef, useState, type ChangeEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
-
-const MAX_BYTES = 25 * 1024 * 1024
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -29,6 +32,8 @@ export function WorkspaceArtifacts({
     { workspaceId },
     { initialNumItems: 20 }
   )
+  const maxBytes = useQuery(api.workspaceBudgets.get, { workspaceId })?.budgets
+    .artifactFileBytes
   const createUpload = useMutation(api.artifacts.createUpload)
   const completeUpload = useAction(api.artifacts.completeUpload)
   const getDownloadUrl = useAction(api.artifacts.getDownloadUrl)
@@ -46,8 +51,9 @@ export function WorkspaceArtifacts({
     const file = event.target.files?.[0]
     event.target.value = ""
     if (!file || busy) return
-    if (file.size > MAX_BYTES) {
-      toast.error("A file can be at most 25 MB")
+    // Until the budget loads, the server alone decides.
+    if (maxBytes !== undefined && file.size > maxBytes) {
+      toast.error(`A file can be at most ${formatSize(maxBytes)}`)
       return
     }
     setBusy(true)

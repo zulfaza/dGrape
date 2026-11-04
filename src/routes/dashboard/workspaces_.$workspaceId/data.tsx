@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { usePaginatedQuery } from "convex/react"
+import { usePaginatedQuery, useQuery } from "convex/react"
 import { useState } from "react"
 import { api } from "../../../../convex/_generated/api"
 import type { Id } from "../../../../convex/_generated/dataModel"
@@ -24,6 +24,7 @@ export const Route = createFileRoute(
 
 function DataSection() {
   const { workspaceId } = Route.useParams()
+  const workspace = useQuery(api.workspaces.get, { workspaceId })
   const { results, status, loadMore } = usePaginatedQuery(
     api.workspaces.listCollections,
     { workspaceId },
@@ -62,7 +63,9 @@ function DataSection() {
                 ? "1 collection"
                 : `${results.length} collections`}
             </span>
-            <CreateCollectionDialog workspaceId={workspaceId} />
+            {workspace && (
+              <CreateCollectionDialog workspaceId={workspace._id} />
+            )}
           </div>
         )}
       </div>
@@ -83,7 +86,9 @@ function DataSection() {
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <CreateCollectionDialog workspaceId={workspaceId} />
+            {workspace && (
+              <CreateCollectionDialog workspaceId={workspace._id} />
+            )}
           </EmptyContent>
         </Empty>
       ) : (
