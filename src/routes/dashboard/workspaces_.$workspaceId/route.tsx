@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react"
 import { api } from "../../../../convex/_generated/api"
 import { ExportDefinitionsButton } from "@/components/export-definitions-button"
 import { PageHeader } from "@/components/page-header"
+import { ROLE_LABELS, WorkspaceRoleProvider } from "@/components/workspace-role"
 
 export const Route = createFileRoute("/dashboard/workspaces_/$workspaceId")({
   component: WorkspaceLayout,
@@ -30,6 +31,7 @@ function WorkspaceLayout() {
         </Link>
         <PageHeader
           title={workspace ? workspace.name : "Loading workspace…"}
+          description={workspace && `Your role: ${ROLE_LABELS[workspace.role]}`}
           actions={
             workspace && (
               <ExportDefinitionsButton
@@ -40,7 +42,9 @@ function WorkspaceLayout() {
           }
         />
       </div>
-      <Outlet />
+      <WorkspaceRoleProvider role={workspace?.role ?? null}>
+        <Outlet />
+      </WorkspaceRoleProvider>
     </main>
   )
 }

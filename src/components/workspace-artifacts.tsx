@@ -11,6 +11,7 @@ import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
+import { useWorkspaceCan } from "@/components/workspace-role"
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -34,6 +35,7 @@ export function WorkspaceArtifacts({
   )
   const maxBytes = useQuery(api.workspaceBudgets.get, { workspaceId })?.budgets
     .artifactFileBytes
+  const canWrite = useWorkspaceCan("write")
   const createUpload = useMutation(api.artifacts.createUpload)
   const completeUpload = useAction(api.artifacts.completeUpload)
   const getDownloadUrl = useAction(api.artifacts.getDownloadUrl)
@@ -127,14 +129,16 @@ export function WorkspaceArtifacts({
           aria-hidden
           onChange={upload}
         />
-        <Button
-          variant="outline"
-          disabled={busy}
-          onClick={() => input.current?.click()}
-        >
-          <Upload aria-hidden />
-          {busy ? "Working…" : "Upload file"}
-        </Button>
+        {canWrite && (
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => input.current?.click()}
+          >
+            <Upload aria-hidden />
+            {busy ? "Working…" : "Upload file"}
+          </Button>
+        )}
       </div>
       {status === "LoadingFirstPage" ? (
         <p role="status" className="text-sm text-muted-foreground">
@@ -158,7 +162,7 @@ export function WorkspaceArtifacts({
                   {new Date(artifact._creationTime).toLocaleDateString()} ·{" "}
                   {artifact.createdBy.kind === "agent"
                     ? "By an agent"
-                    : "By you"}
+                    : "By a member"}
                 </span>
               </div>
               <div className="flex shrink-0 gap-1">
@@ -185,15 +189,17 @@ export function WorkspaceArtifacts({
                 >
                   <Download aria-hidden />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Delete ${artifact.name}`}
-                  disabled={busy}
-                  onClick={() => deleteArtifact(artifact._id, artifact.name)}
-                >
-                  <Trash2 aria-hidden />
-                </Button>
+                {canWrite && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Delete ${artifact.name}`}
+                    disabled={busy}
+                    onClick={() => deleteArtifact(artifact._id, artifact.name)}
+                  >
+                    <Trash2 aria-hidden />
+                  </Button>
+                )}
               </div>
             </li>
           ))}

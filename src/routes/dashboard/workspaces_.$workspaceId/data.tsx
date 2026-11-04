@@ -5,6 +5,7 @@ import { api } from "../../../../convex/_generated/api"
 import type { Id } from "../../../../convex/_generated/dataModel"
 import { CollectionRecords } from "@/components/collection-records"
 import { CreateCollectionDialog } from "@/components/create-collection-dialog"
+import { useWorkspaceCan } from "@/components/workspace-role"
 import { Mascot } from "@/components/mascot"
 import { FIELD_TYPE_LABELS } from "@/lib/field-types"
 import { Badge } from "@/components/ui/badge"
@@ -25,6 +26,7 @@ export const Route = createFileRoute(
 function DataSection() {
   const { workspaceId } = Route.useParams()
   const workspace = useQuery(api.workspaces.get, { workspaceId })
+  const canWrite = useWorkspaceCan("write")
   const { results, status, loadMore } = usePaginatedQuery(
     api.workspaces.listCollections,
     { workspaceId },
@@ -63,7 +65,7 @@ function DataSection() {
                 ? "1 collection"
                 : `${results.length} collections`}
             </span>
-            {workspace && (
+            {canWrite && workspace && (
               <CreateCollectionDialog workspaceId={workspace._id} />
             )}
           </div>
@@ -85,11 +87,11 @@ function DataSection() {
               applied. Your agent can then fill it in.
             </EmptyDescription>
           </EmptyHeader>
-          <EmptyContent>
-            {workspace && (
+          {canWrite && workspace && (
+            <EmptyContent>
               <CreateCollectionDialog workspaceId={workspace._id} />
-            )}
-          </EmptyContent>
+            </EmptyContent>
+          )}
         </Empty>
       ) : (
         <ul className="divide-y">

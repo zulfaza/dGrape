@@ -7,6 +7,7 @@ import { ArtifactLink } from "./artifact-link"
 import { HtmlReportBlock } from "./html-snapshot"
 import { Button } from "./ui/button"
 import { PageLiveBlock } from "./page-live-block"
+import { useWorkspaceCan } from "@/components/workspace-role"
 
 /**
  * Render one block as page viewers see it. Live blocks read the stored
@@ -85,6 +86,7 @@ export function PagePreview({
   close: () => void
 }) {
   const result = useQuery(api.pages.get, { pageId, revision })
+  const canWrite = useWorkspaceCan("write")
   const action = revisionAction(revision, publishedRevision)
   const problems =
     result?.bindings.flatMap((problem, index) =>
@@ -101,7 +103,7 @@ export function PagePreview({
           {action === "published" ? " (published)" : " (not published)"}
         </h3>
         <div className="flex flex-wrap gap-2">
-          {action !== "published" && (
+          {canWrite && action !== "published" && (
             <Button
               disabled={pending || result === undefined || problems.length > 0}
               onClick={() => select(revision)}

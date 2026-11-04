@@ -202,7 +202,7 @@ export function SecretRefInput({
   onChange: (value: string) => void
 }) {
   const secrets = usePaginatedQuery(
-    api.secrets.list,
+    api.secrets.referenceOptions,
     { workspaceId },
     { initialNumItems: PAGE_SIZE }
   )
@@ -214,13 +214,10 @@ export function SecretRefInput({
       <SelectFieldInput
         id={id}
         options={withCurrent(
-          secrets.results
-            .filter(
-              (secret) =>
-                secret.owner.kind === "workspace" &&
-                (secret.status === "pending" || secret.status === "ready")
-            )
-            .map((secret) => ({ value: secret.id, label: secret.label })),
+          secrets.results.map((secret) => ({
+            value: secret.id,
+            label: secret.label,
+          })),
           value
         )}
         optional={optional}

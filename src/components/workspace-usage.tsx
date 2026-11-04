@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
+import { useWorkspaceCan } from "@/components/workspace-role"
 
 function formatAmount(value: number, unit: BudgetSpec["unit"]) {
   switch (unit) {
@@ -97,6 +98,7 @@ export function WorkspaceUsage({
 }) {
   const budgets = useQuery(api.workspaceBudgets.get, { workspaceId })
   const usage = useQuery(api.workspaceBudgets.usage, { workspaceId })
+  const canManage = useWorkspaceCan("manage")
   if (!budgets || !usage)
     return (
       <p role="status" className="text-sm text-muted-foreground">
@@ -205,11 +207,13 @@ export function WorkspaceUsage({
           </p>
         ) : null}
       </section>
-      <BudgetForm
-        key={JSON.stringify(budgets.overrides)}
-        workspaceId={workspaceId}
-        overrides={budgets.overrides}
-      />
+      {canManage && (
+        <BudgetForm
+          key={JSON.stringify(budgets.overrides)}
+          workspaceId={workspaceId}
+          overrides={budgets.overrides}
+        />
+      )}
     </div>
   )
 }

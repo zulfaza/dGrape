@@ -13,7 +13,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel"
 import { recipeTables } from "./lib/recipeState"
 import { memberWithAccess, requireMembership } from "./lib/auth"
-import type { WorkspaceAccess } from "./lib/workspaceRoles"
+import { roleAllows, type WorkspaceAccess } from "./lib/workspaceRoles"
 import { recipeBudgetProblem, workspaceBudgets } from "./lib/budgets"
 import {
   checkRecordValues,
@@ -329,6 +329,9 @@ export const permissions = query({
     const version = await ctx.db.get(versionId)
     if (!version) throw new Error("Recipe not found")
     const member = await requireMembership(ctx, version.workspaceId, "read")
+    // Running and managing need a role that can write.
+    if (!roleAllows(member.role, "write"))
+      return { canManage: false, canRun: false }
     const canManage = member.userId === version.createdBy
     const grant = canManage
       ? null

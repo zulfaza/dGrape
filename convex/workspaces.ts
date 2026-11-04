@@ -61,7 +61,7 @@ export const list = query({
       memberships.page.map(async (member) => {
         const workspace = await ctx.db.get(member.workspaceId)
         if (!workspace) throw new Error("Workspace not found")
-        return workspace
+        return { ...workspace, role: member.role }
       })
     )
     return { ...memberships, page }
@@ -100,10 +100,11 @@ export const get = query({
   handler: async (ctx, { workspaceId: rawId }) => {
     const workspaceId = ctx.db.normalizeId("workspaces", rawId)
     if (!workspaceId) throw new Error("Workspace access denied")
-    await requireMembership(ctx, workspaceId, "read")
+    const member = await requireMembership(ctx, workspaceId, "read")
     const workspace = await ctx.db.get(workspaceId)
     if (!workspace) throw new Error("Workspace not found")
-    return workspace
+    /** The caller's role, so the UI offers only what the role allows. */
+    return { ...workspace, role: member.role }
   },
 })
 

@@ -8,6 +8,7 @@ import {
   History,
   PanelsTopLeft,
   Plug,
+  Users,
 } from "lucide-react"
 import { Link, useParams } from "@tanstack/react-router"
 import type { User } from "@workos/authkit-tanstack-react-start"
@@ -54,6 +55,11 @@ const WORKSPACE_SECTIONS = [
     label: "Artifacts",
     icon: Files,
     to: "/dashboard/workspaces/$workspaceId/artifacts",
+  },
+  {
+    label: "Members",
+    icon: Users,
+    to: "/dashboard/workspaces/$workspaceId/members",
   },
   {
     label: "Activity",

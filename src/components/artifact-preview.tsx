@@ -13,6 +13,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "./ui/dialog"
+import { useWorkspaceCan } from "@/components/workspace-role"
 
 export function ArtifactPreview({
   artifactId,
@@ -27,6 +28,7 @@ export function ArtifactPreview({
   onClose: () => void
   onReturnFocus: () => void
 }) {
+  const canWrite = useWorkspaceCan("write")
   const saveTimestamp = useMutation(api.artifacts.setDataTimestamp)
   const [timestamp, setTimestamp] = useState("")
   const [timestampStatus, setTimestampStatus] = useState("")
@@ -51,7 +53,7 @@ export function ArtifactPreview({
           Private file preview. HTML reports are static snapshots; scripts and
           links are disabled.
         </DialogDescription>
-        {previewKind(contentType) === "html" && (
+        {canWrite && previewKind(contentType) === "html" && (
           <details>
             <summary>HTML report data timestamp</summary>
             <label className="block">

@@ -73,6 +73,43 @@ export const list = query({
     }
   },
 })
+/**
+ * The workspace secrets that a record can reference, for the record form.
+ * Editors cannot list credentials (`list` needs manage), so this returns
+ * only the ID and label of workspace-owned secrets that are not deleted.
+ */
+export const referenceOptions = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(
+    v.object({ id: v.id("secretRefs"), label: v.string() })
+  ),
+  handler: async (ctx, { workspaceId, paginationOpts }) => {
+    await requireMembership(ctx, workspaceId, "write")
+    if (
+      !Number.isInteger(paginationOpts.numItems) ||
+      paginationOpts.numItems < 1 ||
+      paginationOpts.numItems > 100
+    )
+      throw new Error("Page size must be between 1 and 100")
+    const secrets = await ctx.db
+      .query("secretRefs")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+      .paginate(paginationOpts)
+    return {
+      ...secrets,
+      page: secrets.page
+        .filter(
+          (s) =>
+            s.owner.kind === "workspace" &&
+            (s.state.kind === "pending" || s.state.kind === "ready")
+        )
+        .map((s) => ({ id: s._id, label: s.label })),
+    }
+  },
+})
 /** Reserve metadata first. Plaintext is never a mutation argument. */
 export const prepare = mutation({
   args: {

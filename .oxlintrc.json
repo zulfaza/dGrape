@@ -250,7 +250,7 @@
       }
     },
     {
-      "files": ["src/routes/claim.tsx"],
+      "files": ["src/routes/claim.tsx", "src/routes/invite.tsx"],
       "rules": {
         "anti-slop/no-unsafe-dictionary-type": "off",
         "anti-slop/no-runtime-typeof": "off"
