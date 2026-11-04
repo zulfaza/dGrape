@@ -35,6 +35,7 @@ import type * as lib_agentAuthDiscovery from "../lib/agentAuthDiscovery.js";
 import type * as lib_agentCapabilities from "../lib/agentCapabilities.js";
 import type * as lib_agentCollectionTransport from "../lib/agentCollectionTransport.js";
 import type * as lib_agentGrant from "../lib/agentGrant.js";
+import type * as lib_agentExportTransport from "../lib/agentExportTransport.js";
 import type * as lib_agentPageTransport from "../lib/agentPageTransport.js";
 import type * as lib_agentQueryTransport from "../lib/agentQueryTransport.js";
 import type * as lib_agentRecipeTransport from "../lib/agentRecipeTransport.js";
@@ -71,6 +72,7 @@ import type * as lib_savedQueries from "../lib/savedQueries.js";
 import type * as lib_secretDomain from "../lib/secretDomain.js";
 import type * as lib_secretService from "../lib/secretService.js";
 import type * as lib_sourceSync from "../lib/sourceSync.js";
+import type * as lib_workspaceExport from "../lib/workspaceExport.js";
 import type * as operations from "../operations.js";
 import type * as pages from "../pages.js";
 import type * as recipeExecution from "../recipeExecution.js";
@@ -86,6 +88,7 @@ import type * as secretSettingsLookup from "../secretSettingsLookup.js";
 import type * as secrets from "../secrets.js";
 import type * as sourceSyncs from "../sourceSyncs.js";
 import type * as workspaceBudgets from "../workspaceBudgets.js";
+import type * as workspaceExport from "../workspaceExport.js";
 import type * as workspaces from "../workspaces.js";
 
 import type {
@@ -122,6 +125,7 @@ declare const fullApi: ApiFromModules<{
   "lib/agentCapabilities": typeof lib_agentCapabilities;
   "lib/agentCollectionTransport": typeof lib_agentCollectionTransport;
   "lib/agentGrant": typeof lib_agentGrant;
+  "lib/agentExportTransport": typeof lib_agentExportTransport;
   "lib/agentPageTransport": typeof lib_agentPageTransport;
   "lib/agentQueryTransport": typeof lib_agentQueryTransport;
   "lib/agentRecipeTransport": typeof lib_agentRecipeTransport;
@@ -158,6 +162,7 @@ declare const fullApi: ApiFromModules<{
   "lib/secretDomain": typeof lib_secretDomain;
   "lib/secretService": typeof lib_secretService;
   "lib/sourceSync": typeof lib_sourceSync;
+  "lib/workspaceExport": typeof lib_workspaceExport;
   operations: typeof operations;
   pages: typeof pages;
   recipeExecution: typeof recipeExecution;
@@ -173,6 +178,7 @@ declare const fullApi: ApiFromModules<{
   secrets: typeof secrets;
   sourceSyncs: typeof sourceSyncs;
   workspaceBudgets: typeof workspaceBudgets;
+  workspaceExport: typeof workspaceExport;
   workspaces: typeof workspaces;
 }>;
 
