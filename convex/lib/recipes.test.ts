@@ -104,6 +104,24 @@ describe("trusted recipe transforms", () => {
         /filter values|range/i
       )
   })
+  it("joins only an earlier step", () => {
+    const join = (step: number): RecipeStep => ({
+      kind: "join",
+      field: "id",
+      rightField: "id",
+      prefix: "r",
+      step,
+    })
+    const output: RecipeStep = { kind: "artifact", name: "a", format: "json" }
+    const map: RecipeStep = { kind: "map", fields: { id: "id" } }
+    expect(() =>
+      validateRecipe({ limits, steps: [map, join(0), output] })
+    ).not.toThrow()
+    for (const step of [1, 2, -1])
+      expect(() =>
+        validateRecipe({ limits, steps: [map, join(step), output] })
+      ).toThrow("join step")
+  })
   it("aggregates min, max and average per group", () => {
     const rows = [
       { g: "a", v: 4 },

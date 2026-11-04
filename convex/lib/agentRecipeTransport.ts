@@ -58,6 +58,20 @@ const recipe = <V extends typeof Values | typeof StoredValues>(values: V) =>
             rows: Schema.mutable(Schema.Array(values)),
           }),
           Schema.Struct({
+            kind: Schema.Literal("join"),
+            field: Schema.String,
+            rightField: Schema.String,
+            prefix: Schema.String,
+            collectionId: Schema.String,
+          }),
+          Schema.Struct({
+            kind: Schema.Literal("join"),
+            field: Schema.String,
+            rightField: Schema.String,
+            prefix: Schema.String,
+            step: Schema.Number,
+          }),
+          Schema.Struct({
             kind: Schema.Literal("aggregate"),
             groupBy: Schema.String,
             operation: Schema.Literals([

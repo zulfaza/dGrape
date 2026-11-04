@@ -1164,5 +1164,41 @@ describe("recipe credentials", () => {
     expect(await agentPreview("dataRead")).toMatchObject({
       ok: true,
     })
+    const joined: Recipe = {
+      steps: [
+        { kind: "map", fields: { team: "team" } },
+        {
+          kind: "join",
+          field: "team",
+          rightField: "team",
+          prefix: "t",
+          collectionId,
+        },
+        { kind: "artifact", name: "joined.json", format: "json" },
+      ],
+      limits: recipe.limits,
+    }
+    expect(
+      await owner.query(api.recipes.preview, {
+        workspaceId,
+        recipe: { ...joined, steps: [sizes.steps[0], ...joined.steps] },
+        sample: [],
+      })
+    ).toMatchObject({
+      ok: true,
+      rows: [
+        { team: "a", t_team: "a", t_size: 2 },
+        { team: "b", t_team: "b", t_size: 6 },
+        { team: "c", t_team: "c", t_size: 4 },
+      ],
+    })
+    await expect(
+      t.query(internal.agentRecipes.preview, {
+        now: Date.now(),
+        digest: "jobsRead",
+        recipe: joined,
+        sample: [],
+      })
+    ).rejects.toThrow("does not have the scope data.read")
   })
 })
