@@ -62,7 +62,7 @@ const ListConnections = Tool.make("connections_list", {
 
 const DescribeConnection = Tool.make("connections_describe", {
   description:
-    "Describe one connection: its origin, each route (path, method, allowed query keys, returned fields), and its credential label, owner, and status. `usable` is false when the credential is not ready or the origin is not approved. Secret values are never returned. A person adds credentials in the dashboard, never through MCP.",
+    "Describe one connection: its origin, each route (path, method, allowed query keys, returned fields, and `response`: where rows and the next page are in the response), and its credential label, owner, and status. `usable` is false when the credential is not ready or the origin is not approved. Secret values are never returned. A person adds credentials in the dashboard, never through MCP.",
   parameters: Schema.Struct({ connectionId: Schema.String }),
   success: AgentApi.Connection,
   failure: AgentApi.AgentApiError,
