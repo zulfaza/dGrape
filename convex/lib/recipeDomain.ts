@@ -385,7 +385,7 @@ export async function previewRecipe(
     try {
       switch (step.kind) {
         case "fetch":
-          rows.push(...sample)
+          rows = [...sample]
           break
         case "query":
           rows = await sources.query(step)
