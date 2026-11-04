@@ -1,5 +1,6 @@
 import * as Activity from "../../convex/lib/agentActivityTransport.ts"
 import * as Collections from "../../convex/lib/agentCollectionTransport.ts"
+import * as ArtifactLinks from "../../convex/lib/agentArtifactLinkTransport.ts"
 import * as Pages from "../../convex/lib/agentPageTransport.ts"
 import * as Queries from "../../convex/lib/agentQueryTransport.ts"
 import * as Recipes from "../../convex/lib/agentRecipeTransport.ts"
@@ -432,6 +433,12 @@ export class AgentApi extends Context.Service<
     readonly deleteRecord: (
       input: DeleteRecordInput
     ) => Call<typeof DeletedRecord.Type>
+    readonly linkArtifact: (
+      input: typeof ArtifactLinks.LinkInput.Type
+    ) => Call<null>
+    readonly unlinkArtifact: (
+      input: typeof ArtifactLinks.LinkInput.Type
+    ) => Call<null>
   }
 >()("dfe/AgentApi") {}
 
@@ -727,6 +734,22 @@ export const layer = (baseUrl: string) =>
           send(
             json(HttpClientRequest.delete(url("/agent/records")), input),
             DeletedRecord
+          ),
+        linkArtifact: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/records/linkArtifact")),
+              input
+            ),
+            Schema.Null
+          ),
+        unlinkArtifact: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/records/unlinkArtifact")),
+              input
+            ),
+            Schema.Null
           ),
       }
     })

@@ -76,6 +76,73 @@ test("file links authorize identity and workspace, retry safely, enforce MIME an
       relation: "attachment",
     })
   ).rejects.toThrow("unavailable")
+  const { digestToken } = await import("./agentAccess")
+  const writer = "e".repeat(64)
+  await t.run(async (ctx) => {
+    for (const [digest, scope] of [
+      [await digestToken(writer), "readwrite"],
+      ["reader", "readonly"],
+    ] as const)
+      await ctx.db.insert("agentGrants", {
+        workspaceId,
+        owner: "owner",
+        digest,
+        scope,
+        state: "active",
+        expiresAt: Date.now() + 60_000,
+      })
+  })
+  const agentPost = (
+    path: string,
+    body: { recordId: string; artifactId: string; relation: string }
+  ) =>
+    t.fetch(path, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${writer}` },
+      body: JSON.stringify(body),
+    })
+  const pdf = await file("application/pdf")
+  const report = { recordId, artifactId: pdf, relation: "report" }
+  expect((await agentPost("/agent/records/linkArtifact", report)).status).toBe(
+    200
+  )
+  expect(
+    (await owner.query(api.artifactBindings.list, { recordId })).map(
+      (row) => row.artifactId
+    )
+  ).toContain(pdf)
+  expect(
+    (
+      await agentPost("/agent/records/linkArtifact", {
+        ...report,
+        artifactId: foreignFile,
+      })
+    ).status
+  ).toBe(400)
+  expect(
+    (
+      await agentPost("/agent/records/linkArtifact", {
+        ...report,
+        recordId: "missing",
+      })
+    ).status
+  ).toBe(403)
+  await expect(
+    t.mutation(internal.artifactBindings.unlinkForAgent, {
+      digest: "reader",
+      recordId,
+      artifactId: pdf,
+      relation: "report",
+    })
+  ).rejects.toThrow("does not have the scope data.write")
+  expect(
+    (await agentPost("/agent/records/unlinkArtifact", report)).status
+  ).toBe(200)
+  expect(
+    (await owner.query(api.artifactBindings.list, { recordId })).map(
+      (row) => row.artifactId
+    )
+  ).not.toContain(pdf)
   expect(
     await owner.query(api.artifacts.metadata, {
       workspaceId,
@@ -170,7 +237,8 @@ test("file links authorize identity and workspace, retry safely, enforce MIME an
   expect(
     await owner.query(api.artifactBindings.list, { recordId })
   ).toHaveLength(19)
-})
+  // The first HTTP call loads the router, which can be slow on a busy runner.
+}, 20_000)
 
 test("saved artifact pages retain definitions and report deleted references", async () => {
   const t = convexTest(schema, modules)

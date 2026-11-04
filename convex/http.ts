@@ -5,6 +5,7 @@ import { registerRecipeRoutes } from "./recipeHttp"
 import { agentRoute } from "./lib/agentRoute"
 import * as Activity from "./lib/agentActivityTransport"
 import * as Collections from "./lib/agentCollectionTransport"
+import * as ArtifactLinks from "./lib/agentArtifactLinkTransport"
 import * as Pages from "./lib/agentPageTransport"
 import * as Queries from "./lib/agentQueryTransport"
 import { httpRouter } from "convex/server"
@@ -453,6 +454,26 @@ agentRoute(
   Collections.RenameFieldInput,
   (ctx, digest, input) =>
     ctx.runMutation(internal.collectionSchemas.renameFieldForAgent, {
+      ...input,
+      digest,
+    })
+)
+agentRoute(
+  http,
+  "/agent/records/linkArtifact",
+  ArtifactLinks.LinkInput,
+  (ctx, digest, input) =>
+    ctx.runMutation(internal.artifactBindings.linkForAgent, {
+      ...input,
+      digest,
+    })
+)
+agentRoute(
+  http,
+  "/agent/records/unlinkArtifact",
+  ArtifactLinks.LinkInput,
+  (ctx, digest, input) =>
+    ctx.runMutation(internal.artifactBindings.unlinkForAgent, {
       ...input,
       digest,
     })
