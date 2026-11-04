@@ -443,3 +443,71 @@ test("an idempotency key returns the first result, refuses other input, and expi
   expect(await t.run((ctx) => ctx.db.query("operations").take(10))).toEqual([])
   expect(await once("grant:a", { a: 2 })).toEqual({ run: 3 })
 })
+
+test("agent writes over HTTP return the first result for a retried idempotency key", async () => {
+  const { t, workspaceId } = await fixture()
+  const { digestToken } = await import("./agentAccess")
+  const bearer = "e".repeat(64)
+  await t.run(async (ctx) => {
+    await ctx.db.insert("agentGrants", {
+      workspaceId,
+      owner: "owner",
+      digest: await digestToken(bearer),
+      scope: "readwrite",
+      state: "active",
+      expiresAt: Date.now() + 60000,
+    })
+  })
+  const send = (method: string, path: string, body: Value) =>
+    t.fetch(path, {
+      method,
+      headers: {
+        Authorization: `Bearer ${bearer}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    })
+  const create = {
+    name: "Leads",
+    fields: [{ id: "name", label: "Name", type: "text" }],
+    idempotencyKey: "create-leads",
+  }
+  const first = await send("POST", "/agent/collections", create)
+  expect(first.status).toBe(201)
+  const { id } = await first.json()
+  const retry = await send("POST", "/agent/collections", create)
+  expect(retry.status).toBe(201)
+  expect((await retry.json()).id).toBe(id)
+  const reused = await send("POST", "/agent/collections", {
+    ...create,
+    name: "Other",
+  })
+  expect(reused.status).toBe(409)
+  expect((await reused.json()).error).toContain("different request")
+
+  const { id: recordId } = await (
+    await send("POST", "/agent/records", {
+      collectionId: id,
+      values: { name: "A" },
+    })
+  ).json()
+  const update = {
+    collectionId: id,
+    recordId,
+    expectedRevision: 1,
+    values: { name: "B" },
+    idempotencyKey: "rename-a",
+  }
+  const updated = await send("PATCH", "/agent/records", update)
+  expect(await updated.json()).toEqual({ status: "updated", revision: 2 })
+  // The retry returns the first result, not a revision conflict.
+  const again = await send("PATCH", "/agent/records", update)
+  expect(again.status).toBe(200)
+  expect(await again.json()).toEqual({ status: "updated", revision: 2 })
+  const { idempotencyKey: _key, ...withoutKey } = update
+  expect((await send("PATCH", "/agent/records", withoutKey)).status).toBe(409)
+  expect(
+    (await send("PATCH", "/agent/records", { ...update, idempotencyKey: "" }))
+      .status
+  ).toBe(400)
+}, 20_000)

@@ -24,6 +24,11 @@ import * as AgentApi from "./agent-api"
 
 const MAX_PAGE_SIZE = 50
 
+/** The optional idempotency key of a write; see convex/lib/operations.ts. */
+const OperationKey = { idempotencyKey: Schema.optionalKey(Schema.String) }
+const OperationKeyDescription =
+  " Send an `idempotencyKey` (1 to 200 characters) to retry safely: a retry with the same key returns the first result, and the same key with other input fails."
+
 const DescribeWorkspace = Tool.make("workspace_describe", {
   description:
     "Describe the workspace this credential can read: its name and each collection with its fields. Call this first to find collection IDs.",
@@ -147,10 +152,11 @@ const FieldsDescription =
   'Use integer for exact money in minor units (safe integers only), with a separate currency field (three uppercase letters, e.g. USD). Keep totals separate by currency. Each field has an `id` (lowercase letters, numbers, underscores; unique), a `label`, and a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), "date" (a calendar date as YYYY-MM-DD), "select" (one of the `options`), "multiSelect" (a list of different `options`), "recordReference" (the ID of a record in the collection `collectionId`, in this workspace), or "artifactReference" (the ID of an artifact in this workspace). A select or multiSelect field needs `options`: 1 to 100 different texts. A recordReference field needs `collectionId`. A referenced record or artifact cannot be deleted. Set `optional` to true when a record may leave the field out. Set `indexed` to true for fields you will filter or sort by (at most 5; indexed text is at most 200 characters; filter an indexed multiSelect field with `{ eq: option }`).'
 
 const CreateCollection = Tool.make("collections_create", {
-  description: `Create a collection in the workspace. Needs the data.write scope. ${FieldsDescription} Give 1 to 50 fields.`,
+  description: `Create a collection in the workspace. Needs the data.write scope. ${FieldsDescription} Give 1 to 50 fields.${OperationKeyDescription}`,
   parameters: Schema.Struct({
     name: Schema.String,
     fields: Schema.Array(AgentApi.Field),
+    ...OperationKey,
   }),
   success: AgentApi.CreatedCollection,
   failure: AgentApi.AgentApiError,
@@ -159,10 +165,12 @@ const CreateCollection = Tool.make("collections_create", {
 
 const AddField = Tool.make("collections_add_field", {
   description:
-    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), "date" (a calendar date as YYYY-MM-DD), "select" (one of the `options`), "multiSelect" (a list of different `options`), "recordReference" (the ID of a record in the collection `collectionId`, in this workspace), or "artifactReference" (the ID of an artifact in this workspace). Set `indexed: true` when you will filter or sort by it. A select or multiSelect field needs `options`: 1 to 100 different texts. A recordReference field needs `collectionId`. A referenced record or artifact cannot be deleted. Returns the new schema version. Needs the data.write scope.',
+    'Add a field to a collection without changing its records. The new field is optional, so the records that exist have no value for it. The `field` has an `id` (lowercase letters, numbers, underscores; not used yet in the collection), a `label`, a `type`: "text", "number", "boolean", "integer", "currency", "timestamp" (integer milliseconds since 1970-01-01T00:00:00Z), "date" (a calendar date as YYYY-MM-DD), "select" (one of the `options`), "multiSelect" (a list of different `options`), "recordReference" (the ID of a record in the collection `collectionId`, in this workspace), or "artifactReference" (the ID of an artifact in this workspace). Set `indexed: true` when you will filter or sort by it. A select or multiSelect field needs `options`: 1 to 100 different texts. A recordReference field needs `collectionId`. A referenced record or artifact cannot be deleted. Returns the new schema version. Needs the data.write scope.' +
+    OperationKeyDescription,
   parameters: Schema.Struct({
     collectionId: Schema.String,
     field: AgentApi.NewField,
+    ...OperationKey,
   }),
   success: AgentApi.AddedField,
   failure: AgentApi.AgentApiError,
@@ -193,12 +201,14 @@ const CreateRecord = Tool.make("records_create", {
 
 const UpdateRecord = Tool.make("records_update", {
   description:
-    "Replace all values of a record. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you retry. Needs the data.write scope.",
+    "Replace all values of a record. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you retry. Needs the data.write scope." +
+    OperationKeyDescription,
   parameters: Schema.Struct({
     collectionId: Schema.String,
     recordId: Schema.String,
     expectedRevision: Schema.Int,
     values: AgentApi.RecordValues,
+    ...OperationKey,
   }),
   success: AgentApi.UpdatedRecord,
   failure: AgentApi.AgentApiError,
@@ -207,11 +217,13 @@ const UpdateRecord = Tool.make("records_update", {
 
 const DeleteRecord = Tool.make("records_delete", {
   description:
-    "Delete a record. You cannot undo this. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you decide to delete it. If another record references it, the call fails with that record ID. Needs the data.write scope.",
+    "Delete a record. You cannot undo this. Pass the record's current `revision` as `expectedRevision`. If the record changed since you read it, the call fails with the current revision: read the record again before you decide to delete it. If another record references it, the call fails with that record ID. Needs the data.write scope." +
+    OperationKeyDescription,
   parameters: Schema.Struct({
     collectionId: Schema.String,
     recordId: Schema.String,
     expectedRevision: Schema.Int,
+    ...OperationKey,
   }),
   success: AgentApi.DeletedRecord,
   failure: AgentApi.AgentApiError,

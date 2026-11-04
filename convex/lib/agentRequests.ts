@@ -13,7 +13,10 @@ import type { RecordQuery } from "./recordQuery"
  * when the body does not have the documented shape.
  */
 
-export type CreateCollectionBody = {
+/** See convex/lib/operations.ts. */
+type OperationKey = { idempotencyKey?: string }
+
+export type CreateCollectionBody = OperationKey & {
   name: string
   fields: AgentField[]
 }
@@ -22,11 +25,11 @@ export type CreateRecordBody = {
   values: RecordValues
   idempotencyKey?: string
 }
-export type AddFieldBody = {
+export type AddFieldBody = OperationKey & {
   collectionId: string
   field: AgentNewField
 }
-export type UpdateRecordBody = {
+export type UpdateRecordBody = OperationKey & {
   collectionId: string
   recordId: string
   expectedRevision: number
@@ -35,6 +38,14 @@ export type UpdateRecordBody = {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+/** Reads the optional `idempotencyKey`; null when it is not a string. */
+function parseOperationKey(body: Record<string, unknown>): OperationKey | null {
+  const { idempotencyKey } = body
+  if (idempotencyKey === undefined) return {}
+  if (typeof idempotencyKey !== "string") return null
+  return { idempotencyKey }
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -89,24 +100,27 @@ export function parseCreateCollection(
 ): CreateCollectionBody | null {
   if (!isObject(body) || typeof body.name !== "string") return null
   if (!Array.isArray(body.fields)) return null
+  const key = parseOperationKey(body)
+  if (!key) return null
   const fields: AgentField[] = []
   for (const item of body.fields) {
     const field = parseField(item)
     if (!field) return null
     fields.push(field)
   }
-  return { name: body.name, fields }
+  return { name: body.name, fields, ...key }
 }
 
 export function parseAddField(body: unknown): AddFieldBody | null {
   if (!isObject(body) || typeof body.collectionId !== "string") return null
   if (!isObject(body.field) || body.field.optional !== undefined) return null
   const field = parseField(body.field)
-  if (!field) return null
-  return { collectionId: body.collectionId, field }
+  const key = parseOperationKey(body)
+  if (!field || !key) return null
+  return { collectionId: body.collectionId, field, ...key }
 }
 
-export type DeleteRecordBody = {
+export type DeleteRecordBody = OperationKey & {
   collectionId: string
   recordId: string
   expectedRevision: number
@@ -123,7 +137,9 @@ export function parseDeleteRecord(body: unknown): DeleteRecordBody | null {
     expectedRevision < 1
   )
     return null
-  return { collectionId, recordId, expectedRevision }
+  const key = parseOperationKey(body)
+  if (!key) return null
+  return { collectionId, recordId, expectedRevision, ...key }
 }
 
 export function parseCreateRecord(body: unknown): CreateRecordBody | null {
@@ -149,8 +165,9 @@ export function parseUpdateRecord(body: unknown): UpdateRecordBody | null {
   )
     return null
   const values = parseValues(body.values)
-  if (!values) return null
-  return { collectionId, recordId, expectedRevision, values }
+  const key = parseOperationKey(body)
+  if (!values || !key) return null
+  return { collectionId, recordId, expectedRevision, values, ...key }
 }
 
 export type QueryRecordsBody = {
