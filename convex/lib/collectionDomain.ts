@@ -170,7 +170,7 @@ export type RecordValue = Infer<typeof recordValueValidator>
 export type RecordValues = Infer<typeof recordValuesValidator>
 
 const MAX_NAME_LENGTH = 100
-const MAX_FIELDS = 50
+export const MAX_FIELDS = 50
 export const MAX_INDEXED_FIELDS = 5
 export const MAX_INDEXED_TEXT_LENGTH = 200
 const MAX_TEXT_LENGTH = 10_000

@@ -1,5 +1,5 @@
-import { isFieldType } from "../../convex/lib/collectionDomain"
-import { useMutation } from "convex/react"
+import { isFieldType, MAX_FIELDS } from "../../convex/lib/collectionDomain"
+import { useMutation, useQuery } from "convex/react"
 import { Plus } from "lucide-react"
 import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
@@ -38,9 +38,6 @@ import {
 type Field = Doc<"collections">["definition"]["fields"][number]
 type FieldType = Field["type"]
 
-const MAX_FIELDS = 50
-const MAX_INDEXED_FIELDS = 5
-
 /**
  * Opens a form that adds an optional field to a collection. Records that
  * exist have no value for the new field until someone edits them.
@@ -57,6 +54,8 @@ export function AddFieldDialog({
   disabled: boolean
 }) {
   const addField = useMutation(api.workspaces.addField)
+  const maxIndexed = useQuery(api.workspaceBudgets.get, { workspaceId })
+    ?.budgets.indexedFieldsPerCollection
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState("")
   const [id, setId] = useState("")
@@ -65,8 +64,10 @@ export function AddFieldDialog({
   const [target, setTarget] = useState<Id<"collections"> | null>(null)
   const [indexed, setIndexed] = useState(false)
   const hasOptions = type === "select" || type === "multiSelect"
+  // Until the budget loads, the server alone decides.
   const canIndex =
-    fields.filter((field) => field.indexed).length < MAX_INDEXED_FIELDS
+    maxIndexed === undefined ||
+    fields.filter((field) => field.indexed).length < maxIndexed
   const [saving, setSaving] = useState(false)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -209,7 +210,8 @@ export function AddFieldDialog({
             </div>
             {!canIndex && (
               <p className="text-sm text-muted-foreground">
-                This collection already has {MAX_INDEXED_FIELDS} indexed fields.
+                This workspace allows at most {maxIndexed} indexed fields in a
+                collection.
               </p>
             )}
           </fieldset>

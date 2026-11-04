@@ -2,10 +2,11 @@ import { collectionTemplates } from "../../convex/lib/collectionTemplates"
 import {
   isChoiceField,
   isFieldType,
+  MAX_FIELDS,
   type CollectionField,
 } from "../../convex/lib/collectionDomain"
 import type { Id } from "../../convex/_generated/dataModel"
-import { useMutation } from "convex/react"
+import { useMutation, useQuery } from "convex/react"
 import { Plus, Trash2 } from "lucide-react"
 import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
@@ -53,8 +54,6 @@ type Field = {
   optional?: true
 }
 
-const MAX_FIELDS = 50
-const MAX_INDEXED_FIELDS = 5
 const emptyField = (): Field => ({
   id: "",
   label: "",
@@ -68,9 +67,11 @@ const emptyField = (): Field => ({
 export function CreateCollectionDialog({
   workspaceId,
 }: {
-  workspaceId: string
+  workspaceId: Id<"workspaces">
 }) {
   const create = useMutation(api.workspaces.createCollection)
+  const maxIndexed = useQuery(api.workspaceBudgets.get, { workspaceId })
+    ?.budgets.indexedFieldsPerCollection
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [fields, setFields] = useState<Field[]>([emptyField()])
@@ -97,8 +98,9 @@ export function CreateCollectionDialog({
       return
     }
     const indexedCount = fields.filter((field) => field.indexed).length
-    if (indexedCount > MAX_INDEXED_FIELDS) {
-      toast.error(`Index at most ${MAX_INDEXED_FIELDS} fields`)
+    // Until the budget loads, the server alone decides.
+    if (maxIndexed !== undefined && indexedCount > maxIndexed) {
+      toast.error(`This workspace allows at most ${maxIndexed} indexed fields`)
       return
     }
     const built: CollectionField[] = []
@@ -203,9 +205,10 @@ export function CreateCollectionDialog({
             <legend className="mb-1 text-sm font-medium">Fields</legend>
             <p className="text-sm text-muted-foreground">
               The ID is what agents and the API use. Use lowercase letters,
-              numbers, and underscores. Mark up to {MAX_INDEXED_FIELDS} fields
-              as indexed to sort and filter by them. Indexed text is at most 200
-              characters.
+              numbers, and underscores. Mark fields as indexed to sort and
+              filter by them
+              {maxIndexed !== undefined && ` (at most ${maxIndexed})`}. Indexed
+              text is at most 200 characters.
             </p>
             {fields.map((field, index) => (
               <div
