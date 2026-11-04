@@ -8,6 +8,7 @@ import { transform, validateRecipe } from "./lib/recipeDomain"
 import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
 import { Schema } from "effect"
+import type { Id } from "./_generated/dataModel"
 import schema from "./schema"
 import { api, internal } from "./_generated/api"
 import {
@@ -674,6 +675,7 @@ test("templates create valid collections through HTTP and MCP contracts", async 
   const workspaceId = await owner.mutation(api.workspaces.create, {
     name: "Templates",
   })
+  const created = new Map<CollectionTemplate["id"], Id<"collections">>()
   for (const template of collectionTemplates()) {
     expect(parseCreateCollection(template)?.fields).toEqual(template.fields)
     for (const field of template.fields)
@@ -700,13 +702,6 @@ test("templates create valid collections through HTTP and MCP contracts", async 
       github_pull_requests: () => githubRow(template, String(collectionId)),
     }
     const values = examples[template.id]()
-    if (template.fields.some((field) => field.id === "date"))
-      await expect(
-        owner.mutation(api.workspaces.createRecord, {
-          collectionId,
-          values: { ...values, date: "03/11/2026" },
-        })
-      ).rejects.toThrow("date")
     const recordId = await owner.mutation(api.workspaces.createRecord, {
       collectionId,
       values,
@@ -715,6 +710,31 @@ test("templates create valid collections through HTTP and MCP contracts", async 
       (await owner.query(api.workspaces.getRecord, { collectionId, recordId }))
         .values
     ).toEqual(values)
+    created.set(template.id, collectionId)
+  }
+  // Template dates are date fields: text that is not a date is refused.
+  const badDates: Array<[CollectionTemplate["id"], RecordValues]> = [
+    [
+      "applications",
+      {
+        company: "Example",
+        role: "Engineer",
+        stage: "Applied",
+        source: "Website",
+        date: "03/11/2026",
+      },
+    ],
+    [
+      "transactions",
+      { date: "03/11/2026", amount: -123, currency: "USD", category: "Food" },
+    ],
+  ]
+  for (const [id, values] of badDates) {
+    const collectionId = created.get(id)
+    if (!collectionId) throw new Error(`Template ${id} missing`)
+    await expect(
+      owner.mutation(api.workspaces.createRecord, { collectionId, values })
+    ).rejects.toThrow("date")
   }
   expect(collectionTemplates()[0]?.fields[0]?.label).toBe("Company")
 })
