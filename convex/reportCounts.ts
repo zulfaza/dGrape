@@ -1,10 +1,11 @@
 import type { Doc } from "./_generated/dataModel"
-import { v, type Infer } from "convex/values"
+import { ConvexError, v, type Infer } from "convex/values"
 import { internal } from "./_generated/api"
 import { queryRecords } from "./lib/recordQuery"
 import { internalMutation, mutation, query } from "./_generated/server"
 import { memberWithAccess, requireMembership } from "./lib/auth"
 import { workspaceBudgets } from "./lib/budgets"
+import { asQueryTooExpensive } from "./lib/queryErrors"
 import { firstPageWithinBudget, runSavedQuery } from "./lib/savedQueries"
 
 const args = { queryId: v.id("queryDefinitions"), expectedRevision: v.number() }
@@ -37,8 +38,8 @@ export const rebuild = mutation({
             }
     } catch (error) {
       if (
-        !(error instanceof Error) ||
-        error.message !== "Query result byte budget exceeded; reduce page size"
+        !(error instanceof ConvexError) ||
+        asQueryTooExpensive(error)?.budget !== "resultBytes"
       )
         throw error
       result = {
