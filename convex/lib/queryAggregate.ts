@@ -1,9 +1,11 @@
 import { compareValues, v, type Infer } from "convex/values"
-import type {
-  Checked,
-  CollectionField,
-  IndexValue,
-  RecordValues,
+import {
+  isIndexableType,
+  isObjectValue,
+  type Checked,
+  type CollectionField,
+  type IndexValue,
+  type RecordValues,
 } from "./collectionDomain"
 import { checkQuery, recordQueryValidator, selectedFields } from "./recordQuery"
 
@@ -112,8 +114,10 @@ export function aggregateFields(
   if (groupBy !== undefined) {
     const field = fields.find((f) => f.id === groupBy.fieldId)
     if (!field) return invalid(`Unknown group field "${groupBy.fieldId}"`)
-    if (field.type === "multiSelect")
-      return invalid(`Group field "${field.id}" cannot be a multi-select field`)
+    if (field.type === "multiSelect" || !isIndexableType(field.type))
+      return invalid(
+        `Group field "${field.id}" (${field.type}) cannot make groups`
+      )
     if (
       groupBy.bucket !== undefined &&
       field.type !== "date" &&
@@ -216,7 +220,8 @@ export function aggregateRecords(
     let group: IndexValue | undefined
     if (groupBy !== undefined) {
       const value = values[groupBy.fieldId]
-      if (value === undefined || Array.isArray(value)) continue
+      if (value === undefined || Array.isArray(value) || isObjectValue(value))
+        continue
       group =
         groupBy.bucket === undefined
           ? value
@@ -227,7 +232,8 @@ export function aggregateRecords(
     for (const measure of measures) {
       if (measure.op === "count") continue
       const value = values[measure.fieldId]
-      if (value === undefined || Array.isArray(value)) continue
+      if (value === undefined || Array.isArray(value) || isObjectValue(value))
+        continue
       const id = measureId(measure)
       if (measure.op === "sum" || measure.op === "average") {
         if (typeof value !== "number") continue
