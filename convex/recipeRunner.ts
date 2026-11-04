@@ -5,6 +5,7 @@ import { internal } from "./_generated/api"
 import { executionArgs } from "./recipeExecution"
 import { transform, checkBudget, type RecipeRow } from "./lib/recipeDomain"
 import { r2 } from "./lib/r2"
+import type { QueryStepPage } from "./lib/recipeQuery"
 import type { Id } from "./_generated/dataModel"
 
 type FetchArgs = {
@@ -82,6 +83,22 @@ export const execute = internalAction({
           cursor = result.nextCursor
           if (page === step.maxPages - 1)
             throw new Error("Recipe pagination is incomplete")
+        }
+      } else if (step.kind === "query") {
+        // Each page is its own query: Convex permits one paginated read per query.
+        rows = []
+        let cursor: string | null = null
+        for (let page = 0; ; page++) {
+          if (page === step.maxPages)
+            throw new Error("Saved query has more pages than maxPages")
+          const result: QueryStepPage = await ctx.runQuery(
+            internal.recipeExecution.queryPage,
+            { ...args, cursor }
+          )
+          rows.push(...result.rows)
+          checkBudget(rows, plan.recipe.limits)
+          if (result.isDone) break
+          cursor = result.continueCursor
         }
       } else if (step.kind === "artifact") {
         artifactKey = `workspaces/${plan.workspaceId}/recipes/${args.runId}/${args.epoch}/${args.step}/${state.attempt}`

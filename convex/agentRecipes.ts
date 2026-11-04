@@ -1,23 +1,37 @@
 import { ConvexError, v } from "convex/values"
 import { internalMutation, internalQuery } from "./_generated/server"
 import { withGrant, type Grant } from "./lib/agentGrant"
-import { missingScopeMessage, missingScopes } from "./lib/agentScope"
+import {
+  missingScopeMessage,
+  missingScopes,
+  type AgentScope,
+} from "./lib/agentScope"
 import type { Recipe } from "./lib/recipeDomain"
 import { agentOperation, runOnce } from "./lib/operations"
 import * as recipes from "./recipes"
 
-/**
- * A recipe with a fetch step calls a connection. Binding it to a recipe, or
- * starting or scheduling its runs, also needs `connections.use`.
- */
-function requireConnectionUse(grant: Grant, recipe: Recipe) {
-  if (!recipe.steps.some((step) => step.kind === "fetch")) return
-  const missing = missingScopes(grant.scopes, ["connections.use"])
+function requireScopes(grant: Grant, needed: ReadonlyArray<AgentScope>) {
+  const missing = missingScopes(grant.scopes, needed)
   if (missing.length > 0)
     throw new ConvexError({
       status: 403,
       message: missingScopeMessage(missing),
     })
+}
+/** A query step reads records, so a preview of its rows needs `data.read`. */
+function readScopes(recipe: Recipe): AgentScope[] {
+  return recipe.steps.some((step) => step.kind === "query") ? ["data.read"] : []
+}
+/**
+ * A recipe with a fetch step calls a connection, and a query step reads
+ * records. Binding it to a recipe, or starting or scheduling its runs, also
+ * needs `connections.use` or `data.read`.
+ */
+function requireRecipeScopes(grant: Grant, recipe: Recipe) {
+  const needed = readScopes(recipe)
+  if (recipe.steps.some((step) => step.kind === "fetch"))
+    needed.push("connections.use")
+  requireScopes(grant, needed)
 }
 
 function checkPage(input: { numItems: number; cursor: string | null }) {
@@ -43,7 +57,7 @@ export const publish = internalMutation({
         agentOperation(grant, "recipes.publish", idempotencyKey, input),
         recipes.publishResult,
         async () => {
-          requireConnectionUse(grant, input.recipe)
+          requireRecipeScopes(grant, input.recipe)
           await recipes.checkRecipe(ctx, grant.workspaceId, input.recipe)
           return recipes.publishForPrincipal(
             ctx,
@@ -78,8 +92,9 @@ export const preview = internalQuery({
   },
   returns: recipes.previewResult,
   handler: (ctx, args) =>
-    withGrant(ctx, args.digest, args.now, ["jobs.read"], async (grant) =>
-      recipes.previewForPrincipal(
+    withGrant(ctx, args.digest, args.now, ["jobs.read"], async (grant) => {
+      requireScopes(grant, readScopes(args.recipe))
+      return recipes.previewForPrincipal(
         ctx,
         {
           recipe: args.recipe,
@@ -88,7 +103,7 @@ export const preview = internalQuery({
         },
         grant
       )
-    ),
+    }),
 })
 export const versions = internalMutation({
   args: {
@@ -163,7 +178,7 @@ export const trigger = internalMutation({
           status: 403,
           message: "Workspace access denied",
         })
-      requireConnectionUse(grant, document.recipe)
+      requireRecipeScopes(grant, document.recipe)
       return recipes.triggerForPrincipal(ctx, { ...input, versionId }, grant)
     }),
 })
@@ -196,7 +211,7 @@ export const schedule = internalMutation({
               status: 403,
               message: "Workspace access denied",
             })
-          requireConnectionUse(grant, document.recipe)
+          requireRecipeScopes(grant, document.recipe)
           return recipes.scheduleForPrincipal(
             ctx,
             { ...input, versionId },
@@ -255,7 +270,7 @@ export const setEnabled = internalMutation({
             })
           if (input.enabled) {
             const version = await ctx.db.get(document.versionId)
-            if (version) requireConnectionUse(grant, version.recipe)
+            if (version) requireRecipeScopes(grant, version.recipe)
           }
           return recipes.setEnabledForPrincipal(
             ctx,
@@ -304,7 +319,7 @@ export const updateSchedule = internalMutation({
               status: 403,
               message: "Workspace access denied",
             })
-          requireConnectionUse(grant, version.recipe)
+          requireRecipeScopes(grant, version.recipe)
           return recipes.updateScheduleForPrincipal(
             ctx,
             { ...input, scheduleId, versionId },
@@ -356,7 +371,7 @@ export const retry = internalMutation({
           message: "Workspace access denied",
         })
       const version = await ctx.db.get(document.versionId)
-      if (version) requireConnectionUse(grant, version.recipe)
+      if (version) requireRecipeScopes(grant, version.recipe)
       return recipes.retryForPrincipal(ctx, { ...input, runId }, grant)
     }),
 })

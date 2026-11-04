@@ -18,6 +18,7 @@ import {
 } from "./lib/recordPublication"
 import { recordSyncOutcome } from "./lib/sourceSync"
 import { memberWithAccess } from "./lib/auth"
+import { readQueryPage } from "./lib/recipeQuery"
 
 export const executionArgs = {
   runId: v.id("recipeRuns"),
@@ -43,6 +44,32 @@ export const checkpoint = internalQuery({
       rows: previous?.rows ?? [],
       sourceCursor: previous?.sourceCursor ?? null,
     }
+  },
+})
+/** One page of a query step, read as the recipe owner in the run's workspace. */
+export const queryPage = internalQuery({
+  args: { ...executionArgs, cursor: v.union(v.string(), v.null()) },
+  returns: v.object({
+    rows: v.array(recordValuesValidator),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId)
+    if (!run || run.epoch !== args.epoch || run.state !== "running")
+      throw new Error("Run lease is stale")
+    const version = await ctx.db.get(run.versionId)
+    const step = version?.recipe.steps[args.step]
+    if (!version || step?.kind !== "query")
+      throw new Error("Invalid recipe step")
+    const member = await memberWithAccess(
+      ctx,
+      run.workspaceId,
+      version.createdBy,
+      "read"
+    )
+    if (!member) throw new Error("Recipe owner no longer has access")
+    return readQueryPage(ctx, run.workspaceId, step, args.cursor)
   },
 })
 /** Saving output and advancing the step is one transaction, even on redelivery. */
