@@ -631,7 +631,7 @@ describe("recipe credentials", () => {
       capabilities.capabilities
         .filter((capability: { allowed: boolean }) => capability.allowed)
         .map((capability: { id: string }) => capability.id)
-    ).toEqual(["connections.read", "recipes.read"])
+    ).toEqual(["connections.read", "recipes.read", "activity.read"])
     const write = await t.fetch("/agent/collections", {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },

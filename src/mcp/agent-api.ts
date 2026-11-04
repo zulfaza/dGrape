@@ -1,3 +1,4 @@
+import * as Activity from "../../convex/lib/agentActivityTransport.ts"
 import * as Pages from "../../convex/lib/agentPageTransport.ts"
 import * as Queries from "../../convex/lib/agentQueryTransport.ts"
 import * as Recipes from "../../convex/lib/agentRecipeTransport.ts"
@@ -362,6 +363,9 @@ export class AgentApi extends Context.Service<
     readonly pageList: (
       input: typeof Pages.ListInput.Type
     ) => Call<typeof Pages.PageList.Type>
+    readonly activityList: (
+      input: typeof Activity.ListInput.Type
+    ) => Call<typeof Activity.ActivityPage.Type>
     readonly describeWorkspace: Call<typeof WorkspaceDescription.Type>
     readonly capabilities: Call<typeof Capabilities.Type>
     readonly describeCollection: (input: {
@@ -580,6 +584,11 @@ export const layer = (baseUrl: string) =>
           send(
             json(HttpClientRequest.post(url("/agent/pages/list")), input),
             Pages.PageList
+          ),
+        activityList: (input) =>
+          send(
+            json(HttpClientRequest.post(url("/agent/activity/list")), input),
+            Activity.ActivityPage
           ),
         describeWorkspace: send(
           HttpClientRequest.get(url("/agent/workspace")),

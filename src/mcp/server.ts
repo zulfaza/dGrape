@@ -1,3 +1,4 @@
+import * as Activity from "../../convex/lib/agentActivityTransport"
 import * as Pages from "../../convex/lib/agentPageTransport"
 import * as Queries from "../../convex/lib/agentQueryTransport"
 import * as Recipes from "../../convex/lib/agentRecipeTransport"
@@ -408,6 +409,14 @@ const PageList = Tool.make("pages_list", {
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Readonly, true)
 
+const ActivityList = Tool.make("activity_list", {
+  description: `List the workspace's activity history, newest first: who made each change (a user, or an agent credential for its owner), the \`operation\`, and the IDs and revisions of the changed objects. Events never contain record values, names, or secret values. You see an event only when the credential has the read scope of the changed object (data.read, pages.read, or jobs.read). Reads up to \`limit\` events (1 to ${Activity.MAX_PAGE_SIZE}), so a page can have fewer items, or none; when \`isDone\` is false, pass \`continueCursor\` as \`cursor\`.`,
+  parameters: Activity.ListInput,
+  success: Activity.ActivityPage,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Readonly, true)
+
 const DfeToolkit = Toolkit.make(
   RecipeValidate,
   RecipePreview,
@@ -431,6 +440,7 @@ const DfeToolkit = Toolkit.make(
   PagePublish,
   PageGet,
   PageList,
+  ActivityList,
 
   ListTemplates,
   ListCapabilities,
@@ -476,6 +486,7 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       pages_publish: (input) => api.pagePublish(input),
       pages_get: (input) => api.pageGet(input),
       pages_list: (input) => api.pageList(input),
+      activity_list: (input) => api.activityList(input),
       collections_templates: () => Effect.succeed(collectionTemplates()),
       capabilities_list: () => api.capabilities,
       workspace_describe: () => api.describeWorkspace,
@@ -524,7 +535,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. " +
+      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. " +
       "Recipes fetch and transform data without a model. A recipe fetch step uses a connection: connections_list and connections_describe show each connection's origin, routes, and credential status, never secret values. A person adds credentials in the dashboard. recipes_publish saves an immutable recipe version (fetch, map, filter, join, aggregate, upsert, snapshot, and artifact steps); recipes_versions lists versions. recipes_trigger starts a run (reuse its idempotencyKey to retry), recipes_runs lists runs, recipes_history lists the attempts of one run, and recipes_cancel stops a run. recipes_schedule creates a UTC schedule, recipes_schedules lists schedules, recipes_set_enabled turns one on or off, and recipes_set_run_access lets another user run a recipe. Only the recipe creator manages schedules and run access.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)

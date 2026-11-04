@@ -92,6 +92,12 @@ const CAPABILITIES = [
     description: "Save page drafts, and publish or roll back pages.",
   },
   {
+    id: "activity.read",
+    scopes: [],
+    description:
+      "Read the activity history, newest first. Each event shows only when the credential has the read scope of the changed object: data.read, pages.read, or jobs.read. Credential events show only in the dashboard.",
+  },
+  {
     id: "schedules.write",
     scopes: ["jobs.manage"],
     description:

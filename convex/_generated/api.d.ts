@@ -9,6 +9,7 @@
  */
 
 import type * as agentAccess from "../agentAccess.js";
+import type * as agentActivity from "../agentActivity.js";
 import type * as agentDiscoveryHttp from "../agentDiscoveryHttp.js";
 import type * as agentGrants from "../agentGrants.js";
 import type * as agentIdentityHttp from "../agentIdentityHttp.js";
@@ -26,6 +27,7 @@ import type * as collectionSchemas from "../collectionSchemas.js";
 import type * as connectors from "../connectors.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
+import type * as lib_agentActivityTransport from "../lib/agentActivityTransport.js";
 import type * as lib_agentAuthConfig from "../lib/agentAuthConfig.js";
 import type * as lib_agentAuthCrypto from "../lib/agentAuthCrypto.js";
 import type * as lib_agentAuthDiscovery from "../lib/agentAuthDiscovery.js";
@@ -90,6 +92,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agentAccess: typeof agentAccess;
+  agentActivity: typeof agentActivity;
   agentDiscoveryHttp: typeof agentDiscoveryHttp;
   agentGrants: typeof agentGrants;
   agentIdentityHttp: typeof agentIdentityHttp;
@@ -107,6 +110,7 @@ declare const fullApi: ApiFromModules<{
   connectors: typeof connectors;
   crons: typeof crons;
   http: typeof http;
+  "lib/agentActivityTransport": typeof lib_agentActivityTransport;
   "lib/agentAuthConfig": typeof lib_agentAuthConfig;
   "lib/agentAuthCrypto": typeof lib_agentAuthCrypto;
   "lib/agentAuthDiscovery": typeof lib_agentAuthDiscovery;
