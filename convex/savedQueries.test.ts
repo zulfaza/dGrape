@@ -5,6 +5,8 @@ import { Schema } from "effect"
 import schema from "./schema"
 import { api, internal } from "./_generated/api"
 import * as Queries from "./lib/agentQueryTransport"
+import type { RecordQuery } from "./lib/recordQuery"
+import type { RecordValues } from "./lib/collectionDomain"
 import { insertRecord } from "./lib/records"
 import { sha256 } from "./lib/agentAuthCrypto"
 const modules = import.meta.glob("./**/*.ts")
@@ -490,4 +492,127 @@ test("owners invite members, change roles and always keep one owner", async () =
   await expect(
     guest.query(api.workspaces.get, { workspaceId })
   ).rejects.toThrow("Workspace access denied")
+})
+
+test("saved queries filter by an in list and by residual filters on any field", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const collectionId = await t.run(async (ctx) => {
+    const workspaceId = await ctx.db.insert("workspaces", { name: "Mine" })
+    await ctx.db.insert("workspaceMembers", {
+      workspaceId,
+      userId: "owner",
+      role: "owner",
+    })
+    const id = await ctx.db.insert("collections", {
+      workspaceId,
+      name: "Jobs",
+      definition: {
+        version: 1,
+        fields: [
+          { id: "name", label: "Name", type: "text", indexed: true },
+          { id: "salary", label: "Salary", type: "integer", optional: true },
+          {
+            id: "tags",
+            label: "Tags",
+            type: "multiSelect",
+            options: ["remote", "senior"],
+          },
+          { id: "active", label: "Active", type: "boolean" },
+        ],
+      },
+    })
+    const collection = await ctx.db.get(id)
+    if (!collection) throw new Error("Missing fixture")
+    const rows: RecordValues[] = [
+      { name: "a", salary: 10, tags: ["remote"], active: true },
+      { name: "b", salary: 20, tags: [], active: false },
+      { name: "c", tags: ["senior"], active: true },
+      { name: "d", salary: 40, tags: ["remote", "senior"], active: true },
+    ]
+    for (const values of rows) await insertRecord(ctx, collection, values)
+    return id
+  })
+  const paginationOpts = {
+    numItems: 50,
+    cursor: null,
+    maximumRowsRead: 100,
+    maximumBytesRead: 1_000_000,
+  }
+  const names = async (query: RecordQuery) => {
+    const saved = await owner.mutation(api.savedQueries.save, {
+      collectionId,
+      name: "Filtered",
+      query,
+    })
+    const result = await owner.query(api.savedQueries.run, {
+      queryId: saved.queryId,
+      expectedRevision: 1,
+      paginationOpts,
+    })
+    expect(result.completeness).toBe("complete")
+    return result.page.map((row) => row.values.name)
+  }
+  expect(
+    await names({ fieldId: "name", order: "desc", where: { in: ["d", "a"] } })
+  ).toEqual(["d", "a"])
+  expect(
+    await names({
+      fieldId: "name",
+      order: "asc",
+      filters: [{ fieldId: "salary", op: "gte", value: 20 }],
+    })
+  ).toEqual(["b", "d"])
+  expect(
+    await names({
+      fieldId: "name",
+      order: "asc",
+      filters: [
+        { fieldId: "tags", op: "in", values: ["senior"] },
+        { fieldId: "active", op: "eq", value: true },
+      ],
+    })
+  ).toEqual(["c", "d"])
+  expect(
+    await names({
+      fieldId: "name",
+      order: "asc",
+      filters: [{ fieldId: "tags", op: "neq", value: "remote" }],
+    })
+  ).toEqual(["b", "c"])
+  const invalidQueries: Array<[RecordQuery, string]> = [
+    [{ fieldId: "name", order: "asc", where: { in: [] } }, "1 to 20 values"],
+    [
+      {
+        fieldId: "name",
+        order: "asc",
+        filters: [{ fieldId: "active", op: "lt", value: true }],
+      },
+      "only eq, neq and in",
+    ],
+    [
+      {
+        fieldId: "name",
+        order: "asc",
+        filters: [{ fieldId: "salary", op: "eq", value: "high" }],
+      },
+      "safe integer",
+    ],
+    [
+      {
+        fieldId: "name",
+        order: "asc",
+        filters: [{ fieldId: "missing", op: "eq", value: 1 }],
+      },
+      'Unknown filter field "missing"',
+    ],
+  ]
+  for (const [query, message] of invalidQueries)
+    await expect(
+      owner.mutation(api.savedQueries.save, {
+        collectionId,
+        name: "Bad",
+        query,
+      })
+    ).rejects.toThrow(message)
 })
