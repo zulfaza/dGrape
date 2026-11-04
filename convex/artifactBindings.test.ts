@@ -343,5 +343,29 @@ test("the upload sweep removes expired uploads only and keeps artifacts and usag
   expect(deleted).toHaveBeenCalledTimes(100)
   await t.mutation(internal.artifacts.sweepExpiredUploads)
   expect(deleted).toHaveBeenCalledTimes(150)
+  // Finishing and deleting an upload each add an audit event.
+  const inserted = await t.mutation(internal.artifacts.insertArtifact, {
+    key: "upload-2",
+    contentType: "text/plain",
+    size: 10,
+  })
+  if (inserted.status !== "inserted") throw new Error("Upload missing")
+  await owner.mutation(api.artifacts.remove, {
+    artifactId: inserted.artifactId,
+  })
+  const events = await owner.query(api.auditEvents.list, {
+    workspaceId,
+    paginationOpts: { numItems: 10, cursor: null },
+  })
+  expect(events.page.slice(0, 2).map((row) => [row.actor, row.event])).toEqual([
+    [
+      { kind: "user", userId: "owner" },
+      { operation: "artifact.delete", artifactId: inserted.artifactId },
+    ],
+    [
+      { kind: "user", userId: "owner" },
+      { operation: "artifact.upload", artifactId: inserted.artifactId },
+    ],
+  ])
   deleted.mockRestore()
 })

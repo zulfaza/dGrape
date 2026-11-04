@@ -21,19 +21,31 @@ export type AgentPrincipal = {
   registrationId: Id<"agentRegistrations"> | null
 }
 
-/** Who made a change: a signed-in user, or an agent credential. */
+const userActor = v.object({ kind: v.literal("user"), userId: v.string() })
+const agentActor = v.object({
+  kind: v.literal("agent"),
+  grantId: v.id("agentGrants"),
+  /** Null for a credential that a user created in the workspace settings. */
+  registrationId: v.union(v.id("agentRegistrations"), v.null()),
+  /** The user that the agent acts for. */
+  owner: v.string(),
+})
+
+/**
+ * Who made a change: a signed-in user, an agent credential, or a recipe
+ * schedule that started a run.
+ */
 export const auditActorValidator = v.union(
-  v.object({ kind: v.literal("user"), userId: v.string() }),
+  userActor,
+  agentActor,
   v.object({
-    kind: v.literal("agent"),
-    grantId: v.id("agentGrants"),
-    /** Null for a credential that a user created in the workspace settings. */
-    registrationId: v.union(v.id("agentRegistrations"), v.null()),
-    /** The user that the agent acts for. */
-    owner: v.string(),
+    kind: v.literal("scheduler"),
+    scheduleId: v.id("recipeSchedules"),
   })
 )
 export type AuditActor = Infer<typeof auditActorValidator>
+/** A person or an agent that acts for a person. */
+export type PrincipalActor = Infer<typeof userActor> | Infer<typeof agentActor>
 
 const op = <Name extends string, Fields extends PropertyValidators>(
   name: Name,
@@ -97,6 +109,8 @@ export const auditEventValidator = v.union(
     retryOf: v.id("recipeRuns"),
   }),
   op("run.cancel", { runId: v.id("recipeRuns") }),
+  op("artifact.upload", { artifactId: v.id("artifacts") }),
+  op("artifact.delete", { artifactId: v.id("artifacts") }),
   op("connection.create", { connectionId: v.id("connections") }),
   op("connection.grantUse", {
     connectionId: v.id("connections"),
@@ -139,7 +153,10 @@ export const auditEventFields = {
 }
 
 /** The actor for a change that `userId` made, directly or through `agent`. */
-export function auditActor(userId: string, agent?: AgentPrincipal): AuditActor {
+export function auditActor(
+  userId: string,
+  agent?: AgentPrincipal
+): PrincipalActor {
   if (!agent) return { kind: "user", userId }
   return {
     kind: "agent",
@@ -158,3 +175,6 @@ export async function recordAuditEvent(
 ) {
   await ctx.db.insert("auditEvents", { workspaceId, actor, event })
 }
+
+/** Audit events older than this are deleted; see `pruneAuditEvents`. */
+export const AUDIT_RETENTION_DAYS = 365

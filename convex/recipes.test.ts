@@ -146,10 +146,30 @@ describe("recipe lifecycle", () => {
         paginationOpts: { numItems: 10, cursor: null },
       })
       expect(all.page.map((run) => run.state)).toEqual(["skipped", "running"])
+      const events = () =>
+        owner.query(api.auditEvents.list, {
+          workspaceId,
+          paginationOpts: { numItems: 50, cursor: null },
+        })
+      // Each run that the schedule started has an event with the schedule.
+      expect(
+        (await events()).page
+          .filter((row) => row.actor.kind === "scheduler")
+          .map((row) => [row.actor, row.event.operation, row.byViewer])
+      ).toEqual([
+        [{ kind: "scheduler", scheduleId }, "run.trigger", false],
+        [{ kind: "scheduler", scheduleId }, "run.trigger", false],
+      ])
+      // Events older than 365 days are deleted; newer events stay.
+      vi.advanceTimersByTime(366 * 24 * 60 * 60 * 1000)
       await owner.mutation(api.recipes.setEnabled, {
         scheduleId,
         enabled: false,
       })
+      await t.mutation(internal.auditEvents.pruneWorkspace, { workspaceId })
+      expect((await events()).page.map((row) => row.event.operation)).toEqual([
+        "schedule.setEnabled",
+      ])
     } finally {
       vi.useRealTimers()
     }
