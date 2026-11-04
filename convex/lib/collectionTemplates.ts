@@ -35,12 +35,7 @@ export function collectionTemplates(): CollectionTemplate[] {
         { id: "role", label: "Role", type: "text" },
         { id: "stage", label: "Stage", type: "text", indexed: true },
         { id: "source", label: "Source", type: "text", indexed: true },
-        {
-          id: "date",
-          label: "Application date (YYYY-MM-DD)",
-          type: "text",
-          indexed: true,
-        },
+        { id: "date", label: "Application date", type: "date", indexed: true },
         { id: "url", label: "Job URL", type: "text", optional: true },
       ],
       source: { kind: "manual" },
@@ -49,9 +44,9 @@ export function collectionTemplates(): CollectionTemplate[] {
       id: "transactions",
       name: "Transactions",
       description:
-        "Store signed minor-unit amounts. Keep totals separate by currency. Use YYYY-MM-DD dates.",
+        "Store signed minor-unit amounts. Keep totals separate by currency.",
       fields: [
-        { id: "date", label: "Date (YYYY-MM-DD)", type: "text", indexed: true },
+        { id: "date", label: "Date", type: "date", indexed: true },
         { id: "amount", label: "Amount (minor units)", type: "integer" },
         { id: "currency", label: "Currency", type: "currency", indexed: true },
         { id: "category", label: "Category", type: "text", indexed: true },
