@@ -317,3 +317,56 @@ test("agent discovery reports capabilities by scope and describes one collection
   ).toBe(403)
   expect((await get("/agent/collections/describe")).status).toBe(400)
 }, 20_000)
+
+test("agent activity shows only events whose read scope the credential has", async () => {
+  const { t, owner, collectionId, workspaceId } = await fixture()
+  const { digestToken } = await import("./agentAccess")
+  const reader = "a".repeat(64)
+  const runner = "b".repeat(64)
+  await t.run(async (ctx) => {
+    for (const [bearer, scope] of [
+      [reader, ["data.read"]],
+      [runner, ["jobs.read"]],
+    ] as const)
+      await ctx.db.insert("agentGrants", {
+        workspaceId,
+        owner: "owner",
+        digest: await digestToken(bearer),
+        scope: [...scope],
+        state: "active",
+        expiresAt: Date.now() + 60000,
+      })
+  })
+  await owner.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { name: "A" },
+  })
+  const list = (bearer: string, body: { limit?: number; cursor?: string }) =>
+    t.fetch("/agent/activity/list", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${bearer}` },
+      body: JSON.stringify(body),
+    })
+  const first = await (await list(reader, { limit: 1 })).json()
+  expect(first.page.map((row: { event: unknown }) => row.event)).toEqual([
+    {
+      operation: "record.create",
+      collectionId,
+      recordId: expect.any(String),
+    },
+  ])
+  expect(first.page[0].actor).toEqual({ kind: "user", userId: "owner" })
+  expect(first.isDone).toBe(false)
+  const rest = await (
+    await list(reader, { cursor: first.continueCursor })
+  ).json()
+  expect(
+    rest.page.map(
+      (row: { event: { operation: string } }) => row.event.operation
+    )
+  ).toEqual(["collection.create", "workspace.create"])
+  // Data events need data.read; a jobs.read credential sees none of them.
+  expect((await (await list(runner, {})).json()).page).toEqual([])
+  expect((await list(reader, { limit: 51 })).status).toBe(400)
+  expect((await list("c".repeat(64), {})).status).toBe(403)
+}, 20_000)

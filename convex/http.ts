@@ -3,6 +3,7 @@ import { registerAgentRecipeRoutes } from "./agentRecipeHttp"
 import { collectionTemplates } from "./lib/collectionTemplates"
 import { registerRecipeRoutes } from "./recipeHttp"
 import { agentRoute } from "./lib/agentRoute"
+import * as Activity from "./lib/agentActivityTransport"
 import * as Pages from "./lib/agentPageTransport"
 import * as Queries from "./lib/agentQueryTransport"
 import { httpRouter } from "convex/server"
@@ -204,6 +205,18 @@ agentRoute(http, "/agent/pages/list", Pages.ListInput, (ctx, digest, input) =>
     numItems: input.limit ?? Pages.MAX_PAGE_SIZE,
     cursor: input.cursor ?? null,
   })
+)
+agentRoute(
+  http,
+  "/agent/activity/list",
+  Activity.ListInput,
+  (ctx, digest, input) =>
+    ctx.runQuery(internal.agentActivity.list, {
+      digest,
+      now: Date.now(),
+      numItems: input.limit ?? Activity.MAX_PAGE_SIZE,
+      cursor: input.cursor ?? null,
+    })
 )
 http.route({ path: "/agent/workspace", method: "OPTIONS", handler: preflight })
 http.route({
