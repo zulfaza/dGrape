@@ -116,14 +116,13 @@ export async function setRunAccessForPrincipal(
   const version = await ctx.db.get(args.versionId)
   if (!version) throw new Error("Recipe not found")
   const actor = await requireRecipeAccess(ctx, version, "manage", agent)
-  // A run grant is useless to a member whose role cannot run recipes.
-  const member = await memberWithAccess(
-    ctx,
-    version.workspaceId,
-    args.userId,
-    "write"
+  // A run grant is useless to a member whose role cannot run recipes. A
+  // grant can always be removed, also after the member lost access.
+  if (
+    args.allowed &&
+    !(await memberWithAccess(ctx, version.workspaceId, args.userId, "write"))
   )
-  if (!member) throw new Error("Workspace member cannot run recipes")
+    throw new Error("Workspace member cannot run recipes")
   const grant = await ctx.db
     .query("recipeRunGrants")
     .withIndex("by_versionId_and_userId", (q) =>
