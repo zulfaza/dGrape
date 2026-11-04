@@ -16,6 +16,15 @@ export const workspaceRoleValidator = v.union(
 export type WorkspaceRole = Infer<typeof workspaceRoleValidator>
 
 /**
+ * The roles an invite can give. An invite never makes an owner: an owner
+ * promotes a member after they join.
+ */
+export const inviteRoleValidator = v.union(
+  v.literal("editor"),
+  v.literal("viewer")
+)
+
+/**
  * The access that one operation needs. Every membership check names one.
  *
  * - read: see workspace data.

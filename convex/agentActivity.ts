@@ -51,6 +51,12 @@ const READ_SCOPE: Record<AuditEvent["operation"], AgentScope | null> = {
   "agentGrant.revoke": null,
   "agentRegistration.claim": null,
   "agentRegistration.revoke": null,
+  // Member events stay in the dashboard: they name other users.
+  "member.invite": null,
+  "member.revokeInvite": null,
+  "member.join": null,
+  "member.setRole": null,
+  "member.remove": null,
 }
 
 /**

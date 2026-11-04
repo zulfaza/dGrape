@@ -6,6 +6,7 @@ import schema from "./schema"
 import { api, internal } from "./_generated/api"
 import * as Queries from "./lib/agentQueryTransport"
 import { insertRecord } from "./lib/records"
+import { sha256 } from "./lib/agentAuthCrypto"
 const modules = import.meta.glob("./**/*.ts")
 
 test("saved queries enforce membership, immutable revisions, source schema, and page budgets", async () => {
@@ -358,4 +359,120 @@ test("workspace roles limit viewers to reads and editors to data changes", async
     t.query(internal.agentGrants.describe, { digest, now })
   expect(await describe("owner-digest")).not.toBe("denied")
   expect(await describe("editor-digest")).toBe("denied")
+})
+
+test("owners invite members, change roles and always keep one owner", async () => {
+  const t = convexTest(schema, modules)
+  const workspaceId = await t.run(async (ctx) => {
+    const workspaceId = await ctx.db.insert("workspaces", { name: "Team" })
+    await ctx.db.insert("workspaceMembers", {
+      workspaceId,
+      userId: "owner",
+      role: "owner",
+    })
+    return workspaceId
+  })
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const guest = t.withIdentity({ tokenIdentifier: "guest" })
+  const page = { numItems: 10, cursor: null }
+
+  // Only the invited, verified email can redeem the link, once.
+  const token = await owner.action(api.invites.create, {
+    workspaceId,
+    email: " Guest@Example.com ",
+    role: "viewer",
+  })
+  const tokenDigest = await sha256(token)
+  const redeem = (email: string) =>
+    t.mutation(internal.invites.redeem, { tokenDigest, userId: "guest", email })
+  expect(await redeem("other@example.com")).toEqual({ status: "wrong_account" })
+  expect(await redeem("guest@example.com")).toEqual({
+    status: "joined",
+    workspaceId,
+  })
+  expect(await redeem("guest@example.com")).toEqual({ status: "invalid" })
+
+  // Expired invites do not block new ones.
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 50; i++)
+      await ctx.db.insert("workspaceInvites", {
+        workspaceId,
+        email: `old${i}@example.com`,
+        role: "viewer",
+        tokenDigest: `old${i}`,
+        invitedBy: "owner",
+        expiresAt: 0,
+      })
+  })
+  await owner.action(api.invites.create, {
+    workspaceId,
+    email: "new@example.com",
+    role: "editor",
+  })
+
+  // A viewer cannot manage members or invite.
+  await expect(
+    guest.query(api.members.list, { workspaceId, paginationOpts: page })
+  ).rejects.toThrow("Workspace permission denied for your role")
+  await expect(
+    guest.action(api.invites.create, {
+      workspaceId,
+      email: "x@example.com",
+      role: "editor",
+    })
+  ).rejects.toThrow("Workspace permission denied for your role")
+  const members = await owner.query(api.members.list, {
+    workspaceId,
+    paginationOpts: page,
+  })
+  expect(members.page.map((m) => [m.userId, m.role, m.email])).toEqual([
+    ["guest", "viewer", "guest@example.com"],
+    ["owner", "owner", null],
+  ])
+
+  // The last owner cannot leave the owner role.
+  await expect(
+    owner.mutation(api.members.setRole, {
+      workspaceId,
+      userId: "owner",
+      role: "editor",
+    })
+  ).rejects.toThrow("at least one owner")
+  await expect(
+    owner.mutation(api.members.remove, { workspaceId, userId: "owner" })
+  ).rejects.toThrow("at least one owner")
+
+  // A demoted and promoted owner does not get old agent tokens back.
+  await owner.mutation(api.members.setRole, {
+    workspaceId,
+    userId: "guest",
+    role: "owner",
+  })
+  const now = Date.now()
+  await t.run((ctx) =>
+    ctx.db.insert("agentGrants", {
+      workspaceId,
+      owner: "guest",
+      digest: "guest-digest",
+      expiresAt: now + 60_000,
+      state: "active",
+      scope: "readwrite",
+    })
+  )
+  const describe = () =>
+    t.query(internal.agentGrants.describe, { digest: "guest-digest", now })
+  expect(await describe()).not.toBe("denied")
+  for (const role of ["editor", "owner"] as const)
+    await owner.mutation(api.members.setRole, {
+      workspaceId,
+      userId: "guest",
+      role,
+    })
+  expect(await describe()).toBe("denied")
+
+  // Removed members lose access.
+  await owner.mutation(api.members.remove, { workspaceId, userId: "guest" })
+  await expect(
+    guest.query(api.workspaces.get, { workspaceId })
+  ).rejects.toThrow("Workspace access denied")
 })

@@ -84,6 +84,16 @@ function describe(event: AuditEvent): string {
       return "connected an agent"
     case "agentRegistration.revoke":
       return "disconnected an agent"
+    case "member.invite":
+      return `invited a member as ${event.role}`
+    case "member.revokeInvite":
+      return "revoked an invite"
+    case "member.join":
+      return `joined as ${event.role}`
+    case "member.setRole":
+      return `changed a member's role to ${event.role}`
+    case "member.remove":
+      return "removed a member"
   }
 }
 

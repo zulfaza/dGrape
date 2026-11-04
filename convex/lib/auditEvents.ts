@@ -3,6 +3,7 @@ import type { Id } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
 import { storedScopesValidator } from "./agentScope"
 import { budgetOverridesValidator } from "./budgets"
+import { inviteRoleValidator, workspaceRoleValidator } from "./workspaceRoles"
 
 /**
  * Audit events: an append-only history of the changes in a workspace.
@@ -119,7 +120,15 @@ export const auditEventValidator = v.union(
   }),
   op("agentRegistration.revoke", {
     registrationId: v.id("agentRegistrations"),
-  })
+  }),
+  op("member.invite", {
+    inviteId: v.id("workspaceInvites"),
+    role: inviteRoleValidator,
+  }),
+  op("member.revokeInvite", { inviteId: v.id("workspaceInvites") }),
+  op("member.join", { userId: v.string(), role: inviteRoleValidator }),
+  op("member.setRole", { userId: v.string(), role: workspaceRoleValidator }),
+  op("member.remove", { userId: v.string() })
 )
 export type AuditEvent = Infer<typeof auditEventValidator>
 
