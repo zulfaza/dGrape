@@ -200,7 +200,10 @@ function WorkspacePagesEditor({
       )}
       {draft && (
         <div className="flex flex-col gap-4 border-t pt-4">
-          <label className="flex flex-col gap-2">
+          {!canWrite && (
+            <h3 className="text-lg font-semibold">{draft.definition.title}</h3>
+          )}
+          <label hidden={!canWrite} className="flex flex-col gap-2">
             Page title
             <Input
               maxLength={100}
@@ -211,130 +214,135 @@ function WorkspacePagesEditor({
               }
             />
           </label>
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="flex flex-col gap-4">
-              <h3 className="font-semibold">Edit markdown</h3>
-              {draft.definition.blocks.map((block, index) =>
-                block.kind === "markdown" ? (
-                  <label key={index} className="flex flex-col gap-2">
-                    Markdown block {index + 1}
-                    <textarea
-                      className="min-h-48 w-full rounded-md border bg-background p-3 font-mono text-sm"
-                      disabled={pending}
-                      value={block.text}
-                      onChange={(event) =>
+          <div className={canWrite ? "grid gap-6 md:grid-cols-2" : "grid"}>
+            {canWrite && (
+              <div className="flex flex-col gap-4">
+                <h3 className="font-semibold">Edit markdown</h3>
+                {draft.definition.blocks.map((block, index) =>
+                  block.kind === "markdown" ? (
+                    <label key={index} className="flex flex-col gap-2">
+                      Markdown block {index + 1}
+                      <textarea
+                        className="min-h-48 w-full rounded-md border bg-background p-3 font-mono text-sm"
+                        disabled={pending}
+                        value={block.text}
+                        onChange={(event) =>
+                          change({
+                            ...draft.definition,
+                            blocks: draft.definition.blocks.map(
+                              (item, position) =>
+                                position === index
+                                  ? {
+                                      kind: "markdown",
+                                      text: event.target.value,
+                                    }
+                                  : item
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                  ) : (
+                    <p key={index} className="rounded-md border p-3">
+                      {block.kind} block: {block.title}.{" "}
+                      {block.kind === "table" ||
+                      block.kind === "metric" ||
+                      block.kind === "chart"
+                        ? "Remove and add a block to change its binding."
+                        : "This block is kept unchanged."}
+                    </p>
+                  )
+                )}
+                {draft.definition.blocks.map((block, index) => (
+                  <Button
+                    key={index}
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => {
+                      if (window.confirm(`Remove block ${index + 1}?`))
                         change({
                           ...draft.definition,
-                          blocks: draft.definition.blocks.map(
-                            (item, position) =>
-                              position === index
-                                ? { kind: "markdown", text: event.target.value }
-                                : item
+                          blocks: draft.definition.blocks.filter(
+                            (_, position) => position !== index
                           ),
                         })
-                      }
-                    />
-                  </label>
-                ) : (
-                  <p key={index} className="rounded-md border p-3">
-                    {block.kind} block: {block.title}.{" "}
-                    {block.kind === "table" ||
-                    block.kind === "metric" ||
-                    block.kind === "chart"
-                      ? "Remove and add a block to change its binding."
-                      : "This block is kept unchanged."}
-                  </p>
-                )
-              )}
-              {draft.definition.blocks.map((block, index) => (
-                <Button
-                  key={index}
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() => {
-                    if (window.confirm(`Remove block ${index + 1}?`))
-                      change({
-                        ...draft.definition,
-                        blocks: draft.definition.blocks.filter(
-                          (_, position) => position !== index
-                        ),
-                      })
-                  }}
-                >
-                  Remove block {index + 1} ({block.kind})
-                </Button>
-              ))}
-              <label>
-                File or HTML report block title
-                <Input
-                  maxLength={100}
-                  value={artifactTitle}
-                  disabled={pending}
-                  onChange={(e) => setArtifactTitle(e.target.value)}
+                    }}
+                  >
+                    Remove block {index + 1} ({block.kind})
+                  </Button>
+                ))}
+                <label>
+                  File or HTML report block title
+                  <Input
+                    maxLength={100}
+                    value={artifactTitle}
+                    disabled={pending}
+                    onChange={(e) => setArtifactTitle(e.target.value)}
+                  />
+                </label>
+                <ArtifactPicker
+                  workspaceId={workspaceId}
+                  disabled={pending || draft.definition.blocks.length >= 20}
+                  choose={(artifactId, name) =>
+                    change({
+                      ...draft.definition,
+                      blocks: [
+                        ...draft.definition.blocks,
+                        {
+                          kind: "artifact",
+                          title: artifactTitle.trim() || name.slice(0, 100),
+                          artifactId,
+                        },
+                      ],
+                    })
+                  }
                 />
-              </label>
-              <ArtifactPicker
-                workspaceId={workspaceId}
-                disabled={pending || draft.definition.blocks.length >= 20}
-                choose={(artifactId, name) =>
-                  change({
-                    ...draft.definition,
-                    blocks: [
-                      ...draft.definition.blocks,
-                      {
-                        kind: "artifact",
-                        title: artifactTitle.trim() || name.slice(0, 100),
-                        artifactId,
-                      },
-                    ],
-                  })
-                }
-              />
-              <ArtifactPicker
-                workspaceId={workspaceId}
-                label="Choose HTML report"
-                accepts={(contentType) => previewKind(contentType) === "html"}
-                disabled={pending || draft.definition.blocks.length >= 20}
-                choose={(artifactId, name) =>
-                  change({
-                    ...draft.definition,
-                    blocks: [
-                      ...draft.definition.blocks,
-                      {
-                        kind: "htmlReport",
-                        title: artifactTitle.trim() || name.slice(0, 100),
-                        artifactId,
-                      },
-                    ],
-                  })
-                }
-              />
-              <PageSourcePicker
-                workspaceId={workspaceId}
-                disabled={pending || draft.definition.blocks.length >= 20}
-                add={(block) =>
-                  change({
-                    ...draft.definition,
-                    blocks: [...draft.definition.blocks, block],
-                  })
-                }
-              />
-              <Button
-                variant="outline"
-                disabled={pending || draft.definition.blocks.length >= 20}
-                onClick={() =>
-                  change({
-                    ...draft.definition,
-                    blocks: [
-                      ...draft.definition.blocks,
-                      { kind: "markdown", text: "" },
-                    ],
-                  })
-                }
-              >
-                Add markdown block
-              </Button>
-            </div>
+                <ArtifactPicker
+                  workspaceId={workspaceId}
+                  label="Choose HTML report"
+                  accepts={(contentType) => previewKind(contentType) === "html"}
+                  disabled={pending || draft.definition.blocks.length >= 20}
+                  choose={(artifactId, name) =>
+                    change({
+                      ...draft.definition,
+                      blocks: [
+                        ...draft.definition.blocks,
+                        {
+                          kind: "htmlReport",
+                          title: artifactTitle.trim() || name.slice(0, 100),
+                          artifactId,
+                        },
+                      ],
+                    })
+                  }
+                />
+                <PageSourcePicker
+                  workspaceId={workspaceId}
+                  disabled={pending || draft.definition.blocks.length >= 20}
+                  add={(block) =>
+                    change({
+                      ...draft.definition,
+                      blocks: [...draft.definition.blocks, block],
+                    })
+                  }
+                />
+                <Button
+                  variant="outline"
+                  disabled={pending || draft.definition.blocks.length >= 20}
+                  onClick={() =>
+                    change({
+                      ...draft.definition,
+                      blocks: [
+                        ...draft.definition.blocks,
+                        { kind: "markdown", text: "" },
+                      ],
+                    })
+                  }
+                >
+                  Add markdown block
+                </Button>
+              </div>
+            )}
             <div className="min-w-0">
               <h3 className="mb-4 font-semibold">Preview</h3>
               <div className="space-y-4 break-words [&_a]:underline [&_h1]:text-2xl [&_h2]:text-xl [&_pre]:overflow-auto [&_ul]:list-disc [&_ul]:pl-5">
