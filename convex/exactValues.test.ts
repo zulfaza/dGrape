@@ -25,6 +25,7 @@ import {
 import { Field } from "../src/mcp/agent-api"
 import * as Queries from "./lib/agentQueryTransport"
 import { stageSnapshotChunk, upsertSourceRecord } from "./lib/recordPublication"
+import { toCsv, toJson } from "../src/lib/record-export"
 const modules = import.meta.glob("./**/*.ts")
 const fields: CollectionField[] = [
   {
@@ -241,6 +242,75 @@ test("object values have limits on depth, size, and keys, and are never indexed"
       field: { id: "more", label: "More", type: "object", indexed: true },
     })
   ).rejects.toThrow("cannot be indexed")
+})
+
+test("secret references point to workspace secrets and stay out of indexes and exports", async () => {
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const workspaceId = await owner.mutation(api.workspaces.create, {
+    name: "Jobs",
+  })
+  const otherWorkspaceId = await owner.mutation(api.workspaces.create, {
+    name: "Other",
+  })
+  const prepare = (id: typeof workspaceId, isPrivate: boolean) =>
+    owner.mutation(api.secrets.prepare, {
+      workspaceId: id,
+      label: "API",
+      private: isPrivate,
+    })
+  const shared = await prepare(workspaceId, false)
+  const personal = await prepare(workspaceId, true)
+  const foreign = await prepare(otherWorkspaceId, false)
+  const removed = await prepare(workspaceId, false)
+  await owner.mutation(api.secrets.beginDelete, {
+    secretRef: removed,
+    revision: 1,
+  })
+  await expect(
+    owner.mutation(api.workspaces.createCollection, {
+      workspaceId,
+      name: "Bad",
+      fields: [{ id: "key", label: "Key", type: "secretRef", indexed: true }],
+    })
+  ).rejects.toThrow("cannot be indexed")
+  const collectionId = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Services",
+    fields: [
+      { id: "name", label: "Name", type: "text" },
+      { id: "key", label: "Key", type: "secretRef" },
+    ],
+  })
+  for (const key of [personal, foreign, removed, "not-an-id"])
+    await expect(
+      owner.mutation(api.workspaces.createRecord, {
+        collectionId,
+        values: { name: "x", key },
+      })
+    ).rejects.toThrow("workspace secret")
+  const recordId = await owner.mutation(api.workspaces.createRecord, {
+    collectionId,
+    values: { name: "GitHub", key: shared },
+  })
+  const record = await owner.query(api.workspaces.getRecord, {
+    collectionId,
+    recordId,
+  })
+  const collection = await owner.query(api.workspaces.getCollection, {
+    collectionId,
+  })
+  expect(record?.values.key).toBe(shared)
+  if (!record) throw new Error("Expected the record")
+  expect(toCsv(collection, [record])).not.toContain(shared)
+  expect(toJson(collection, [record])).not.toContain(shared)
+  await expect(
+    owner.query(api.workspaces.queryRecords, {
+      collectionId,
+      query: { fieldId: "key", order: "asc" },
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+  ).rejects.toThrow("is not indexed")
 })
 
 test("collections reject bad options and multi-select queries find each chosen option", async () => {

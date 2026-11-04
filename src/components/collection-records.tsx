@@ -20,6 +20,7 @@ import {
 import {
   ArtifactReferenceInput,
   RecordReferenceInput,
+  SecretRefInput,
 } from "@/components/reference-field-input"
 import { ExportRecordsButton } from "@/components/export-records-button"
 import { Mascot } from "@/components/mascot"
@@ -565,6 +566,16 @@ export function CollectionRecords({
                             onChange={(value) => setDraftValue(field.id, value)}
                           />
                         )),
+                        Match.when({ type: "secretRef" }, () => (
+                          <SecretRefInput
+                            id={`record-${field.id}`}
+                            workspaceId={collection.workspaceId}
+                            optional={field.optional === true}
+                            value={String(draft.values[field.id] ?? "")}
+                            disabled={saving}
+                            onChange={(value) => setDraftValue(field.id, value)}
+                          />
+                        )),
                         Match.when({ type: "object" }, () => (
                           <>
                             <textarea
@@ -744,6 +755,7 @@ function ReferenceLabel({
 function formatValue(field: Field, value: Values[string] | undefined) {
   if (value === undefined) return ""
   if (field.type === "boolean") return value === true ? "Yes" : "No"
+  if (field.type === "secretRef") return "Secret reference"
   if (field.type === "timestamp" && typeof value === "number")
     return new Date(value).toLocaleString()
   if (Array.isArray(value)) return value.join(", ")

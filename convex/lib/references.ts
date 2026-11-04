@@ -79,8 +79,8 @@ export async function resolveFields(
 
 /**
  * Checks `values` with the domain rules, then checks that each reference
- * points to a record of the field's collection, or to an artifact of the
- * collection's workspace. Every record write path calls this first.
+ * points to a record of the field's collection, or to an artifact or a
+ * workspace secret of the collection's workspace. Every record write path calls this first.
  */
 export async function checkRecord(
   ctx: QueryCtx,
@@ -105,6 +105,20 @@ export async function checkRecord(
       if (!artifact || artifact.workspaceId !== collection.workspaceId)
         return invalid(
           `Field "${field.id}" references an artifact that is not in this workspace`
+        )
+    } else if (field.type === "secretRef") {
+      // Every member can read the record, so a private secret is not allowed.
+      const id = ctx.db.normalizeId("secretRefs", String(value))
+      const secret = id && (await ctx.db.get(id))
+      if (
+        !secret ||
+        secret.workspaceId !== collection.workspaceId ||
+        secret.owner.kind !== "workspace" ||
+        secret.state.kind === "deleting" ||
+        secret.state.kind === "deleted"
+      )
+        return invalid(
+          `Field "${field.id}" must be the ID of a workspace secret in this workspace`
         )
     }
   }

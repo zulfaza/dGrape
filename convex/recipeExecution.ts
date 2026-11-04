@@ -107,6 +107,15 @@ export const commit = internalMutation({
       )
         throw new Error("Recipe output changed during execution")
       checkOutput(step, args.rows)
+      // A source identity is indexed, so it cannot be a secret reference.
+      if (
+        step.kind === "upsert" &&
+        collection.definition.fields.some(
+          (field) =>
+            field.id === step.identityField && field.type === "secretRef"
+        )
+      )
+        throw new Error("A secret reference cannot be a source identity")
       if (step.kind === "upsert") {
         for (const row of args.rows) {
           const key = sourceKey(row, step.identityField)

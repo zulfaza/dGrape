@@ -47,6 +47,7 @@ const scalarField = {
     "timestamp",
     "date",
     "artifactReference",
+    "secretRef",
   ]),
 }
 

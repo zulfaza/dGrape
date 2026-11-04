@@ -104,3 +104,19 @@ limits apply:
 
 An object field cannot be indexed, so a query cannot filter or sort by it.
 CSV export writes the value as JSON.
+
+## Secret references
+
+A `secretRef` field keeps the ID of a secret in the `secretRefs` table, never
+the secret. Every write checks that the secret is in the same workspace, is
+owned by the workspace (not a private secret), and is not being deleted.
+
+- A secret reference field cannot be indexed, so a query cannot filter, sort,
+  or group by it.
+- Page tables and charts cannot use it, and a recipe upsert cannot use it as
+  the source identity.
+- CSV export writes an empty cell, and JSON export leaves the value out.
+- The record table shows "Secret reference", not the ID.
+
+The ID alone does not give permission to use the secret. A connection still
+needs its own grant.
