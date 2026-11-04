@@ -198,6 +198,7 @@ Primary documentation checked 2026-11-02. Re-check package APIs and runtime limi
 - User changed direction from a job-only tracker to an agent-first general data workspace.
 - This proposal recommends constrained versioned primitives and sandboxed custom visualizations to balance flexibility with operability.
 - Pending user agreement: all implementation phases and proposed v1 scope assumptions above.
+- Removed the proposed connections.manage scope. No agent route configures connections: a person adds connections and secrets in the dashboard, so secret values never pass through MCP. connections.use stays the separate permission to execute a connection.
 
 ## Follow-up: concrete storage and user-provided secrets
 
@@ -239,7 +240,7 @@ The auth.md document must include discovery, supported registration requests/res
 
 ### Authorization design
 
-Proposed scopes: data.read, data.write, artifacts.read, artifacts.write, pages.read, pages.write, jobs.read, jobs.run, jobs.manage, connections.use, connections.manage. Read-only onboarding is the default. Requested scopes are intersected with user-approved scopes and current workspace permissions. Model permission to execute a connection separately from permission to configure it. No scope reveals third-party credentials. A code confirmation cannot grant access to another workspace or bypass revoked membership.
+Proposed scopes: data.read, data.write, artifacts.read, artifacts.write, pages.read, pages.write, jobs.read, jobs.run, jobs.manage, connections.use. Read-only onboarding is the default. Requested scopes are intersected with user-approved scopes and current workspace permissions. Model permission to execute a connection separately from permission to configure it. No scope reveals third-party credentials. A code confirmation cannot grant access to another workspace or bypass revoked membership.
 
 WorkOS AuthKit establishes the human session; the application owns agent registrations and workspace grants. auth.md is an open protocol, not evidence that AuthKit automatically hosts these endpoints. Evaluate a compatible managed authorization-server option during Phase 0, including production entitlement; otherwise scope the application's standards-based authorization-server responsibilities explicitly. Keep that choice separate from WorkOS Vault pricing.
 
