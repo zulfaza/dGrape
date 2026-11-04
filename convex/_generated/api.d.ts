@@ -32,6 +32,7 @@ import type * as lib_agentAuthConfig from "../lib/agentAuthConfig.js";
 import type * as lib_agentAuthCrypto from "../lib/agentAuthCrypto.js";
 import type * as lib_agentAuthDiscovery from "../lib/agentAuthDiscovery.js";
 import type * as lib_agentCapabilities from "../lib/agentCapabilities.js";
+import type * as lib_agentCollectionTransport from "../lib/agentCollectionTransport.js";
 import type * as lib_agentGrant from "../lib/agentGrant.js";
 import type * as lib_agentPageTransport from "../lib/agentPageTransport.js";
 import type * as lib_agentQueryTransport from "../lib/agentQueryTransport.js";
@@ -115,6 +116,7 @@ declare const fullApi: ApiFromModules<{
   "lib/agentAuthCrypto": typeof lib_agentAuthCrypto;
   "lib/agentAuthDiscovery": typeof lib_agentAuthDiscovery;
   "lib/agentCapabilities": typeof lib_agentCapabilities;
+  "lib/agentCollectionTransport": typeof lib_agentCollectionTransport;
   "lib/agentGrant": typeof lib_agentGrant;
   "lib/agentPageTransport": typeof lib_agentPageTransport;
   "lib/agentQueryTransport": typeof lib_agentQueryTransport;

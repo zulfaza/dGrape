@@ -24,7 +24,7 @@ const CAPABILITIES = [
   {
     id: "collections.write",
     scopes: ["data.write"],
-    description: "Create collections and add fields.",
+    description: "Create collections, add fields, and rename field labels.",
   },
   {
     id: "records.read",

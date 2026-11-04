@@ -3,9 +3,20 @@ import {
   paginationResultValidator,
 } from "convex/server"
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import type { Doc } from "./_generated/dataModel"
+import {
+  internalMutation,
+  mutation,
+  query,
+  type MutationCtx,
+} from "./_generated/server"
+import { withGrant } from "./lib/agentGrant"
 import { requireMembership } from "./lib/auth"
-import { recordAuditEvent } from "./lib/auditEvents"
+import {
+  auditActor,
+  recordAuditEvent,
+  type AuditActor,
+} from "./lib/auditEvents"
 import { collectionDefinitionValidator } from "./lib/collectionDomain"
 import { publishCompatibleSchema } from "./lib/collectionSchemas"
 
@@ -65,6 +76,41 @@ export const get = query({
   },
 })
 
+/**
+ * Changes the label of one field. The field ID stays, so values, projections,
+ * and reference bindings are kept. Throws "Schema revision conflict" when the
+ * collection is not at `expectedVersion`. Returns the new definition.
+ */
+export async function renameFieldLabel(
+  ctx: MutationCtx,
+  collection: Doc<"collections">,
+  actor: AuditActor,
+  { expectedVersion, fieldId, label }: RenameField
+) {
+  if (
+    !Number.isSafeInteger(expectedVersion) ||
+    collection.definition.version !== expectedVersion
+  )
+    throw new Error("Schema revision conflict")
+  if (!collection.definition.fields.some((field) => field.id === fieldId))
+    throw new Error("Unknown field")
+  const definition = {
+    version: expectedVersion + 1,
+    fields: collection.definition.fields.map((field) =>
+      field.id === fieldId ? { ...field, label: label.trim() } : field
+    ),
+  }
+  await publishCompatibleSchema(ctx, collection, definition)
+  await recordAuditEvent(ctx, collection.workspaceId, actor, {
+    operation: "collection.renameField",
+    collectionId: collection._id,
+    version: definition.version,
+  })
+  return definition
+}
+
+type RenameField = { expectedVersion: number; fieldId: string; label: string }
+
 /** A rename preserves field identity, values, projections, and reference bindings. */
 export const renameField = mutation({
   args: {
@@ -74,34 +120,41 @@ export const renameField = mutation({
     label: v.string(),
   },
   returns: collectionDefinitionValidator,
-  handler: async (ctx, { collectionId, expectedVersion, fieldId, label }) => {
+  handler: async (ctx, { collectionId, ...rename }) => {
     const collection = await ctx.db.get(collectionId)
     if (!collection) throw new Error("Collection access denied")
     const member = await requireMembership(ctx, collection.workspaceId)
-    if (
-      !Number.isSafeInteger(expectedVersion) ||
-      collection.definition.version !== expectedVersion
-    )
-      throw new Error("Schema revision conflict")
-    if (!collection.definition.fields.some((field) => field.id === fieldId))
-      throw new Error("Unknown field")
-    const definition = {
-      version: expectedVersion + 1,
-      fields: collection.definition.fields.map((field) =>
-        field.id === fieldId ? { ...field, label: label.trim() } : field
-      ),
-    }
-    await publishCompatibleSchema(ctx, collection, definition)
-    await recordAuditEvent(
+    return renameFieldLabel(
       ctx,
-      collection.workspaceId,
+      collection,
       { kind: "user", userId: member.userId },
-      {
-        operation: "collection.renameField",
-        collectionId,
-        version: definition.version,
-      }
+      rename
     )
-    return definition
   },
+})
+
+/** renameField for an agent credential with the data.write scope. */
+export const renameFieldForAgent = internalMutation({
+  args: {
+    digest: v.string(),
+    collectionId: v.string(),
+    expectedVersion: v.number(),
+    fieldId: v.string(),
+    label: v.string(),
+  },
+  returns: v.object({ version: v.number() }),
+  handler: (ctx, { digest, collectionId, ...rename }) =>
+    withGrant(ctx, digest, Date.now(), ["data.write"], async (grant) => {
+      const id = ctx.db.normalizeId("collections", collectionId)
+      const collection = id && (await ctx.db.get(id))
+      if (!collection || collection.workspaceId !== grant.workspaceId)
+        throw new Error("Collection access denied")
+      const { version } = await renameFieldLabel(
+        ctx,
+        collection,
+        auditActor(grant.owner, grant),
+        rename
+      )
+      return { version }
+    }),
 })

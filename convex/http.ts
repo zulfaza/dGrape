@@ -4,6 +4,7 @@ import { collectionTemplates } from "./lib/collectionTemplates"
 import { registerRecipeRoutes } from "./recipeHttp"
 import { agentRoute } from "./lib/agentRoute"
 import * as Activity from "./lib/agentActivityTransport"
+import * as Collections from "./lib/agentCollectionTransport"
 import * as Pages from "./lib/agentPageTransport"
 import * as Queries from "./lib/agentQueryTransport"
 import { httpRouter } from "convex/server"
@@ -446,6 +447,16 @@ http.route({
     }
   }),
 })
+agentRoute(
+  http,
+  "/agent/collections/renameField",
+  Collections.RenameFieldInput,
+  (ctx, digest, input) =>
+    ctx.runMutation(internal.collectionSchemas.renameFieldForAgent, {
+      ...input,
+      digest,
+    })
+)
 http.route({ path: "/agent/identity", method: "OPTIONS", handler: preflight })
 http.route({ path: "/agent/identity", method: "POST", handler: registerAgent })
 http.route({
