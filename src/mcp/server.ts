@@ -1,4 +1,5 @@
 import * as Activity from "../../convex/lib/agentActivityTransport"
+import * as Collections from "../../convex/lib/agentCollectionTransport"
 import * as Pages from "../../convex/lib/agentPageTransport"
 import * as Queries from "../../convex/lib/agentQueryTransport"
 import * as Recipes from "../../convex/lib/agentRecipeTransport"
@@ -163,6 +164,15 @@ const AddField = Tool.make("collections_add_field", {
     field: AgentApi.NewField,
   }),
   success: AgentApi.AddedField,
+  failure: AgentApi.AgentApiError,
+  dependencies: [AgentApi.AgentCredential],
+}).annotate(Tool.Destructive, false)
+
+const RenameField = Tool.make("collections_rename_field", {
+  description:
+    "Change the label of one field. The field `id` stays, so records, saved queries, and pages keep working. Pass the collection's current `version` (from collections_describe) as `expectedVersion`; if the schema changed since you read it, the call fails: read it again. The label is trimmed and must not be empty. Returns the new schema version. Needs the data.write scope.",
+  parameters: Collections.RenameFieldInput,
+  success: Collections.RenamedField,
   failure: AgentApi.AgentApiError,
   dependencies: [AgentApi.AgentCredential],
 }).annotate(Tool.Destructive, false)
@@ -456,6 +466,7 @@ const DfeToolkit = Toolkit.make(
   CompleteArtifactUpload,
   CreateCollection,
   AddField,
+  RenameField,
   CreateRecord,
   UpdateRecord,
   DeleteRecord
@@ -501,6 +512,7 @@ const DfeToolkitHandlers = DfeToolkit.toLayer(
       artifacts_complete_upload: (input) => api.completeArtifactUpload(input),
       collections_create: (input) => api.createCollection(input),
       collections_add_field: (input) => api.addField(input),
+      collections_rename_field: (input) => api.renameField(input),
       records_create: (input) => api.createRecord(input),
       records_update: (input) => api.updateRecord(input),
       records_delete: (input) => api.deleteRecord(input),
@@ -535,7 +547,7 @@ export const makeMcpApp = (agentApiUrl: string) =>
     path: "/mcp",
     protocols: [McpProtocol.v2026_07_28],
     instructions:
-      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. " +
+      "DFE stores workspace data in collections of typed records. Call capabilities_list first to see what this credential can do. Use workspace_describe to find collections, collections_describe for the fields and schema version of one collection, records_list to read records, and records_query to filter and sort them by an indexed field. Files are artifacts: artifacts_list and artifacts_download_url read them, and artifacts_create_upload then artifacts_complete_upload add one. With the data.write scope, collections_create, collections_add_field, collections_rename_field, records_create, records_update, and records_delete change data. Saved queries are the data sources of pages: queries_save stores a records query as an immutable revision, queries_list finds saved queries and their result fields, and queries_run reads one revision. Pages show markdown, artifacts, and live blocks bound to saved query revisions: pages_save_draft stores a draft revision, pages_publish publishes or rolls back, and pages_get and pages_list read pages and report invalid bindings. activity_list reads the history of changes. " +
       "Recipes fetch and transform data without a model. A recipe fetch step uses a connection: connections_list and connections_describe show each connection's origin, routes, and credential status, never secret values. A person adds credentials in the dashboard. recipes_publish saves an immutable recipe version (fetch, map, filter, join, aggregate, upsert, snapshot, and artifact steps); recipes_versions lists versions. recipes_trigger starts a run (reuse its idempotencyKey to retry), recipes_runs lists runs, recipes_history lists the attempts of one run, and recipes_cancel stops a run. recipes_schedule creates a UTC schedule, recipes_schedules lists schedules, recipes_set_enabled turns one on or off, and recipes_set_run_access lets another user run a recipe. Only the recipe creator manages schedules and run access.",
     registrations: McpServer.toolkit(DfeToolkit).pipe(
       Layer.provideMerge(DfeToolkitHandlers)

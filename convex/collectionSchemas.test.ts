@@ -273,6 +273,46 @@ test("agent collection creation and optional additions also preserve versions", 
       })
     )?.fields
   ).toHaveLength(2)
+  const rename = {
+    digest: "test",
+    collectionId: result.id,
+    fieldId: "source",
+    label: " Origin ",
+    expectedVersion: 2,
+  }
+  expect(
+    await t.mutation(internal.collectionSchemas.renameFieldForAgent, rename)
+  ).toEqual({ version: 3 })
+  expect(
+    (
+      await owner.query(api.workspaces.getCollection, {
+        collectionId: result.id,
+      })
+    ).definition.fields.map((field) => [field.id, field.label])
+  ).toEqual([
+    ["name", "Name"],
+    ["source", "Origin"],
+  ])
+  await expect(
+    t.mutation(internal.collectionSchemas.renameFieldForAgent, rename)
+  ).rejects.toThrow("Schema revision conflict")
+  await t.run(async (ctx) => {
+    await ctx.db.insert("agentGrants", {
+      workspaceId,
+      owner: "owner",
+      digest: "reader",
+      scope: "readonly",
+      state: "active",
+      expiresAt: Date.now() + 60_000,
+    })
+  })
+  await expect(
+    t.mutation(internal.collectionSchemas.renameFieldForAgent, {
+      ...rename,
+      digest: "reader",
+      expectedVersion: 3,
+    })
+  ).rejects.toThrow("does not have the scope data.write")
 })
 
 // The first HTTP call loads the router, which can be slow on a busy runner.

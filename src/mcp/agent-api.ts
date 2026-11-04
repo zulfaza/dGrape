@@ -1,4 +1,5 @@
 import * as Activity from "../../convex/lib/agentActivityTransport.ts"
+import * as Collections from "../../convex/lib/agentCollectionTransport.ts"
 import * as Pages from "../../convex/lib/agentPageTransport.ts"
 import * as Queries from "../../convex/lib/agentQueryTransport.ts"
 import * as Recipes from "../../convex/lib/agentRecipeTransport.ts"
@@ -419,6 +420,9 @@ export class AgentApi extends Context.Service<
       input: CreateCollectionInput
     ) => Call<typeof CreatedCollection.Type>
     readonly addField: (input: AddFieldInput) => Call<typeof AddedField.Type>
+    readonly renameField: (
+      input: typeof Collections.RenameFieldInput.Type
+    ) => Call<typeof Collections.RenamedField.Type>
     readonly createRecord: (
       input: CreateRecordInput
     ) => Call<typeof CreatedRecord.Type>
@@ -700,6 +704,14 @@ export const layer = (baseUrl: string) =>
               input
             ),
             AddedField
+          ),
+        renameField: (input) =>
+          send(
+            json(
+              HttpClientRequest.post(url("/agent/collections/renameField")),
+              input
+            ),
+            Collections.RenamedField
           ),
         createRecord: (input) =>
           send(
