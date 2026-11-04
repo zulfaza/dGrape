@@ -50,6 +50,10 @@ export const routeValidator = v.object({
   path: v.string(),
   method: methodValidator,
   queryKeys: v.array(v.string()),
+  /**
+   * Keys to keep from each row. A dotted path such as `user.login` reads a
+   * nested key; see {@link fieldKey} for its key in the output row.
+   */
   fields: v.array(v.string()),
   /** Absent means `{ rows, nextCursor }` with the `cursor` query parameter. */
   response: v.optional(responseValidator),
@@ -83,6 +87,10 @@ export type ResponseMapping = Infer<typeof responseValidator>
 export const defaultResponse: ResponseMapping = {
   rows: ["rows"],
   next: { kind: "body", path: ["nextCursor"], param: "cursor" },
+}
+/** The output row key of a route field: `user.login` becomes `user_login`. */
+export function fieldKey(field: string) {
+  return field.split(".").join("_")
 }
 export function safeLabel(value: string) {
   if (!/^[a-zA-Z][a-zA-Z0-9 ._-]{0,79}$/.test(value))
@@ -124,7 +132,19 @@ export function checkRoute(route: ConnectorRoute) {
     route.fields.length > 50
   )
     throw new Error("Invalid route")
-  for (const key of [...route.queryKeys, ...route.fields, ...paths.flat()]) {
+  const fieldPaths = route.fields.map((field) => field.split("."))
+  const keys = route.fields.map(fieldKey)
+  if (
+    fieldPaths.some((path) => path.length > 3) ||
+    keys.some((key) => key.length > 64) ||
+    new Set(keys).size !== keys.length
+  )
+    throw new Error("Invalid route")
+  for (const key of [
+    ...route.queryKeys,
+    ...fieldPaths.flat(),
+    ...paths.flat(),
+  ]) {
     if (
       !/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key) ||
       /token|secret|password|credential|authorization|cookie|api.?key/i.test(

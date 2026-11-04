@@ -545,6 +545,18 @@ describe("connector response mapping and pagination", () => {
         checkRoute({ ...route, queryKeys: ["page"], response })
       ).toThrow(/Invalid route|Unsafe field/)
     expect(() => checkRoute({ ...route, queryKeys: [] })).not.toThrow()
+    expect(() =>
+      checkRoute({ ...route, fields: ["user.login", "user.id"] })
+    ).not.toThrow()
+    for (const fields of [
+      ["a.b.c.d"],
+      ["user.login", "user_login"],
+      ["user.access_token"],
+      ["user..login"],
+    ])
+      expect(() => checkRoute({ ...route, fields })).toThrow(
+        /Invalid route|Unsafe field/
+      )
   })
 })
 
@@ -588,13 +600,30 @@ describe("GitHub read-only connector", () => {
       Response.json(
         {
           total_count: 1,
-          items: [{ id: 7, number: 3, title: "Fix", body: "discard" }],
+          items: [
+            {
+              id: 7,
+              number: 3,
+              title: "Fix",
+              body: "discard",
+              user: { login: "octocat", email: "discard" },
+              pull_request: { merged_at: "2026-11-03T10:00:00Z" },
+            },
+          ],
         },
         { headers: { Link: `<${next}>; rel="next"` } }
       )
     )
     expect(page).toMatchObject({
-      rows: [{ id: 7, number: 3, title: "Fix" }],
+      rows: [
+        {
+          id: 7,
+          number: 3,
+          title: "Fix",
+          user_login: "octocat",
+          pull_request_merged_at: "2026-11-03T10:00:00Z",
+        },
+      ],
       nextCursor: next,
     })
     const request = sent[0]

@@ -2,6 +2,7 @@ import { Effect, Redacted, Schema } from "effect"
 import { SecretService, type SecretScope } from "./secretService"
 import {
   defaultResponse,
+  fieldKey,
   type ConnectorRoute,
   type ResponseMapping,
 } from "./secretDomain"
@@ -196,7 +197,7 @@ export function fetchConnectorPage(
           )
         )
         const pageRows = Schema.decodeUnknownSync(
-          Schema.Array(Schema.Record(Schema.String, Schema.Unknown)).check(
+          Schema.Array(Schema.Record(Schema.String, Schema.Json)).check(
             Schema.isMaxLength(input.limits.maxRows)
           )
         )(at(body, mapping.rows))
@@ -227,9 +228,9 @@ export function fetchConnectorPage(
         for (const item of pageRows) {
           const row: Row = {}
           for (const field of route.fields) {
-            const value = parseValue(item[field])
+            const value = parseValue(at(item, field.split(".")))
             if (value === undefined || value === null) continue
-            row[field] = value
+            row[fieldKey(field)] = value
           }
           rows.push(row)
         }
