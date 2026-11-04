@@ -4,6 +4,7 @@ import type { Doc } from "../_generated/dataModel"
 import type { QueryCtx } from "../_generated/server"
 import {
   indexValueValidator,
+  isIndexableType,
   checkRecordValues,
   type Checked,
   type CollectionField,
@@ -163,6 +164,8 @@ function checkFilter(
     return invalid(
       `Unknown filter field "${filter.fieldId}". Fields: ${fields.map((f) => f.id).join(", ")}`
     )
+  if (!isIndexableType(field.type))
+    return invalid(`Field "${field.id}" (${field.type}) takes no filters`)
   if (filter.op === "in") {
     if (filter.values.length < 1 || filter.values.length > MAX_IN_VALUES)
       return invalid(`An "in" filter has 1 to ${MAX_IN_VALUES} values`)
