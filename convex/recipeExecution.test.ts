@@ -121,6 +121,17 @@ describe("durable recipe checkpoints", () => {
     expect(await owner.query(api.sourceSyncs.list, { workspaceId })).toEqual([
       { collectionId, name: "Data", freshness: { kind: "never_synced" } },
     ])
+    const versionId = await t.run(async (ctx) => {
+      const run = await ctx.db.get(args.runId)
+      if (!run) throw new Error("Run missing")
+      return run.versionId
+    })
+    // As if an hourly schedule started this run.
+    const scheduleId = await owner.mutation(api.recipes.schedule, {
+      versionId,
+      timing: { kind: "cron", expression: "0 * * * *" },
+    })
+    await t.run((ctx) => ctx.db.patch(args.runId, { scheduleId }))
     await t.action(internal.recipeRunner.execute, { ...args, step: 0 })
     await t.action(internal.recipeRunner.execute, { ...args, step: 1 })
     const [synced] = await owner.query(api.sourceSyncs.list, { workspaceId })
@@ -129,11 +140,20 @@ describe("durable recipe checkpoints", () => {
       name: "Data",
       freshness: { kind: "synced", runId: args.runId },
     })
-    const versionId = await t.run(async (ctx) => {
-      const run = await ctx.db.get(args.runId)
-      if (!run) throw new Error("Run missing")
-      return run.versionId
+    // Stale after the second hour mark: one whole interval was missed.
+    const syncedAt =
+      synced?.freshness.kind === "synced"
+        ? synced.freshness.lastSuccessfulSyncAt
+        : -1
+    const hour = 3_600_000
+    expect(synced?.freshness).toMatchObject({
+      staleAfter: (Math.floor(syncedAt / hour) + 2) * hour,
     })
+    await owner.mutation(api.recipes.setEnabled, { scheduleId, enabled: false })
+    const [unscheduled] = await owner.query(api.sourceSyncs.list, {
+      workspaceId,
+    })
+    expect(unscheduled?.freshness).toMatchObject({ staleAfter: null })
     const failedRunId = await owner.mutation(api.recipes.trigger, {
       versionId,
       idempotencyKey: "two",
