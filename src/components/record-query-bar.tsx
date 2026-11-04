@@ -1,4 +1,7 @@
-import { checkRecordValues } from "../../convex/lib/collectionDomain"
+import {
+  ANY_OPTION,
+  checkRecordValues,
+} from "../../convex/lib/collectionDomain"
 import { useState, type FormEvent } from "react"
 import type { Doc } from "../../convex/_generated/dataModel"
 import type { RecordQuery } from "../../convex/lib/recordQuery"
@@ -21,9 +24,6 @@ type Order = RecordQuery["order"]
 
 /** The select value for "no indexed field": records in the order added. */
 const ADDED = "__added"
-
-/** The select value for "no filter" on a select field. */
-const ANY = "__any"
 
 function isOrder(value: string): value is Order {
   return value === "asc" || value === "desc"
@@ -160,11 +160,11 @@ export function RecordQueryBar({
                 value={
                   query.where && "eq" in query.where
                     ? String(query.where.eq)
-                    : ANY
+                    : ANY_OPTION
                 }
                 onValueChange={(value) =>
                   onChange(
-                    value === ANY
+                    value === ANY_OPTION
                       ? { fieldId: query.fieldId, order: query.order }
                       : { ...query, where: { eq: value } }
                   )
@@ -176,7 +176,7 @@ export function RecordQueryBar({
                 <SelectContent>
                   <SelectGroup>
                     {field.type === "select" && (
-                      <SelectItem value={ANY}>All</SelectItem>
+                      <SelectItem value={ANY_OPTION}>All</SelectItem>
                     )}
                     {field.options.map((option) => (
                       <SelectItem key={option} value={option}>
