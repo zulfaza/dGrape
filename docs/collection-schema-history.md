@@ -33,7 +33,7 @@ outdated; plan again.
 
 `schemaMigrations.get` and `list` return the field changes and the rollback
 limitations: values of removed fields are deleted, and converted values may not
-convert back. `dryRun` reads every record in bounded steps of 100 and reports
+convert back. `dryRun` reads every record in bounded steps of up to 25 and reports
 how many records do not fit the target, with the first 20 record IDs and
 reasons. It changes no record and no schema, and it does not lock the
 collection. A duplicate or cancelled step does nothing.

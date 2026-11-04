@@ -36,8 +36,11 @@ import {
  * convex/lib/schemaMigrations.ts and docs/collection-schema-history.md.
  */
 
-/** Records read per dry run step. Records hold at most ~60 KB of values each. */
-const DRY_RUN_PAGE = 100
+/**
+ * Records read per dry run step. A record holds at most 50,000 characters of
+ * text (~200 KB in UTF-8), so a page reads at most ~5 MB.
+ */
+const DRY_RUN_PAGE = 25
 
 /** A migration as queries return it, with its derived report. */
 const migrationViewValidator = v.object({
@@ -180,6 +183,22 @@ export const dryRun = mutation({
   },
 })
 
+/**
+ * Reads that the reference targets of one record can need: at most 50
+ * fields, each a record of ~200 KB. Before each record after the first, a
+ * step stops when less than this is left of the 16 MiB read limit.
+ */
+const READ_RESERVE_BYTES = 10 * 1024 * 1024
+const READ_RESERVE_DOCUMENTS = 200
+
+async function readBudgetLow(ctx: MutationCtx) {
+  const { bytesRead, documentsRead } = await ctx.meta.getTransactionMetrics()
+  return (
+    bytesRead.remaining < READ_RESERVE_BYTES ||
+    documentsRead.remaining < READ_RESERVE_DOCUMENTS
+  )
+}
+
 /** Why `record` does not fit the target of `migration`, or null. */
 async function misfit(
   ctx: MutationCtx,
@@ -236,20 +255,26 @@ export const dryRunStep = internalMutation({
       .take(DRY_RUN_PAGE)
     let { misfitCount } = state
     const misfits = [...state.misfits]
+    const checked: Array<Doc<"collectionRecords">> = []
+    let budgetLow = false
     for (const record of page) {
+      budgetLow = checked.length > 0 && (await readBudgetLow(ctx))
+      if (budgetLow) break
       const message = await misfit(ctx, collection, migration, record)
-      if (message === null) continue
-      misfitCount += 1
-      if (misfits.length < MAX_REPORTED_MISFITS)
-        misfits.push({ recordId: record._id, message })
+      checked.push(record)
+      if (message !== null) {
+        misfitCount += 1
+        if (misfits.length < MAX_REPORTED_MISFITS)
+          misfits.push({ recordId: record._id, message })
+      }
     }
     const progress = {
-      checked: state.checked + page.length,
+      checked: state.checked + checked.length,
       misfitCount,
       misfits,
     }
-    const last = page.at(-1)
-    if (page.length < DRY_RUN_PAGE || !last) {
+    const last = checked.at(-1)
+    if ((!budgetLow && page.length < DRY_RUN_PAGE) || !last) {
       await ctx.db.patch(migrationId, {
         state: { kind: "checked", ...progress },
       })

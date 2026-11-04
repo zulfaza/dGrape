@@ -108,8 +108,12 @@ function sameField(a: CollectionField, b: CollectionField) {
     a.indexed === b.indexed &&
     (a.type !== "recordReference" ||
       (b.type === "recordReference" && a.collectionId === b.collectionId)) &&
-    optionsOf(a).join("\n") === optionsOf(b).join("\n")
+    sameOptions(optionsOf(a), optionsOf(b))
   )
+}
+
+function sameOptions(a: ReadonlyArray<string>, b: ReadonlyArray<string>) {
+  return a.length === b.length && a.every((option, i) => option === b[i])
 }
 
 function optionsOf(field: CollectionField): ReadonlyArray<string> {
