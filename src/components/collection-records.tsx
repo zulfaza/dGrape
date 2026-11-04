@@ -1,7 +1,9 @@
 import { RecordArtifacts } from "./record-artifacts"
 import {
   isNumericField,
+  isObjectValue,
   checkRecordValues,
+  MAX_OBJECT_DEPTH,
 } from "../../convex/lib/collectionDomain"
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react"
 import { useState, type FormEvent } from "react"
@@ -63,7 +65,9 @@ import {
   fromInputText,
   inputStep,
   inputType,
+  parseObjectText,
   timestampInputText,
+  valueText,
 } from "@/lib/field-types"
 
 type Values = Doc<"collectionRecords">["values"]
@@ -98,9 +102,11 @@ function editValues(fields: Field[], values: Values): Draft["values"] {
           field.id,
           field.type === "timestamp" && typeof value === "number"
             ? timestampInputText(value)
-            : typeof value === "boolean" || Array.isArray(value)
-              ? value
-              : String(value),
+            : isObjectValue(value)
+              ? JSON.stringify(value, null, 2)
+              : typeof value === "boolean" || Array.isArray(value)
+                ? value
+                : String(value),
         ],
       ]
     })
@@ -169,7 +175,14 @@ export function CollectionRecords({
         values[field.id] = stored
         continue
       }
-      if (typeof value === "string") {
+      if (field.type === "object" && typeof value === "string") {
+        const parsed = parseObjectText(value)
+        if (!parsed.ok) {
+          toast.error(`${field.label}: ${parsed.message}`)
+          return
+        }
+        values[field.id] = parsed.value
+      } else if (typeof value === "string") {
         const parsed = fromInputText(field.type, value)
         if (!parsed.ok) {
           toast.error(parsed.message)
@@ -552,6 +565,26 @@ export function CollectionRecords({
                             onChange={(value) => setDraftValue(field.id, value)}
                           />
                         )),
+                        Match.when({ type: "object" }, () => (
+                          <>
+                            <textarea
+                              id={`record-${field.id}`}
+                              className="min-h-32 w-full rounded-md border bg-background p-3 font-mono text-sm"
+                              rows={6}
+                              spellCheck={false}
+                              disabled={saving}
+                              required={!field.optional}
+                              value={String(draft.values[field.id] ?? "")}
+                              onChange={(e) =>
+                                setDraftValue(field.id, e.target.value)
+                              }
+                            />
+                            <p className="text-sm text-muted-foreground">
+                              A JSON object, nested at most {MAX_OBJECT_DEPTH}{" "}
+                              levels deep.
+                            </p>
+                          </>
+                        )),
                         Match.orElse(() => (
                           <Input
                             disabled={saving}
@@ -715,5 +748,5 @@ function formatValue(field: Field, value: Values[string] | undefined) {
     return new Date(value).toLocaleString()
   if (Array.isArray(value)) return value.join(", ")
   if (typeof value === "number") return value.toLocaleString()
-  return String(value)
+  return valueText(value)
 }

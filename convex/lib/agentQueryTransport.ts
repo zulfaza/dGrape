@@ -15,12 +15,37 @@ const Bound = Schema.Struct({
   value: Value,
   inclusive: Schema.optionalKey(Schema.Boolean),
 })
-/** A record value: a scalar, or the chosen options of a multi-select field. */
-const RecordValue = Schema.Union([
+/**
+ * An object field value, nested at most four levels deep like
+ * `objectValueValidator` in collectionDomain.ts, which also checks its keys
+ * and size.
+ */
+const JsonLeaf = Schema.Union([
+  Schema.String,
+  Schema.Number,
+  Schema.Boolean,
+  Schema.Null,
+])
+const nested = <S extends Schema.Top>(item: S) =>
+  Schema.Union([
+    JsonLeaf,
+    Schema.Array(item),
+    Schema.Record(Schema.String, item),
+  ])
+const ObjectValue = Schema.Record(
+  Schema.String,
+  nested(nested(nested(JsonLeaf)))
+)
+/**
+ * A record value: a scalar, the chosen options of a multi-select field, or
+ * the object of an object field.
+ */
+export const RecordValue = Schema.Union([
   Schema.String,
   Schema.Number,
   Schema.Boolean,
   Schema.Array(Schema.String),
+  ObjectValue,
 ])
 const fieldIdentity = {
   id: Schema.String,
@@ -53,6 +78,7 @@ export const Field = Schema.Union([
     type: Schema.Literal("recordReference"),
     collectionId: Schema.String,
   }),
+  Schema.Struct({ ...fieldIdentity, type: Schema.Literal("object") }),
 ])
 const Limit = Schema.Int.check(
   Schema.isBetween({ minimum: 1, maximum: MAX_PAGE_SIZE })

@@ -1,9 +1,15 @@
-import type {
-  Checked,
-  CollectionField,
-  IndexValue,
-  NewCollectionField,
+import {
+  isIndexableType,
+  isObjectValue,
+  MAX_OBJECT_DEPTH,
+  type Checked,
+  type CollectionField,
+  type IndexValue,
+  type NewCollectionField,
+  type ObjectValue,
+  type RecordValue,
 } from "../../convex/lib/collectionDomain"
+import { parseObjectValue } from "../../convex/lib/agentRequests"
 import type { Id } from "../../convex/_generated/dataModel"
 
 /**
@@ -26,6 +32,7 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   multiSelect: "Multi-select",
   recordReference: "Record reference",
   artifactReference: "Artifact reference",
+  object: "Object (JSON)",
 }
 
 /** The field types in the order the type pickers show them. */
@@ -41,6 +48,7 @@ export const FIELD_TYPES: ReadonlyArray<FieldType> = [
   "multiSelect",
   "recordReference",
   "artifactReference",
+  "object",
 ]
 
 /** Option text with one option on each line; blank lines are ignored. */
@@ -65,7 +73,8 @@ export function buildField(
   target: Id<"collections"> | null,
   indexed: boolean
 ): NewCollectionField | null {
-  const flags: { indexed?: true } = indexed ? { indexed } : {}
+  const flags: { indexed?: true } =
+    indexed && isIndexableType(type) ? { indexed } : {}
   if (type === "select" || type === "multiSelect")
     return { id, label, type, options: [...options], ...flags }
   if (type === "recordReference")
@@ -73,6 +82,27 @@ export function buildField(
       ? null
       : { id, label, type, collectionId: target, ...flags }
   return { id, label, type, ...flags }
+}
+
+/**
+ * Parses the text of an object field input. The domain rules
+ * (convex/lib/collectionDomain.ts) still check its keys and size.
+ */
+export function parseObjectText(text: string): Checked<ObjectValue> {
+  const message = `Enter a JSON object, nested at most ${MAX_OBJECT_DEPTH} levels deep`
+  let json: unknown
+  try {
+    json = JSON.parse(text)
+  } catch {
+    return { ok: false, message }
+  }
+  const value = parseObjectValue(json)
+  return value === null ? { ok: false, message } : { ok: true, value }
+}
+
+/** A stored value as one line of text: objects are compact JSON. */
+export function valueText(value: RecordValue): string {
+  return isObjectValue(value) ? JSON.stringify(value) : String(value)
 }
 
 /** The HTML input type for a field that is not a yes/no field. */

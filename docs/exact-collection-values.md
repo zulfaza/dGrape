@@ -17,8 +17,18 @@ For example, create a collection through `collections_create` (MCP),
 {
   "name": "Transactions",
   "fields": [
-    { "id": "amount_minor", "label": "Amount (minor units)", "type": "integer", "indexed": true },
-    { "id": "currency", "label": "Currency", "type": "currency", "indexed": true },
+    {
+      "id": "amount_minor",
+      "label": "Amount (minor units)",
+      "type": "integer",
+      "indexed": true
+    },
+    {
+      "id": "currency",
+      "label": "Currency",
+      "type": "currency",
+      "indexed": true
+    },
     { "id": "category", "label": "Category", "type": "text", "indexed": true }
   ]
 }
@@ -78,3 +88,19 @@ returns HTTP 409 with the referencing record ID. A record that references only
 itself can be deleted. Snapshot rows are checked when they are staged, but they
 do not keep their targets from deletion. Both kinds can be indexed, so an
 equal query finds the records that reference one target.
+
+## Objects
+
+An `object` field keeps a JSON object, such as
+`{ "address": { "city": "Jakarta", "lines": ["Jl. Sudirman 1"] } }`. These
+limits apply:
+
+- Objects and arrays nest at most 4 levels deep, the top object included.
+- The value is at most 10000 characters as JSON, and counts toward the text
+  limit of the record.
+- Each key has 1 to 100 printable ASCII characters, and does not start with
+  `$` or `_`.
+- Leaves are text, finite numbers, `true`, `false`, or `null`.
+
+An object field cannot be indexed, so a query cannot filter or sort by it.
+CSV export writes the value as JSON.

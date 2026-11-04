@@ -58,7 +58,7 @@ function safeText(value: string): string {
  * CSV: one row per record; field columns use the field IDs. Timestamps are
  * ISO 8601 text in UTC, so spreadsheets can read them as dates.
  * Multi-select values are JSON arrays, so options that contain commas stay
- * whole.
+ * whole. Object values are JSON.
  */
 export function toCsv(
   collection: Collection,
@@ -80,7 +80,8 @@ export function toCsv(
     ...fields.map((field) => {
       const value = record.values[field.id]
       if (value === undefined) return ""
-      if (Array.isArray(value)) return JSON.stringify(value)
+      if (Array.isArray(value) || field.type === "object")
+        return JSON.stringify(value)
       if (field.type === "timestamp" && typeof value === "number")
         return new Date(value).toISOString()
       return typeof value === "string" ? safeText(value) : String(value)

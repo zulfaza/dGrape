@@ -2,6 +2,7 @@ import { collectionTemplates } from "../../convex/lib/collectionTemplates"
 import {
   isChoiceField,
   isFieldType,
+  isIndexableType,
   MAX_FIELDS,
   type CollectionField,
 } from "../../convex/lib/collectionDomain"
@@ -97,7 +98,9 @@ export function CreateCollectionDialog({
       toast.error("Field IDs must be unique")
       return
     }
-    const indexedCount = fields.filter((field) => field.indexed).length
+    const indexedCount = fields.filter(
+      (field) => field.indexed && isIndexableType(field.type)
+    ).length
     // Until the budget loads, the server alone decides.
     if (maxIndexed !== undefined && indexedCount > maxIndexed) {
       toast.error(`This workspace allows at most ${maxIndexed} indexed fields`)
@@ -266,7 +269,8 @@ export function CreateCollectionDialog({
                 <div className="flex h-9 items-center gap-2">
                   <Checkbox
                     id={`indexed-${index}`}
-                    checked={field.indexed}
+                    checked={field.indexed && isIndexableType(field.type)}
+                    disabled={!isIndexableType(field.type)}
                     onCheckedChange={(checked) =>
                       updateField(index, { indexed: checked === true })
                     }

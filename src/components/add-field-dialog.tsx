@@ -1,4 +1,8 @@
-import { isFieldType, MAX_FIELDS } from "../../convex/lib/collectionDomain"
+import {
+  isFieldType,
+  isIndexableType,
+  MAX_FIELDS,
+} from "../../convex/lib/collectionDomain"
 import { useMutation, useQuery } from "convex/react"
 import { Plus } from "lucide-react"
 import { useState, type FormEvent } from "react"
@@ -200,8 +204,8 @@ export function AddFieldDialog({
             <div className="flex items-center gap-2">
               <Checkbox
                 id="new-field-indexed"
-                checked={indexed}
-                disabled={!canIndex}
+                checked={indexed && isIndexableType(type)}
+                disabled={!canIndex || !isIndexableType(type)}
                 onCheckedChange={(checked) => setIndexed(checked === true)}
               />
               <Label htmlFor="new-field-indexed">

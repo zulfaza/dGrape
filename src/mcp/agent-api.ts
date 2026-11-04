@@ -62,6 +62,13 @@ const recordReferenceField = {
   collectionId: Schema.String,
 }
 
+/** An object field; it cannot be indexed. */
+const objectField = {
+  id: Schema.String,
+  label: Schema.String,
+  type: Schema.Literal("object"),
+}
+
 const optional = { optional: Schema.optionalKey(Schema.Literal(true)) }
 
 /** A field to add to a collection; it is always optional. */
@@ -69,12 +76,14 @@ export const NewField = Schema.Union([
   Schema.Struct(scalarField),
   Schema.Struct(choiceField),
   Schema.Struct(recordReferenceField),
+  Schema.Struct(objectField),
 ])
 
 export const Field = Schema.Union([
   Schema.Struct({ ...scalarField, ...optional }),
   Schema.Struct({ ...choiceField, ...optional }),
   Schema.Struct({ ...recordReferenceField, ...optional }),
+  Schema.Struct({ ...objectField, ...optional }),
 ])
 
 export const WorkspaceDescription = Schema.Struct({
@@ -92,14 +101,7 @@ export const WorkspaceDescription = Schema.Struct({
 /** A value in an index: what filters and bounds compare with. */
 const IndexValue = Schema.Union([Schema.String, Schema.Number, Schema.Boolean])
 
-/** A field value: a scalar, or the chosen options of a multi-select field. */
-const RecordValue = Schema.Union([
-  Schema.String,
-  Schema.Number,
-  Schema.Boolean,
-  Schema.Array(Schema.String),
-])
-export const RecordValues = Schema.Record(Schema.String, RecordValue)
+export const RecordValues = Schema.Record(Schema.String, Queries.RecordValue)
 
 const Bound = Schema.Struct({
   value: IndexValue,

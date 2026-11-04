@@ -3,6 +3,8 @@ import type {
   AgentField,
   AgentNewField,
   IndexValue,
+  JsonLeaf,
+  ObjectValue,
   RecordValues,
 } from "./collectionDomain"
 import type { RecordQuery } from "./recordQuery"
@@ -79,18 +81,79 @@ function parseField(value: unknown): AgentField | null {
   return { id, label, type, ...flags }
 }
 
+/** One parse step: the typed value, or null when `value` has another shape. */
+type Parse<T> = (value: unknown) => { value: T } | null
+
+const parseLeaf: Parse<JsonLeaf> = (value) =>
+  value === null ||
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "boolean"
+    ? { value }
+    : null
+
+function parseRecord<T>(
+  parseItem: Parse<T>,
+  value: unknown
+): { value: Record<string, T> } | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return null
+  const entries: Array<[string, T]> = []
+  for (const [key, item] of Object.entries(value)) {
+    const parsed = parseItem(item)
+    if (!parsed) return null
+    entries.push([key, parsed.value])
+  }
+  // fromEntries makes own keys, so a "__proto__" key cannot change the
+  // prototype; checkRecordValues then rejects it.
+  return { value: Object.fromEntries(entries) }
+}
+
+/** Parses a leaf, or an array or object of values that `parseItem` takes. */
+function nested<T>(
+  parseItem: Parse<T>
+): Parse<JsonLeaf | T[] | Record<string, T>> {
+  return (value) => {
+    const leaf = parseLeaf(value)
+    if (leaf) return leaf
+    if (!Array.isArray(value)) return parseRecord(parseItem, value)
+    const items: T[] = []
+    for (const item of value) {
+      const parsed = parseItem(item)
+      if (!parsed) return null
+      items.push(parsed.value)
+    }
+    return { value: items }
+  }
+}
+
+const parseJson3 = nested(nested(nested(parseLeaf)))
+
+/**
+ * Parses untrusted JSON, such as an HTTP body, into an object value. Returns
+ * null for a value that is not an object, or that nests deeper than
+ * `MAX_OBJECT_DEPTH` (collectionDomain.ts). checkRecordValues checks the keys and the size.
+ */
+export function parseObjectValue(value: unknown): ObjectValue | null {
+  return parseRecord(parseJson3, value)?.value ?? null
+}
+
 function parseValues(value: unknown): RecordValues | null {
   if (!isObject(value)) return null
   const values: RecordValues = {}
   for (const [key, item] of Object.entries(value)) {
     if (
-      typeof item !== "string" &&
-      typeof item !== "number" &&
-      typeof item !== "boolean" &&
-      !isStringArray(item)
-    )
-      return null
-    values[key] = item
+      typeof item === "string" ||
+      typeof item === "number" ||
+      typeof item === "boolean" ||
+      isStringArray(item)
+    ) {
+      values[key] = item
+      continue
+    }
+    const object = parseObjectValue(item)
+    if (object === null) return null
+    values[key] = object
   }
   return values
 }

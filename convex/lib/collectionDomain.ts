@@ -55,11 +55,22 @@ const recordReferenceFieldValidator = v.object({
   collectionId: v.id("collections"),
 })
 
+/**
+ * A field whose value is a JSON object, nested at most `MAX_OBJECT_DEPTH`
+ * levels deep and at most `MAX_OBJECT_LENGTH` characters as JSON. An object
+ * field cannot be indexed.
+ */
+const objectFieldValidator = v.object({
+  ...fieldIdentity,
+  type: v.literal("object"),
+})
+
 /** A field before it is in a collection; `addField` makes it optional. */
 export const newCollectionFieldValidator = v.union(
   scalarFieldValidator,
   choiceFieldValidator,
-  recordReferenceFieldValidator
+  recordReferenceFieldValidator,
+  objectFieldValidator
 )
 
 /**
@@ -72,7 +83,8 @@ const requiredness = { optional: v.optional(v.literal(true)) }
 export const collectionFieldValidator = v.union(
   scalarFieldValidator.extend(requiredness),
   choiceFieldValidator.extend(requiredness),
-  recordReferenceFieldValidator.extend(requiredness)
+  recordReferenceFieldValidator.extend(requiredness),
+  objectFieldValidator.extend(requiredness)
 )
 
 /**
@@ -86,13 +98,15 @@ const agentRecordReferenceFieldValidator = recordReferenceFieldValidator
 export const agentNewFieldValidator = v.union(
   scalarFieldValidator,
   choiceFieldValidator,
-  agentRecordReferenceFieldValidator
+  agentRecordReferenceFieldValidator,
+  objectFieldValidator
 )
 
 export const agentFieldValidator = v.union(
   scalarFieldValidator.extend(requiredness),
   choiceFieldValidator.extend(requiredness),
-  agentRecordReferenceFieldValidator.extend(requiredness)
+  agentRecordReferenceFieldValidator.extend(requiredness),
+  objectFieldValidator.extend(requiredness)
 )
 
 /**
@@ -108,12 +122,40 @@ export const collectionDefinitionValidator = v.object({
 /** A value that can be in an index entry or a query bound. */
 export const indexValueValidator = v.union(v.string(), v.number(), v.boolean())
 
-/** A field value: a scalar, or the chosen options of a multi-select field. */
+/**
+ * The value of an object field. Convex validators cannot refer to
+ * themselves, so each level of nesting has its own validator. Together they
+ * allow `MAX_OBJECT_DEPTH` levels of objects and arrays, the top object
+ * included.
+ */
+const jsonLeafValidator = v.union(v.string(), v.number(), v.boolean(), v.null())
+const json1Validator = v.union(
+  jsonLeafValidator,
+  v.array(jsonLeafValidator),
+  v.record(v.string(), jsonLeafValidator)
+)
+const json2Validator = v.union(
+  jsonLeafValidator,
+  v.array(json1Validator),
+  v.record(v.string(), json1Validator)
+)
+const json3Validator = v.union(
+  jsonLeafValidator,
+  v.array(json2Validator),
+  v.record(v.string(), json2Validator)
+)
+export const objectValueValidator = v.record(v.string(), json3Validator)
+
+/**
+ * A field value: a scalar, the chosen options of a multi-select field, or
+ * the object of an object field.
+ */
 export const recordValueValidator = v.union(
   v.string(),
   v.number(),
   v.boolean(),
-  v.array(v.string())
+  v.array(v.string()),
+  objectValueValidator
 )
 
 export const recordValuesValidator = v.record(v.string(), recordValueValidator)
@@ -142,6 +184,7 @@ const FIELD_TYPES: Record<CollectionField["type"], true> = {
   multiSelect: true,
   recordReference: true,
   artifactReference: true,
+  object: true,
 }
 
 /** Shared by HTTP parsers and human forms; field kinds keep scalar wire values. */
@@ -156,6 +199,18 @@ export function isChoiceField<F extends NewCollectionField>(
   return field.type === "select" || field.type === "multiSelect"
 }
 
+/** False for field types whose values never have index entries. */
+export function isIndexableType(type: CollectionField["type"]): boolean {
+  return type !== "object"
+}
+
+/** True for the value of an object field. */
+export function isObjectValue(
+  value: RecordValue | undefined
+): value is ObjectValue {
+  return typeof value === "object" && !Array.isArray(value)
+}
+
 export function isNumericField(type: CollectionField["type"]): boolean {
   return type === "number" || type === "integer"
 }
@@ -167,6 +222,8 @@ export type AgentField = Infer<typeof agentFieldValidator>
 export type IndexValue = Infer<typeof indexValueValidator>
 export type CollectionDefinition = Infer<typeof collectionDefinitionValidator>
 export type RecordValue = Infer<typeof recordValueValidator>
+export type ObjectValue = Infer<typeof objectValueValidator>
+export type JsonLeaf = Infer<typeof jsonLeafValidator>
 export type RecordValues = Infer<typeof recordValuesValidator>
 
 const MAX_NAME_LENGTH = 100
@@ -215,6 +272,41 @@ export function isDateOnly(value: string): boolean {
   )
 }
 
+/** Arrays and objects in an object value nest at most this deep. */
+export const MAX_OBJECT_DEPTH = 4
+/** The most characters an object value can have as JSON. */
+export const MAX_OBJECT_LENGTH = 10_000
+/**
+ * An object key: 1 to 100 printable ASCII characters. Convex keeps keys that
+ * start with "$" or "_" for itself.
+ */
+const OBJECT_KEY = /^(?![$_])[\x20-\x7e]{1,100}$/
+
+/** Any JSON value; the nested validators above are special cases of it. */
+type Json = JsonLeaf | Json[] | { [key: string]: Json }
+
+/** What makes an object value invalid, or null when it is valid. */
+function objectProblem(value: ObjectValue): string | null {
+  if (JSON.stringify(value).length > MAX_OBJECT_LENGTH)
+    return `must be at most ${MAX_OBJECT_LENGTH} characters as JSON`
+  const pending: Json[] = [value]
+  for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
+    if (typeof item === "number" && !Number.isFinite(item))
+      return "must contain only finite numbers"
+    if (item === null || typeof item !== "object") continue
+    if (Array.isArray(item)) {
+      pending.push(...item)
+      continue
+    }
+    for (const [key, child] of Object.entries(item)) {
+      if (!OBJECT_KEY.test(key))
+        return 'must have keys of 1 to 100 printable ASCII characters that do not start with "$" or "_"'
+      pending.push(child)
+    }
+  }
+  return null
+}
+
 /** A checked value, or a message that says what to fix. */
 export type Checked<A> =
   | { readonly ok: true; readonly value: A }
@@ -252,6 +344,10 @@ function checkOptions(
  * and the options.
  */
 function checkField<F extends NewCollectionField>(field: F): Checked<F> {
+  if (field.indexed && !isIndexableType(field.type))
+    return invalid(
+      `Field "${field.id}" has type ${field.type}, which cannot be indexed`
+    )
   if (isChoiceField(field)) {
     const options = checkOptions(field.id, field.options)
     if (!options.ok) return options
@@ -432,6 +528,14 @@ export function checkRecordValues(
         return invalid(
           `Field "${field.id}" must be the ID of an artifact in this workspace`
         )
+    } else if (field.type === "object") {
+      if (!isObjectValue(value))
+        return invalid(
+          `Field "${field.id}" must be a JSON object nested at most ${MAX_OBJECT_DEPTH} levels deep`
+        )
+      const problem = objectProblem(value)
+      if (problem) return invalid(`Field "${field.id}" ${problem}`)
+      textLength += JSON.stringify(value).length
     } else if (field.type === "number") {
       if (typeof value !== "number" || !Number.isFinite(value))
         return invalid(`Field "${field.id}" must be a finite number`)
@@ -457,7 +561,8 @@ export function indexEntries(
 ): Array<{ fieldId: string; value: IndexValue }> {
   return fields.flatMap((field) => {
     const value = values[field.id]
-    if (!field.indexed || value === undefined) return []
+    // Object fields are never indexed.
+    if (!field.indexed || value === undefined || isObjectValue(value)) return []
     const entries = Array.isArray(value) ? value : [value]
     return entries.map((entry) => ({ fieldId: field.id, value: entry }))
   })

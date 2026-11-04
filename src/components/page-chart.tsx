@@ -11,6 +11,7 @@ import { scaleLinear } from "@tanstack/charts/scales/linear"
 import { tooltip } from "@tanstack/charts/tooltip"
 import type { ChartSpec, PageBlock } from "../../convex/lib/pageDomain"
 import type { RecordValue } from "../../convex/lib/collectionDomain"
+import { valueText } from "../lib/field-types"
 
 type ChartBlock = Extract<PageBlock, { kind: "chart" }>
 type CategorySpec = Exclude<ChartSpec, { type: "scatter" }>
@@ -33,7 +34,7 @@ function finite(value: RecordValue | undefined) {
 }
 
 function rowLabel(value: RecordValue | undefined) {
-  return value === undefined ? "Missing label" : String(value)
+  return value === undefined ? "Missing label" : valueText(value)
 }
 
 function fieldLabel(fields: Field[], id: string) {
