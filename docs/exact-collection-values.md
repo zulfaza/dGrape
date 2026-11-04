@@ -113,7 +113,8 @@ owned by the workspace (not a private secret), and is not being deleted.
 
 - A secret reference field cannot be indexed, so a query cannot filter, sort,
   or group by it.
-- Page tables and charts cannot use it.
+- Page tables and charts cannot use it, and a recipe upsert cannot use it as
+  the source identity.
 - CSV export writes an empty cell, and JSON export leaves the value out.
 - The record table shows "Secret reference", not the ID.
 
