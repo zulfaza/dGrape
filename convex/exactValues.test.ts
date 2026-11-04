@@ -313,6 +313,56 @@ test("secret references point to workspace secrets and stay out of indexes and e
   ).rejects.toThrow("is not indexed")
 })
 
+test("record writes reject likely credentials with messages that omit the value", async () => {
+  const textFields: CollectionField[] = [
+    { id: "note", label: "Note", type: "text" },
+    { id: "meta", label: "Meta", type: "object", optional: true },
+  ]
+  // Built at run time, so the file has no token-shaped text.
+  const credentials = [
+    ["-----BEGIN ", "RSA PRIVATE KEY-----\nabc"],
+    ["AKIA", "ABCDEFGHIJKLMNOP"],
+    ["ghp_", "a".repeat(36)],
+    ["github_pat_", "a".repeat(30)],
+    ["xoxb-", "1234567890-abc"],
+    ["sk_live_", "a".repeat(24)],
+    ["sk-ant-", "a".repeat(30)],
+    ["AIza", "a".repeat(35)],
+    ["eyJhbGciOi", "J9.eyJzdWIiOiIx.abcdefghijk"],
+  ].map((parts) => parts.join(""))
+  for (const credential of credentials) {
+    const cases: RecordValues[] = [
+      { note: `token: ${credential}` },
+      { note: "x", meta: { headers: [{ value: credential }] } },
+    ]
+    for (const values of cases) {
+      const checked = checkRecordValues(textFields, values)
+      expect(checked).toMatchObject({ ok: false })
+      expect(checked.ok ? "" : checked.message).toContain("credential")
+      expect(checked.ok ? "" : checked.message).not.toContain(credential)
+    }
+  }
+  for (const note of ["ask-me later", "AKIA short", "sketch", "eyJ"])
+    expect(checkRecordValues(textFields, { note }).ok).toBe(true)
+
+  const t = convexTest(schema, modules)
+  const owner = t.withIdentity({ tokenIdentifier: "owner" })
+  const workspaceId = await owner.mutation(api.workspaces.create, {
+    name: "Jobs",
+  })
+  const collectionId = await owner.mutation(api.workspaces.createCollection, {
+    workspaceId,
+    name: "Notes",
+    fields: textFields,
+  })
+  await expect(
+    owner.mutation(api.workspaces.createRecord, {
+      collectionId,
+      values: { note: credentials[2] },
+    })
+  ).rejects.toThrow("looks like it contains a credential (GitHub token)")
+})
+
 test("collections reject bad options and multi-select queries find each chosen option", async () => {
   const t = convexTest(schema, modules)
   const owner = t.withIdentity({ tokenIdentifier: "owner" })

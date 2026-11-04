@@ -560,7 +560,54 @@ export function checkRecordValues(
     return invalid(
       `Text in one record must total at most ${MAX_RECORD_TEXT} characters`
     )
+  for (const field of fields) {
+    const value = values[field.id]
+    const kind = value === undefined ? null : credentialKind(value)
+    // The message names the field and the kind, never the value.
+    if (kind)
+      return invalid(
+        `Field "${field.id}" looks like it contains a credential (${kind}). Do not keep credentials in records: save the credential as a secret, and use a secret reference field`
+      )
+  }
   return { ok: true, value: values }
+}
+
+/**
+ * Patterns of common credentials, such as API keys and private keys. A
+ * record write that contains one is rejected. This is best effort: it finds
+ * only these known shapes, not every secret.
+ */
+const CREDENTIAL_PATTERNS: ReadonlyArray<{ kind: string; pattern: RegExp }> = [
+  { kind: "private key", pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
+  { kind: "AWS access key", pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
+  {
+    kind: "GitHub token",
+    pattern: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})/,
+  },
+  { kind: "Slack token", pattern: /\bxox[abposr]-[A-Za-z0-9-]{10,}/ },
+  { kind: "Stripe key", pattern: /\b[rs]k_(?:live|test)_[A-Za-z0-9]{16,}/ },
+  { kind: "API key", pattern: /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}/ },
+  { kind: "Google API key", pattern: /\bAIza[0-9A-Za-z_-]{35}/ },
+  {
+    kind: "JSON web token",
+    pattern: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/,
+  },
+]
+
+/** The kind of the first credential pattern in a value, or null. */
+function credentialKind(value: RecordValue): string | null {
+  const pending: Json[] = [value]
+  for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
+    if (typeof item === "string") {
+      const match = CREDENTIAL_PATTERNS.find(({ pattern }) =>
+        pattern.test(item)
+      )
+      if (match) return match.kind
+    } else if (Array.isArray(item)) pending.push(...item)
+    else if (item !== null && typeof item === "object")
+      pending.push(...Object.keys(item), ...Object.values(item))
+  }
+  return null
 }
 
 /**

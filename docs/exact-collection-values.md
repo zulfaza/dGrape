@@ -120,3 +120,17 @@ owned by the workspace (not a private secret), and is not being deleted.
 
 The ID alone does not give permission to use the secret. A connection still
 needs its own grant.
+
+## Pasted credentials
+
+Every record write and import rejects a value that looks like a common
+credential: a private key block, or an AWS, GitHub, Slack, Stripe, Google, or
+`sk-` API key, or a JSON web token. The check looks in text, options, and
+object keys and values. The error names the field and the kind of credential,
+never the value.
+
+This check is best effort. It finds only these known shapes. It does not find
+other secrets in text, files, or API payloads, and it does not clean records
+that exist already. If a credential was saved or sent to a model, remove it
+and rotate it with its provider. Keep credentials as secrets, and refer to
+them with a `secretRef` field.
