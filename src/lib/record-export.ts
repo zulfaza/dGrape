@@ -89,6 +89,19 @@ export function toCsv(
   return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")
 }
 
+/**
+ * A file name stem from a display name, for example "job-applications".
+ * `fallback` is for a name with no letters or digits.
+ */
+export function fileStem(name: string, fallback: string) {
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || fallback
+  )
+}
+
 /** Starts a browser download of `content`. */
 export function download(content: string, fileName: string, type: string) {
   const url = URL.createObjectURL(new Blob([content], { type }))

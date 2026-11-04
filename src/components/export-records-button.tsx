@@ -12,19 +12,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "@/components/ui/toast"
-import { download, toCsv, toJson, type ExportFormat } from "@/lib/record-export"
+import {
+  download,
+  fileStem,
+  toCsv,
+  toJson,
+  type ExportFormat,
+} from "@/lib/record-export"
 
 const PAGE_SIZE = 50
-
-/** Fileable name from the collection name, for example "job-applications". */
-function fileStem(name: string) {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "collection"
-  )
-}
 
 /**
  * Downloads every record of a collection as JSON or CSV. It reads the
@@ -56,7 +52,7 @@ export function ExportRecordsButton({
         if (page.isDone) break
         cursor = page.continueCursor
       }
-      const stem = fileStem(collection.name)
+      const stem = fileStem(collection.name, "collection")
       if (format === "json")
         download(
           toJson(collection, records),
