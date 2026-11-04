@@ -4,6 +4,11 @@ import { v, type Infer } from "convex/values"
  * Agent scopes. A credential holds a set of scopes for one workspace. No
  * scope implies another: a write scope does not include its read scope.
  * Each agent route names the scopes it needs.
+ *
+ * No scope lets an agent configure connections. A person adds connections and
+ * their secrets in the dashboard, so secret values never pass through an
+ * agent (docs/plans/dashboard-everything.md). Agents read connections with
+ * jobs.read and let recipes call them with connections.use.
  */
 export const agentScopeValidator = v.union(
   v.literal("data.read"),
@@ -15,8 +20,7 @@ export const agentScopeValidator = v.union(
   v.literal("jobs.read"),
   v.literal("jobs.run"),
   v.literal("jobs.manage"),
-  v.literal("connections.use"),
-  v.literal("connections.manage")
+  v.literal("connections.use")
 )
 
 export type AgentScope = Infer<typeof agentScopeValidator>
@@ -50,7 +54,6 @@ export const SCOPE_DESCRIPTIONS: Record<AgentScope, string> = {
   "jobs.manage": "Publish recipes and manage schedules and run access.",
   "connections.use":
     "Let recipes call connections. Never shows connection secrets.",
-  "connections.manage": "Configure connections.",
 }
 
 /** Grants made before fine-grained scopes. Stored rows can still hold them. */
