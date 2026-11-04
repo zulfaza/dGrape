@@ -303,7 +303,7 @@ export const AggregateResult = Schema.Struct({
       values: Schema.Record(Schema.String, RecordValue),
     })
   ),
-  rowsRead: Schema.Number,
+  matched: Schema.Number,
   completeness: Schema.Literal("complete"),
   evaluatedAt: Schema.Number,
   dataAsOf: Schema.NullOr(Schema.Number),
