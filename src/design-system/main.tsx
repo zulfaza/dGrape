@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react"
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react"
 import { createRoot } from "react-dom/client"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -339,6 +346,17 @@ function SectionHeading({
   )
 }
 
+/** One row of the specimen workspace table. */
+type WorkspaceRow = {
+  company: string
+  role: string
+  initials: string
+  status: string
+  tone: StatusTone
+  date: string
+  source: string
+}
+
 const applicationRows = [
   {
     company: "Linear",
@@ -376,7 +394,7 @@ const applicationRows = [
     date: "Oct 30",
     source: "Careers page",
   },
-]
+] satisfies ReadonlyArray<WorkspaceRow>
 const transactionRows = [
   {
     company: "GitHub",
@@ -405,7 +423,7 @@ const transactionRows = [
     date: "Oct 31",
     source: "$15.00",
   },
-]
+] satisfies ReadonlyArray<WorkspaceRow>
 
 function Workspace({
   onCreate,
@@ -695,15 +713,18 @@ function Workspace({
   )
 }
 
+type StatusTone = "neutral" | "success" | "warning" | "accent" | "destructive"
+
+/** A status label. theme.css colors each `data-tone`. */
 function Status({
   children,
   tone = "neutral",
 }: {
   children: ReactNode
-  tone?: string
+  tone?: StatusTone
 }) {
   return (
-    <Badge variant="secondary" className={cn("ds-status", `ds-status-${tone}`)}>
+    <Badge variant="secondary" className="ds-status" data-tone={tone}>
       <i aria-hidden="true" />
       {children}
     </Badge>
@@ -807,6 +828,14 @@ function ActivityChart() {
   )
 }
 
+/** The dynamic values of the foundation specimens; theme.css reads them. */
+type SpecimenStyle = CSSProperties & {
+  "--pair-bg"?: string
+  "--pair-fg"?: string
+  "--bar-width"?: string
+  "--corner-radius"?: string
+}
+
 function contrast(a: string, b: string) {
   const luminance = (hex: string) => {
     const c = hex.replace("#", "")
@@ -822,13 +851,51 @@ function contrast(a: string, b: string) {
 
 function Foundations({ theme }: { theme: Theme }) {
   const palette = colors[theme]
+  // Each pair names its hex values for the contrast label and the CSS
+  // tokens with the same values for the swatch.
   const pairs = [
-    ["Canvas & ink", palette.background, palette.foreground],
-    ["Primary action", palette.primary, palette.primaryForeground],
-    ["Quiet text", palette.background, palette.mutedForeground],
-    ["Accent", palette.accent, palette.accentForeground],
-    ["Success", palette.successSurface, palette.success],
-    ["Needs attention", palette.warningSurface, palette.warning],
+    {
+      name: "Canvas & ink",
+      bg: palette.background,
+      fg: palette.foreground,
+      bgToken: "var(--background)",
+      fgToken: "var(--foreground)",
+    },
+    {
+      name: "Primary action",
+      bg: palette.primary,
+      fg: palette.primaryForeground,
+      bgToken: "var(--primary)",
+      fgToken: "var(--primary-foreground)",
+    },
+    {
+      name: "Quiet text",
+      bg: palette.background,
+      fg: palette.mutedForeground,
+      bgToken: "var(--background)",
+      fgToken: "var(--muted-foreground)",
+    },
+    {
+      name: "Accent",
+      bg: palette.accent,
+      fg: palette.accentForeground,
+      bgToken: "var(--accent)",
+      fgToken: "var(--accent-foreground)",
+    },
+    {
+      name: "Success",
+      bg: palette.successSurface,
+      fg: palette.success,
+      bgToken: "var(--success-surface)",
+      fgToken: "var(--success)",
+    },
+    {
+      name: "Needs attention",
+      bg: palette.warningSurface,
+      fg: palette.warning,
+      bgToken: "var(--warning-surface)",
+      fgToken: "var(--warning)",
+    },
   ]
   return (
     <>
@@ -843,11 +910,15 @@ function Foundations({ theme }: { theme: Theme }) {
           room. Status always includes a readable label.
         </p>
         <div className="color-grid">
-          {pairs.map(([name, bg, fg]) => {
+          {pairs.map(({ name, bg, fg, bgToken, fgToken }) => {
             const ratio = contrast(bg, fg)
+            const swatchStyle: SpecimenStyle = {
+              "--pair-bg": bgToken,
+              "--pair-fg": fgToken,
+            }
             return (
               <article className="color-pair" key={name}>
-                <div style={{ background: bg, color: fg }}>
+                <div style={swatchStyle}>
                   Aa <span>{name}</span>
                 </div>
                 <footer>
@@ -893,12 +964,17 @@ function Foundations({ theme }: { theme: Theme }) {
         <section className="surface foundation-section">
           <h2>Space that keeps its rhythm</h2>
           <div className="spacing-ladder">
-            {[4, 8, 12, 16, 24, 32, 48].map((value) => (
-              <div key={value}>
-                <code>{value}px</code>
-                <span style={{ width: value * 3 }} />
-              </div>
-            ))}
+            {[4, 8, 12, 16, 24, 32, 48].map((value) => {
+              const barStyle: SpecimenStyle = {
+                "--bar-width": `${value * 3}px`,
+              }
+              return (
+                <div key={value}>
+                  <code>{value}px</code>
+                  <span style={barStyle} />
+                </div>
+              )
+            })}
           </div>
           <p className="section-copy">
             4px base. 16px within groups, 24px between groups, 32–48px between
@@ -913,13 +989,16 @@ function Foundations({ theme }: { theme: Theme }) {
               ["6px", "Inputs & actions"],
               ["8px", "Data panels"],
               ["12px", "Notes"],
-            ].map(([radius, label]) => (
-              <div key={radius}>
-                <span style={{ borderRadius: radius }} />
-                <strong>{radius}</strong>
-                <small>{label}</small>
-              </div>
-            ))}
+            ].map(([radius, label]) => {
+              const cornerStyle: SpecimenStyle = { "--corner-radius": radius }
+              return (
+                <div key={radius}>
+                  <span style={cornerStyle} />
+                  <strong>{radius}</strong>
+                  <small>{label}</small>
+                </div>
+              )
+            })}
           </div>
           <div className="elevation-ladder">
             <span>Flat data surface</span>

@@ -315,18 +315,6 @@
       }
     },
     {
-      "files": ["src/design-system/main.tsx"],
-      "rules": {
-        "shadcn/no-inline-styles": [
-          "error",
-          {
-            "allow": ["background", "color", "width", "borderRadius"]
-          }
-        ],
-        "shadcn/require-static-classes": "off"
-      }
-    },
-    {
       "files": ["src/routes/index.tsx"],
       "rules": {
         "shadcn/no-arbitrary-values": [
