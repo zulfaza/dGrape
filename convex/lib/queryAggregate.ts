@@ -8,6 +8,7 @@ import {
   type RecordValues,
 } from "./collectionDomain"
 import { checkQuery, recordQueryValidator, selectedFields } from "./recordQuery"
+import { isBoolean, isNumber } from "./valueGuards"
 
 /**
  * Bounded aggregates of a saved query: count, sum, min, max and average,
@@ -236,7 +237,7 @@ export function aggregateRecords(
         continue
       const id = measureId(measure)
       if (measure.op === "sum" || measure.op === "average") {
-        if (typeof value !== "number") continue
+        if (!isNumber(value)) continue
         const sum = accumulator.sums.get(id) ?? { total: 0, n: 0 }
         accumulator.sums.set(id, { total: sum.total + value, n: sum.n + 1 })
         continue
@@ -282,10 +283,8 @@ export function bucketStart(
   value: string | number | boolean,
   bucket: Bucket
 ): IndexValue {
-  if (typeof value === "boolean") return value
-  const date = new Date(
-    typeof value === "number" ? value : `${value}T00:00:00Z`
-  )
+  if (isBoolean(value)) return value
+  const date = new Date(isNumber(value) ? value : `${value}T00:00:00Z`)
   const year = date.getUTCFullYear()
   const month = date.getUTCMonth()
   const day = date.getUTCDate()
@@ -296,7 +295,7 @@ export function bucketStart(
     start.setUTCFullYear(year, month, day - ((date.getUTCDay() + 6) % 7))
   else if (bucket === "month") start.setUTCFullYear(year, month, 1)
   else start.setUTCFullYear(year, 0, 1)
-  if (typeof value === "number") return start.getTime()
+  if (isNumber(value)) return start.getTime()
   return [
     String(start.getUTCFullYear()).padStart(4, "0"),
     String(start.getUTCMonth() + 1).padStart(2, "0"),

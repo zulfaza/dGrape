@@ -5,6 +5,7 @@ import {
   jwtVerify,
   type JWK,
 } from "jose"
+import { Schema } from "effect"
 import { signingKeyJwk } from "./agentAuthConfig"
 
 /**
@@ -27,15 +28,21 @@ type PrivateJwk = {
   kid: string
 }
 
+/** Any JSON object or array; the JWK members are checked one by one. */
+const isJsonObject = Schema.is(Schema.ObjectKeyword)
+const isKeyMember = Schema.is(Schema.NonEmptyString)
+/** The `sub` claim of an assertion: the registration ID. */
+const isAssertionSubject = Schema.is(Schema.String)
+
 /** Parses AGENT_AUTH_SIGNING_KEY into a P-256 private JWK. */
 function privateJwk(): PrivateJwk {
   const parsed: unknown = JSON.parse(signingKeyJwk())
-  if (typeof parsed !== "object" || parsed === null)
+  if (!isJsonObject(parsed))
     throw new Error("AGENT_AUTH_SIGNING_KEY must be a JWK object")
-  const fields = new Map(Object.entries(parsed))
+  const fields = new Map<string, unknown>(Object.entries(parsed))
   const field = (name: string) => {
     const value = fields.get(name)
-    if (typeof value !== "string" || !value)
+    if (!isKeyMember(value))
       throw new Error(`AGENT_AUTH_SIGNING_KEY needs a "${name}" string`)
     return value
   }
@@ -95,7 +102,7 @@ export async function verifyAssertion(issuer: string, assertion: string) {
         algorithms: [ALGORITHM],
       }
     )
-    return typeof payload.sub === "string" ? payload.sub : null
+    return isAssertionSubject(payload.sub) ? payload.sub : null
   } catch {
     return null
   }

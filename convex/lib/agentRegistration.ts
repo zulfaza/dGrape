@@ -78,8 +78,7 @@ export const agentClaimAttemptValidator = v.object({
  * Parses a `login_hint` as an email address. auth.md lets the service
  * decide the hint format; this service accepts only email addresses.
  */
-export function parseLoginHint(value: unknown): string | null {
-  if (typeof value !== "string") return null
+export function parseLoginHint(value: string): string | null {
   const email = value.trim().toLowerCase()
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return null

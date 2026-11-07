@@ -3,6 +3,7 @@ import {
   paginationResultValidator,
 } from "convex/server"
 import { v, type Infer } from "convex/values"
+import { Schema } from "effect"
 import { internal } from "./_generated/api"
 import type { Doc } from "./_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "./_generated/server"
@@ -218,6 +219,13 @@ export const completeClaim = internalMutation({
   },
 })
 
+/** The fields of a WorkOS user that show a verified email. */
+const VerifiedWorkosUser = Schema.Struct({
+  email: Schema.String,
+  email_verified: Schema.Literal(true),
+})
+const isVerifiedWorkosUser = Schema.is(VerifiedWorkosUser)
+
 /** Reads the verified email of a WorkOS user, or null when it is not verified. */
 export async function verifiedEmail(userId: string): Promise<string | null> {
   const response = await fetch(
@@ -226,12 +234,7 @@ export async function verifiedEmail(userId: string): Promise<string | null> {
   )
   if (!response.ok) throw new Error("Could not read the signed-in user")
   const user: unknown = await response.json()
-  if (typeof user !== "object" || user === null) return null
-  const email = "email" in user ? user.email : undefined
-  const verified = "email_verified" in user ? user.email_verified : undefined
-  return typeof email === "string" && verified === true
-    ? email.toLowerCase()
-    : null
+  return isVerifiedWorkosUser(user) ? user.email.toLowerCase() : null
 }
 
 /**
