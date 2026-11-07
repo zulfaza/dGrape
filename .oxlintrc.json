@@ -165,12 +165,6 @@
   ],
   "overrides": [
     {
-      "files": ["convex/lib/recordQuery.ts", "convex/lib/queryAggregate.ts"],
-      "rules": {
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
       "files": ["convex/http.ts"],
       "rules": {
         "anti-slop/no-unknown-parameters": "off",

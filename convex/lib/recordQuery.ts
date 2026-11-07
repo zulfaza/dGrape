@@ -5,12 +5,14 @@ import type { QueryCtx } from "../_generated/server"
 import {
   indexValueValidator,
   isIndexableType,
+  isObjectValue,
   checkRecordValues,
   type Checked,
   type CollectionField,
   type IndexValue,
   type RecordValues,
 } from "./collectionDomain"
+import { isText, sameScalarType } from "./valueGuards"
 
 /**
  * Filtered and sorted record reads over one indexed field. A query reads one
@@ -198,10 +200,7 @@ function selectValues(
 /** Checks that `value` is a valid value of `field` (an option of a choice). */
 function checkValue(field: CollectionField, value: IndexValue): Checked<null> {
   const checked = checkRecordValues([field], {
-    [field.id]:
-      field.type === "multiSelect" && typeof value === "string"
-        ? [value]
-        : value,
+    [field.id]: field.type === "multiSelect" && isText(value) ? [value] : value,
   })
   return checked.ok ? { ok: true, value: null } : checked
 }
@@ -249,7 +248,13 @@ function matchesFilter(filter: ResidualFilter, values: RecordValues): boolean {
     const has = wanted.some((option) => value.includes(String(option)))
     return filter.op === "neq" ? !has : has
   }
-  if (typeof value !== typeof wanted[0]) return false
+  const first = wanted[0]
+  if (
+    isObjectValue(value) ||
+    first === undefined ||
+    !sameScalarType(value, first)
+  )
+    return false
   if (filter.op === "in")
     return wanted.some((option) => compareValues(value, option) === 0)
   const order = compareValues(value, filter.value)
