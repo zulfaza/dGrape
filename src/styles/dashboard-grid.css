@@ -1,0 +1,58 @@
+/* The dashboard edit grid (react-grid-layout). The library positions each
+   item inline; these rules give its classes DFE tokens instead of the
+   library stylesheet. */
+.react-grid-layout {
+  position: relative;
+}
+.react-grid-item {
+  transition:
+    transform 200ms ease,
+    width 200ms ease,
+    height 200ms ease;
+}
+.react-grid-item img {
+  pointer-events: none;
+  user-select: none;
+}
+.react-grid-item.resizing,
+.react-grid-item.react-draggable-dragging {
+  z-index: 3;
+  transition: none;
+}
+.react-grid-item.dropping {
+  visibility: hidden;
+}
+.react-grid-item.react-grid-placeholder {
+  z-index: 2;
+  border: 1px dashed var(--primary);
+  border-radius: var(--dfe-radius-panel);
+  background: var(--secondary);
+  user-select: none;
+  transition-duration: 100ms;
+}
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  cursor: se-resize;
+}
+.react-grid-item > .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted-foreground);
+  border-bottom: 2px solid var(--muted-foreground);
+  border-bottom-right-radius: var(--dfe-radius-small);
+}
+@media (prefers-reduced-motion: reduce) {
+  .react-grid-item,
+  .react-grid-item.react-grid-placeholder {
+    transition: none;
+  }
+}

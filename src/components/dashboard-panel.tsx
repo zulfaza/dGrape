@@ -116,9 +116,13 @@ function PanelFrame({
       {header && (
         <header className="flex h-9 shrink-0 items-center gap-1 pr-1 pl-3">
           {controls.handle}
-          <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
-            {title}
-          </h2>
+          {title === undefined ? (
+            <span className="flex-1" />
+          ) : (
+            <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
+              {title}
+            </h2>
+          )}
           {status}
           {controls.menu}
         </header>

@@ -4,6 +4,7 @@
 @import "@fontsource-variable/ibm-plex-sans";
 @import "@fontsource-variable/jetbrains-mono";
 @import "./styles/geometry.css";
+@import "./styles/dashboard-grid.css";
 @import "./styles/component-theme.css";
 
 @custom-variant dark (&:is(.dark *));
