@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select"
-import { Separator } from "./ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { Skeleton } from "./ui/skeleton"
 import { SourceFreshness } from "./source-freshness"
 import { useWorkspaceCan } from "@/components/workspace-role"
@@ -339,94 +339,120 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
           </FieldGroup>
         </form>
       )}
-      <h3 className="text-base font-semibold">Versions</h3>
-      <p className="-mt-2 text-sm text-muted-foreground">
-        A version cannot change. To edit a recipe, publish a new version.
-      </p>
-      {versions.status === "Exhausted" && versions.results.length === 0 && (
-        <NoItems label="No recipes. Create a recipe to start." />
-      )}
-      <ul className="flex flex-col gap-2">
-        {versions.results.map((item) => (
-          <li
-            key={item._id}
-            className="flex flex-wrap items-center justify-between gap-2"
-          >
-            <span className="min-w-0">
-              <span className="font-medium">{item.name}</span>{" "}
-              <span className="text-sm text-muted-foreground">
-                {formatDateTime(item._creationTime)}
-              </span>
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              aria-pressed={version?._id === item._id}
-              onClick={() => setVersionId(item._id)}
-            >
-              {version?._id === item._id ? "Open" : "Open version"}
-              <span className="sr-only"> {item.name}</span>
-            </Button>
-          </li>
-        ))}
-      </ul>
-      <PageMore {...versions} label="versions" />
-      {version && (
-        <VersionControls
-          key={version._id}
-          version={version}
-          intents={intents.current}
-          onCopy={() => {
-            setDraft({
-              name: version.name,
-              json: JSON.stringify(version.recipe, null, 2),
-              sample: "[]",
-              preview: null,
-            })
-          }}
-          copying={draft !== null}
-        />
-      )}
-      <Separator />
-      <h3 className="text-base font-semibold">Schedules</h3>
-      <p className="text-sm text-muted-foreground">
-        A schedule skips a time while its last run is still running. After
-        missed times, it runs once.
-      </p>
-      {schedules.status === "Exhausted" && schedules.results.length === 0 && (
-        <NoItems label="No schedules. Open a version to add one." />
-      )}
-      <ul className="flex flex-col gap-3">
-        {schedules.results.map((item) => (
-          <ScheduleRow key={item._id} item={item} versions={versions.results} />
-        ))}
-      </ul>
-      <PageMore {...schedules} label="schedules" />
-      <Separator />
-      <h3 className="text-base font-semibold">Source freshness</h3>
-      <SourceFreshnessList workspaceId={workspaceId} />
-      <Separator />
-      <h3 className="text-base font-semibold">Runs</h3>
-      {runs.status === "Exhausted" && runs.results.length === 0 && (
-        <NoItems label="No runs. Open a version to run it." />
-      )}
-      <ul className="flex flex-col gap-3">
-        {runs.results.map((item) => (
-          <RunRow
-            key={item._id}
-            item={item}
-            versionName={
-              versions.results.find((v) => v._id === item.versionId)?.name
-            }
-            selected={item._id === selectedRun?._id}
-            onSelect={() => setRunId(item._id)}
-          />
-        ))}
-      </ul>
-      <PageMore {...runs} label="runs" />
-      {selectedRun && (
-        <RunHistory key={selectedRun._id} runId={selectedRun._id} />
-      )}
+      <Tabs defaultValue="recipes">
+        <TabsList aria-label="Jobs">
+          <TabsTrigger value="recipes">Recipes</TabsTrigger>
+          <TabsTrigger value="schedules">Schedules</TabsTrigger>
+          <TabsTrigger value="runs">Runs</TabsTrigger>
+          <TabsTrigger value="freshness">Freshness</TabsTrigger>
+        </TabsList>
+        <TabsContent value="recipes">
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              A version cannot change. To edit a recipe, publish a new version.
+            </p>
+            {versions.status === "Exhausted" &&
+              versions.results.length === 0 && (
+                <NoItems label="No recipes. Create a recipe to start." />
+              )}
+            <ul className="flex flex-col gap-2">
+              {versions.results.map((item) => (
+                <li
+                  key={item._id}
+                  className="flex flex-wrap items-center justify-between gap-2"
+                >
+                  <span className="min-w-0">
+                    <span className="font-medium">{item.name}</span>{" "}
+                    <span className="text-sm text-muted-foreground">
+                      {formatDateTime(item._creationTime)}
+                    </span>
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-pressed={version?._id === item._id}
+                    onClick={() => setVersionId(item._id)}
+                  >
+                    {version?._id === item._id ? "Open" : "Open version"}
+                    <span className="sr-only"> {item.name}</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <PageMore {...versions} label="versions" />
+            {version && (
+              <VersionControls
+                key={version._id}
+                version={version}
+                intents={intents.current}
+                onCopy={() => {
+                  setDraft({
+                    name: version.name,
+                    json: JSON.stringify(version.recipe, null, 2),
+                    sample: "[]",
+                    preview: null,
+                  })
+                }}
+                copying={draft !== null}
+              />
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="schedules">
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              A schedule skips a time while its last run is still running. After
+              missed times, it runs once.
+            </p>
+            {schedules.status === "Exhausted" &&
+              schedules.results.length === 0 && (
+                <NoItems label="No schedules. Open a version to add one." />
+              )}
+            <ul className="flex flex-col gap-3">
+              {schedules.results.map((item) => (
+                <ScheduleRow
+                  key={item._id}
+                  item={item}
+                  versions={versions.results}
+                />
+              ))}
+            </ul>
+            <PageMore {...schedules} label="schedules" />
+          </div>
+        </TabsContent>
+        <TabsContent value="runs">
+          <div className="flex flex-col gap-4">
+            {runs.status === "Exhausted" && runs.results.length === 0 && (
+              <NoItems label="No runs. Open a version to run it." />
+            )}
+            <ul className="flex flex-col gap-3">
+              {runs.results.map((item) => (
+                <RunRow
+                  key={item._id}
+                  item={item}
+                  versionName={
+                    versions.results.find((v) => v._id === item.versionId)?.name
+                  }
+                  selected={item._id === selectedRun?._id}
+                  onSelect={() => setRunId(item._id)}
+                />
+              ))}
+            </ul>
+            <PageMore {...runs} label="runs" />
+            {selectedRun && (
+              <RunHistory key={selectedRun._id} runId={selectedRun._id} />
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="freshness">
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              When each collection was last synced by a recipe.
+            </p>
+            <SourceFreshnessList workspaceId={workspaceId} />
+          </div>
+        </TabsContent>
+      </Tabs>
     </section>
   )
 }
