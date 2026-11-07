@@ -88,9 +88,11 @@ export function ConfirmDialog({
           </DialogClose>
           <Button
             variant={destructive ? "destructive" : "default"}
+            // Confirm before close, so a caller that treats every close as
+            // a cancel (such as a navigation blocker) sees the confirm first.
             onClick={() => {
-              onOpenChange(false)
               onConfirm()
+              onOpenChange(false)
             }}
           >
             {confirmLabel}

@@ -479,6 +479,36 @@ export const liveBlock = query({
 })
 
 /** A bounded picker of current, schema-valid saved revisions. */
+/**
+ * The fields of one saved query revision, so a panel pinned to that revision
+ * offers only fields the save accepts. Null when the revision is not in the
+ * workspace.
+ */
+export const sourceRevision = query({
+  returns: v.union(v.array(collectionFieldValidator), v.null()),
+  args: {
+    workspaceId: v.id("workspaces"),
+    queryId: v.id("queryDefinitions"),
+    revision: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await requireMembership(ctx, args.workspaceId, "read")
+    const saved = await ctx.db.get(args.queryId)
+    if (saved?.workspaceId !== args.workspaceId) return null
+    const version = await ctx.db
+      .query("queryDefinitionVersions")
+      .withIndex("by_queryId_and_revision", (q) =>
+        q.eq("queryId", args.queryId).eq("revision", args.revision)
+      )
+      .unique()
+    return (
+      version?.resultSchema.fields.filter(
+        (field) => field.type !== "secretRef"
+      ) ?? null
+    )
+  },
+})
+
 export const sources = query({
   returns: v.array(
     v.object({
