@@ -6,7 +6,6 @@ import {
   GitBranch,
   KeyRound,
   LayoutDashboard,
-  Menu,
   PackageOpen,
   Paperclip,
   RefreshCw,
@@ -19,12 +18,7 @@ import { HeroDashboard } from "@/components/landing/hero-dashboard"
 import { LyingSloth } from "@/components/landing/lying-sloth"
 import { HowItWorks, WorkspacesShowcase } from "@/components/landing/step-mocks"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { MobileNav } from "@/components/landing/mobile-nav"
 
 export const Route = createFileRoute("/")({ component: Home })
 
@@ -181,32 +175,19 @@ function Home() {
                 {link.label}
               </a>
             ))}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="sm:hidden"
-                  aria-label="Open menu"
-                >
-                  <Menu aria-hidden />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {SECTION_LINKS.map((link) => (
-                  <DropdownMenuItem key={link.href} asChild>
-                    <a href={link.href}>{link.label}</a>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button asChild variant="outline" size="sm">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="hidden sm:inline-flex"
+            >
               {signedIn ? (
                 <Link to="/dashboard/workspaces">Open workspaces</Link>
               ) : (
                 <a href="/sign-in">Sign in</a>
               )}
             </Button>
+            <MobileNav links={SECTION_LINKS} signedIn={signedIn} />
           </nav>
         </header>
 
