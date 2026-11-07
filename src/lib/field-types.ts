@@ -158,3 +158,18 @@ export function fromInputText(
   }
   return { ok: true, value: text }
 }
+
+/**
+ * A field ID made from a label, for the ID input to suggest:
+ * "Interview date" becomes "interview_date". It matches the ID pattern
+ * `[a-z][a-z0-9_]*`, or is empty when the label has no letters or digits.
+ */
+export function fieldIdFromLabel(label: string): string {
+  const id = label
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+  const start = /^[a-z]/.test(id) ? id : id && `f_${id}`
+  return start.slice(0, 64)
+}

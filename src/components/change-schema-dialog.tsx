@@ -172,12 +172,12 @@ export function ChangeSchemaDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" disabled={disabled}>
-          Change schema
+          Edit fields
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Change schema</DialogTitle>
+          <DialogTitle>Edit fields</DialogTitle>
           <DialogDescription>
             Change field types, required fields, options, or indexes, or remove
             fields. A dry run first finds the records that do not fit.
