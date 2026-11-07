@@ -133,7 +133,7 @@ function HeroShowcase() {
   // padding of width x 1/2 x 0.78 puts the belly on the window's top edge:
   // 45% wide and centered on phones (17.5%), 20% wide on the right above.
   return (
-    <div className="relative mt-14 w-full pt-[17.5%] text-left sm:pt-[7.8%]">
+    <div className="relative mt-14 w-full pt-hero-sloth text-left sm:pt-hero-sloth-wide">
       <div className="pointer-events-none absolute top-0 left-1/2 z-10 w-[45%] -translate-x-1/2 sm:right-[6%] sm:left-auto sm:w-[20%] sm:translate-x-0">
         <div className="dfe-anim dfe-sloth-settle">
           <LyingSloth />
@@ -193,7 +193,7 @@ function Home() {
 
         <main>
           <section className="flex flex-col items-center py-12 text-center md:py-20">
-            <h1 className="max-w-3xl text-4xl leading-tight font-semibold tracking-tight sm:text-6xl sm:leading-[1.05]">
+            <h1 className="max-w-3xl text-4xl leading-tight font-semibold tracking-tight sm:text-6xl sm:leading-display">
               A tidy home for your data, kept by your agent.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">

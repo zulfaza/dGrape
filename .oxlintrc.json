@@ -218,17 +218,6 @@
           }
         ]
       }
-    },
-    {
-      "files": ["src/routes/index.tsx"],
-      "rules": {
-        "shadcn/no-arbitrary-values": [
-          "error",
-          {
-            "allow": ["layout", "pt-[17.5%]", "pt-[7.8%]", "leading-[1.05]"]
-          }
-        ]
-      }
     }
   ]
 }
