@@ -250,13 +250,6 @@
       }
     },
     {
-      "files": ["src/routes/claim.tsx", "src/routes/invite.tsx"],
-      "rules": {
-        "anti-slop/no-unsafe-dictionary-type": "off",
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
       "files": ["convex/lib/recipeDomain.ts"],
       "rules": {
         "anti-slop/no-runtime-typeof": "off"
