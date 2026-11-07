@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
 import { useWorkspaceCan } from "@/components/workspace-role"
+import { LoadingRows } from "@/components/loading-rows"
 
 function formatAmount(value: number, unit: BudgetSpec["unit"]) {
   switch (unit) {
@@ -118,12 +119,7 @@ export function WorkspaceUsage({
   const budgets = useQuery(api.workspaceBudgets.get, { workspaceId })
   const usage = useQuery(api.workspaceBudgets.usage, { workspaceId })
   const canManage = useWorkspaceCan("manage")
-  if (!budgets || !usage)
-    return (
-      <p role="status" className="text-sm text-muted-foreground">
-        Loading usage…
-      </p>
-    )
+  if (!budgets || !usage) return <LoadingRows label="Loading usage" />
   return (
     <div className="flex flex-col gap-8">
       <section aria-labelledby="usage-heading" className="flex flex-col gap-3">

@@ -3,6 +3,7 @@ import { useState } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import { Button } from "./ui/button"
+import { LoadingRows } from "@/components/loading-rows"
 
 export function ArtifactPicker({
   workspaceId,
@@ -41,7 +42,7 @@ export function ArtifactPicker({
           aria-label="Workspace file picker"
         >
           {files.status === "LoadingFirstPage" && (
-            <p role="status">Loading files…</p>
+            <LoadingRows label="Loading files" rows={2} />
           )}
           {files.status === "Exhausted" && files.results.length === 0 && (
             <p>Upload a file in Files first.</p>

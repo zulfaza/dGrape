@@ -20,6 +20,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { toast } from "@/components/ui/toast"
+import { LoadingRows } from "@/components/loading-rows"
 
 type Draft = {
   definition: PageDefinition
@@ -167,11 +168,7 @@ function WorkspacePagesEditor({
         <h2 className="text-xl font-semibold">Pages</h2>
         {newPageButton}
       </div>
-      {status === "LoadingFirstPage" && (
-        <p role="status" className="text-muted-foreground">
-          Loading pages…
-        </p>
-      )}
+      {status === "LoadingFirstPage" && <LoadingRows label="Loading pages" />}
       {status === "Exhausted" && results.length === 0 && !draft && (
         <Empty>
           <EmptyHeader>

@@ -32,7 +32,17 @@ function WorkspaceLayout() {
           All workspaces
         </Link>
         <PageHeader
-          title={workspace ? workspace.name : "Loading workspace…"}
+          title={
+            workspace ? (
+              workspace.name
+            ) : (
+              <span
+                role="status"
+                aria-label="Loading workspace"
+                className="inline-block h-8 w-64 animate-pulse rounded-md bg-muted align-middle"
+              />
+            )
+          }
           description={workspace && `Your role: ${ROLE_LABELS[workspace.role]}`}
           actions={
             workspace && (

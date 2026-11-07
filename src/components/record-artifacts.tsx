@@ -5,6 +5,7 @@ import type { Id } from "../../convex/_generated/dataModel"
 import { ArtifactPicker } from "./artifact-picker"
 import { ArtifactLink } from "./artifact-link"
 import { Button } from "./ui/button"
+import { LoadingRows } from "@/components/loading-rows"
 
 export function RecordArtifacts({
   workspaceId,
@@ -37,7 +38,9 @@ export function RecordArtifacts({
   return (
     <section className="flex flex-col gap-3" aria-label="Record files">
       <h3>Linked files{rows === undefined ? "" : ` (${rows.length}/20)`}</h3>
-      {rows === undefined && <p role="status">Loading file links…</p>}
+      {rows === undefined && (
+        <LoadingRows label="Loading file links" rows={1} />
+      )}
       <label>
         File relation{" "}
         <select

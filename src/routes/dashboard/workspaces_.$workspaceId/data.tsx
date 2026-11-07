@@ -90,9 +90,7 @@ function DataSection() {
         )}
       </div>
       {status === "LoadingFirstPage" ? (
-        <p role="status" className="px-5 py-6 text-muted-foreground">
-          Loading collections…
-        </p>
+        <LoadingRows label="Loading collections" />
       ) : results.length === 0 ? (
         <Empty>
           <EmptyHeader>

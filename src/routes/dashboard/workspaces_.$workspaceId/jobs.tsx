@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { useQuery } from "convex/react"
 import { api } from "../../../../convex/_generated/api"
 import { WorkspaceRecipes } from "@/components/workspace-recipes"
+import { LoadingRows } from "@/components/loading-rows"
 
 export const Route = createFileRoute(
   "/dashboard/workspaces_/$workspaceId/jobs"
@@ -14,5 +15,7 @@ function JobsSection() {
   const workspace = useQuery(api.workspaces.get, { workspaceId })
   return workspace ? (
     <WorkspaceRecipes key={workspace._id} workspaceId={workspace._id} />
-  ) : null
+  ) : (
+    <LoadingRows label="Loading" />
+  )
 }

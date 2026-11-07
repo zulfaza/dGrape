@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "./ui/dialog"
 import { useWorkspaceCan } from "@/components/workspace-role"
+import { LoadingRows } from "@/components/loading-rows"
 
 export function ArtifactPreview({
   artifactId,
@@ -107,7 +108,7 @@ export function ArtifactPreview({
         )}
         {Match.value(preview).pipe(
           Match.when({ status: "loading" }, () => (
-            <p role="status">Loading preview…</p>
+            <LoadingRows label="Loading preview" />
           )),
           Match.when({ status: "unavailable" }, (preview) => (
             <p role="status">{preview.message}</p>

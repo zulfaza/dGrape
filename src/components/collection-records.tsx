@@ -72,6 +72,7 @@ import {
   timestampInputText,
   valueText,
 } from "@/lib/field-types"
+import { LoadingRows } from "@/components/loading-rows"
 
 type Values = Doc<"collectionRecords">["values"]
 type Field = Doc<"collections">["definition"]["fields"][number]
@@ -254,12 +255,7 @@ export function CollectionRecords({
       setSaving(false)
     }
   }
-  if (!collection)
-    return (
-      <p role="status" className="text-muted-foreground">
-        Loading collection…
-      </p>
-    )
+  if (!collection) return <LoadingRows label="Loading collection" />
   const { fields } = collection.definition
   const { migrationLock } = collection
   const setDraftValue = (fieldId: string, value: Draft["values"][string]) =>
@@ -349,9 +345,7 @@ export function CollectionRecords({
         className="overflow-hidden rounded-lg border bg-card"
       >
         {status === "LoadingFirstPage" ? (
-          <p role="status" className="px-5 py-6 text-muted-foreground">
-            Loading records…
-          </p>
+          <LoadingRows label="Loading records" />
         ) : results.length === 0 && query ? (
           <Empty>
             <EmptyHeader>

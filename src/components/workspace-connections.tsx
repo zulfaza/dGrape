@@ -19,6 +19,7 @@ import { Label } from "./ui/label"
 import { toast } from "./ui/toast"
 import { ConfirmButton } from "./confirm-dialog"
 import { CopyButton } from "./copy-button"
+import { LoadingRows } from "@/components/loading-rows"
 
 /** What each credential state means to the person who manages it. */
 const SECRET_STATUS = {
@@ -234,9 +235,7 @@ export function WorkspaceConnectionsView({
         </FieldGroup>
       </form>
       {secrets.status === "LoadingFirstPage" && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading credentials…
-        </p>
+        <LoadingRows label="Loading credentials" />
       )}
       {secrets.status === "Exhausted" && secrets.results.length === 0 && (
         <p className="border-t pt-3 text-sm text-muted-foreground">
@@ -554,9 +553,7 @@ export function WorkspaceConnectionsView({
         </div>
       ))}
       {connections.status === "LoadingFirstPage" && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading connections…
-        </p>
+        <LoadingRows label="Loading connections" />
       )}
       {(connections.status === "CanLoadMore" ||
         connections.status === "LoadingMore") && (

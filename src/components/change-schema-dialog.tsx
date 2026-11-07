@@ -42,6 +42,7 @@ import {
   fromInputText,
   parseOptionLines,
 } from "@/lib/field-types"
+import { LoadingRows } from "@/components/loading-rows"
 
 type FieldType = CollectionField["type"]
 type Migration = Doc<"schemaMigrations">
@@ -184,9 +185,7 @@ export function ChangeSchemaDialog({
           </DialogDescription>
         </DialogHeader>
         {latest === undefined ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            Loading…
-          </p>
+          <LoadingRows label="Loading fields" />
         ) : migrationId ? (
           <MigrationReport
             migrationId={migrationId}
@@ -414,12 +413,7 @@ function MigrationReport({
     }
   }
 
-  if (migration === undefined)
-    return (
-      <p role="status" className="text-sm text-muted-foreground">
-        Loading the plan…
-      </p>
-    )
+  if (migration === undefined) return <LoadingRows label="Loading the plan" />
   const { state } = migration
   return (
     <div className="flex flex-col gap-4">

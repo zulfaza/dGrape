@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ConfirmButton } from "@/components/confirm-dialog"
 import { toast } from "@/components/ui/toast"
+import { LoadingRows } from "@/components/loading-rows"
 
 /**
  * Agents connected through auth.md registration (the /claim page). Revoking
@@ -46,9 +47,7 @@ export function ConnectedAgents({
         Agents you approved with a code.
       </p>
       {status === "LoadingFirstPage" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading agents…
-        </p>
+        <LoadingRows label="Loading agents" />
       ) : results.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No connected agents. Ask your agent to connect to this workspace, then

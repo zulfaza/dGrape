@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/tooltip"
 import { toast } from "@/components/ui/toast"
 import { useWorkspaceCan } from "@/components/workspace-role"
+import { LoadingRows } from "@/components/loading-rows"
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -146,9 +147,7 @@ export function WorkspaceArtifacts({
         )}
       </div>
       {status === "LoadingFirstPage" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading files…
-        </p>
+        <LoadingRows label="Loading files" />
       ) : results.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No files yet.{" "}

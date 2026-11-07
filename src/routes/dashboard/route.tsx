@@ -8,6 +8,7 @@ import {
 import { useConvexAuth } from "convex/react"
 import { Fragment, type ReactNode } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
+import { LoadingPage } from "@/components/loading-rows"
 import { NotFound } from "@/components/not-found"
 import {
   useWorkspaceName,
@@ -124,11 +125,7 @@ function ConvexAuthGate({
   const { isLoading, isAuthenticated } = useConvexAuth()
   if (isAuthenticated) return children
   if (isLoading) {
-    return (
-      <p role="status" className="p-6 text-muted-foreground">
-        Loading…
-      </p>
-    )
+    return <LoadingPage label="Loading" />
   }
   return (
     <main className="p-6">

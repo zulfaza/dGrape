@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ConfirmButton } from "@/components/confirm-dialog"
 import { toast } from "@/components/ui/toast"
+import { LoadingRows } from "@/components/loading-rows"
 
 export class AgentAccessBoundary extends Component<
   { children: ReactNode },
@@ -205,9 +206,7 @@ export function AgentAccess({
           Credentials
         </h3>
         {status === "LoadingFirstPage" ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            Loading credentials…
-          </p>
+          <LoadingRows label="Loading credentials" />
         ) : shown.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No active credentials.

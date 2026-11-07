@@ -98,9 +98,7 @@ function MemberList({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
         </p>
       </div>
       {status === "LoadingFirstPage" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading members…
-        </p>
+        <LoadingRows label="Loading members" />
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
           {results.map((member) => {
