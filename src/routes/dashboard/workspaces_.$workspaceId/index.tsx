@@ -2,8 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { usePaginatedQuery, useQuery } from "convex/react"
 import { ChevronRight, Plus } from "lucide-react"
 import { api } from "../../../../convex/_generated/api"
+import type { Id } from "../../../../convex/_generated/dataModel"
 import { LoadingRows } from "@/components/loading-rows"
 import { Mascot } from "@/components/mascot"
+import { useNewDashboard } from "@/components/new-dashboard"
 import { PageHeader } from "@/components/page-header"
 import { useWorkspaceCan } from "@/components/workspace-role"
 import { Button } from "@/components/ui/button"
@@ -32,16 +34,7 @@ function WorkspaceHome() {
   )
   if (!workspace) return <LoadingRows label="Loading workspace" />
   const newDashboard = canWrite && (
-    <Button asChild>
-      <Link
-        to="/dashboard/workspaces/$workspaceId/pages"
-        params={{ workspaceId }}
-        search={{ new: true }}
-      >
-        <Plus aria-hidden />
-        New dashboard
-      </Link>
-    </Button>
+    <NewDashboardButton workspaceId={workspace._id} />
   )
   return (
     <section aria-label="Dashboards" className="flex flex-col gap-6">
@@ -109,5 +102,19 @@ function WorkspaceHome() {
         <LoadingRows label="Loading more dashboards" rows={1} />
       )}
     </section>
+  )
+}
+
+function NewDashboardButton({
+  workspaceId,
+}: {
+  workspaceId: Id<"workspaces">
+}) {
+  const { create, pending } = useNewDashboard(workspaceId)
+  return (
+    <Button disabled={pending} onClick={create}>
+      <Plus aria-hidden />
+      New dashboard
+    </Button>
   )
 }
