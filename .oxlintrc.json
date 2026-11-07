@@ -172,12 +172,6 @@
       }
     },
     {
-      "files": ["convex/lib/identityAssertion.ts"],
-      "rules": {
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
       "files": ["convex/lib/collectionDomain.ts"],
       "rules": {
         "anti-slop/no-runtime-typeof": "off"
