@@ -1,33 +1,18 @@
 import * as React from "react"
 import {
-  CalendarClock,
-  Check,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
-  ChevronsUpDown,
-  Database,
-  FileText,
-  Files,
-  Gauge,
-  History,
   LayoutGrid,
-  Plug,
   Plus,
   Settings,
-  Users,
 } from "lucide-react"
-import {
-  Link,
-  useNavigate,
-  useParams,
-  useRouterState,
-} from "@tanstack/react-router"
-import { useConvexAuth, usePaginatedQuery, useQuery } from "convex/react"
+import { Link, useParams, useRouterState } from "@tanstack/react-router"
+import { useConvexAuth, usePaginatedQuery } from "convex/react"
 import type { User } from "@workos/authkit-tanstack-react-start"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import type { WorkspaceRole } from "../../convex/lib/workspaceRoles"
+import { settingsSegment } from "@/components/settings-nav"
 
 import { NavUser } from "@/components/nav-user"
 import {
@@ -35,14 +20,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { ROLE_LABELS } from "@/components/workspace-role"
 import {
   Sidebar,
   SidebarContent,
@@ -62,88 +39,6 @@ import {
 
 const ACTIVE_LINK_PROPS = { "data-active": true }
 
-/**
- * Workspace settings, grouped as the settings sidebar shows them. Each one
- * is a route under the workspace; the last path segment is `segment`.
- */
-const SETTINGS_GROUPS = [
-  {
-    label: "Data",
-    items: [
-      {
-        label: "Collections",
-        icon: Database,
-        segment: "data",
-        to: "/dashboard/workspaces/$workspaceId/data",
-      },
-      {
-        label: "Jobs",
-        icon: CalendarClock,
-        segment: "jobs",
-        to: "/dashboard/workspaces/$workspaceId/jobs",
-      },
-      {
-        label: "Files",
-        icon: Files,
-        segment: "artifacts",
-        to: "/dashboard/workspaces/$workspaceId/artifacts",
-      },
-    ],
-  },
-  {
-    label: "Access",
-    items: [
-      {
-        label: "Connections",
-        icon: Plug,
-        segment: "connections",
-        to: "/dashboard/workspaces/$workspaceId/connections",
-      },
-      {
-        label: "Members",
-        icon: Users,
-        segment: "members",
-        to: "/dashboard/workspaces/$workspaceId/members",
-      },
-    ],
-  },
-  {
-    label: "Workspace",
-    items: [
-      {
-        label: "Dashboards",
-        icon: FileText,
-        segment: "pages",
-        to: "/dashboard/workspaces/$workspaceId/pages",
-      },
-      {
-        label: "Activity",
-        icon: History,
-        segment: "activity",
-        to: "/dashboard/workspaces/$workspaceId/activity",
-      },
-      {
-        label: "Usage",
-        icon: Gauge,
-        segment: "usage",
-        to: "/dashboard/workspaces/$workspaceId/usage",
-      },
-    ],
-  },
-] as const
-
-const SETTINGS_SEGMENTS: ReadonlyArray<string> = SETTINGS_GROUPS.flatMap(
-  (group) => group.items.map((item) => item.segment)
-)
-
-/** The settings segment of `pathname`, such as "members", or null. */
-function settingsSegment(pathname: string): string | null {
-  const segment = /^\/dashboard\/workspaces\/[^/]+\/([^/]+)\/?$/.exec(
-    pathname
-  )?.[1]
-  return segment && SETTINGS_SEGMENTS.includes(segment) ? segment : null
-}
-
 type WorkspaceRow = { _id: Id<"workspaces">; name: string; role: WorkspaceRole }
 
 /**
@@ -160,7 +55,6 @@ export function AppSidebar({
     user.name || [user.firstName, user.lastName].filter(Boolean).join(" ")
   const { workspaceId, pageId } = useParams({ strict: false })
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const segment = settingsSegment(pathname)
   // Queries need the Convex session, which arrives after hydration.
   const { isAuthenticated } = useConvexAuth()
   const workspaces = usePaginatedQuery(
@@ -174,67 +68,45 @@ export function AppSidebar({
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            {segment && workspaceId ? (
-              <SidebarMenuButton asChild tooltip="Back to dashboards">
-                <Link
-                  to="/dashboard/workspaces/$workspaceId"
-                  params={{ workspaceId }}
-                  aria-label="Settings. Back to dashboards"
-                >
-                  <ChevronLeft />
-                  <span className="font-semibold">Settings</span>
-                </Link>
-              </SidebarMenuButton>
-            ) : (
-              <SidebarMenuButton size="lg" asChild>
-                <Link to="/">
-                  <img
-                    src="/favicon.svg"
-                    alt=""
-                    className="size-8 shrink-0"
-                    width={32}
-                    height={32}
-                  />
-                  <span className="text-xl font-semibold tracking-tight">
-                    DFE
-                  </span>
-                </Link>
-              </SidebarMenuButton>
-            )}
+            <SidebarMenuButton size="lg" asChild>
+              <Link to="/">
+                <img
+                  src="/favicon.svg"
+                  alt=""
+                  className="size-8 shrink-0"
+                  width={32}
+                  height={32}
+                />
+                <span className="text-xl font-semibold tracking-tight">
+                  DFE
+                </span>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        {segment && workspaceId ? (
-          <SettingsNav
-            workspaceId={workspaceId}
-            segment={segment}
-            workspaces={workspaces.results}
-            loadMore={
-              workspaces.status === "CanLoadMore"
-                ? () => workspaces.loadMore(20)
-                : null
-            }
-          />
-        ) : (
-          <DashboardsNav
-            loading={workspaces.status === "LoadingFirstPage"}
-            workspaces={workspaces.results}
-            loadMore={
-              workspaces.status === "CanLoadMore"
-                ? () => workspaces.loadMore(20)
-                : null
-            }
-            currentWorkspaceId={workspaceId}
-            currentPageId={pageId}
-          />
-        )}
+        <DashboardsNav
+          loading={workspaces.status === "LoadingFirstPage"}
+          workspaces={workspaces.results}
+          loadMore={
+            workspaces.status === "CanLoadMore"
+              ? () => workspaces.loadMore(20)
+              : null
+          }
+          currentWorkspaceId={workspaceId}
+          currentPageId={pageId}
+        />
       </SidebarContent>
       <SidebarFooter>
-        {!segment && settingsWorkspace && (
+        {settingsWorkspace && (
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Settings">
+              <SidebarMenuButton
+                asChild
+                tooltip="Settings"
+                isActive={settingsSegment(pathname) !== null}
+              >
                 <Link
                   to="/dashboard/workspaces/$workspaceId/data"
                   params={{ workspaceId: settingsWorkspace }}
@@ -399,123 +271,5 @@ function WorkspaceTree({
         </CollapsibleContent>
       </SidebarMenuItem>
     </Collapsible>
-  )
-}
-
-/** One workspace's settings, with a switch to the same page of another. */
-function SettingsNav({
-  workspaceId,
-  segment,
-  workspaces,
-  loadMore,
-}: {
-  workspaceId: string
-  segment: string
-  workspaces: ReadonlyArray<WorkspaceRow>
-  loadMore: (() => void) | null
-}) {
-  const navigate = useNavigate()
-  const { isAuthenticated } = useConvexAuth()
-  // The open workspace can be past the loaded list; read it directly then.
-  const listed = workspaces.find((workspace) => workspace._id === workspaceId)
-  const fetched = useQuery(
-    api.workspaces.get,
-    isAuthenticated && !listed ? { workspaceId } : "skip"
-  )
-  const current = listed ?? fetched
-  return (
-    <>
-      <SidebarGroup>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton size="lg">
-                  <div className="grid min-w-0 flex-1 text-left leading-tight">
-                    <span className="truncate font-semibold">
-                      {current?.name ?? "Workspace"}
-                    </span>
-                    {current && (
-                      <span className="truncate text-xs text-sidebar-muted">
-                        {ROLE_LABELS[current.role]}
-                      </span>
-                    )}
-                  </div>
-                  <ChevronsUpDown className="ml-auto" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
-              >
-                <DropdownMenuLabel>Switch workspace</DropdownMenuLabel>
-                {workspaces.map((workspace) => (
-                  <DropdownMenuItem
-                    key={workspace._id}
-                    onSelect={() =>
-                      void navigate({
-                        to: `/dashboard/workspaces/${workspace._id}/${segment}`,
-                      })
-                    }
-                  >
-                    <span className="truncate">{workspace.name}</span>
-                    {workspace._id === workspaceId && (
-                      <Check className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                ))}
-                {loadMore && (
-                  <DropdownMenuItem
-                    onSelect={(event) => {
-                      event.preventDefault()
-                      loadMore()
-                    }}
-                  >
-                    More workspaces
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarGroup>
-      {SETTINGS_GROUPS.map((group) => (
-        <Collapsible
-          key={group.label}
-          defaultOpen
-          className="group/settings"
-          asChild
-        >
-          <SidebarGroup>
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger asChild>
-                <button type="button" className="w-full justify-between">
-                  {group.label}
-                  <ChevronRight className="transition-transform group-data-[state=open]/settings:rotate-90 motion-reduce:transition-none" />
-                </button>
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
-              <SidebarMenu>
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.segment}>
-                    <SidebarMenuButton
-                      asChild
-                      tooltip={item.label}
-                      isActive={item.segment === segment}
-                    >
-                      <Link to={item.to} params={{ workspaceId }}>
-                        <item.icon />
-                        <span>{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </CollapsibleContent>
-          </SidebarGroup>
-        </Collapsible>
-      ))}
-    </>
   )
 }
