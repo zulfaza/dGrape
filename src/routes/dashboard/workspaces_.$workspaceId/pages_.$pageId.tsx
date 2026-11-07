@@ -59,7 +59,7 @@ function DashboardView() {
   return (
     <article className="flex flex-col gap-6">
       <PageHeader
-        title={page.title}
+        title={version?.definition.title ?? page.title}
         description={
           page.publishedRevision
             ? `Revision ${page.publishedRevision}`

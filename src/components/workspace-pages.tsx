@@ -1,6 +1,11 @@
 import { ArtifactPicker } from "./artifact-picker"
 import { previewKind } from "../../convex/lib/artifactPreview"
-import { useConvex, useMutation, usePaginatedQuery } from "convex/react"
+import {
+  useConvex,
+  useMutation,
+  usePaginatedQuery,
+  useQuery,
+} from "convex/react"
 import { useEffect, useRef, useState } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -118,14 +123,17 @@ function WorkspacePagesEditor({
       setPreviewRevision(null)
     })
   }
-  // Open the requested page once its row has loaded.
+  // Open the requested page once. It may be past the loaded rows, so look
+  // it up by id; the query also checks that it is in this workspace.
   const opened = useRef(false)
+  const requested = useQuery(
+    api.pages.view,
+    editPageId ? { workspaceId, pageId: editPageId } : "skip"
+  )
   useEffect(() => {
-    if (opened.current || !editPageId) return
-    const page = results.find((item) => item._id === editPageId)
-    if (!page) return
+    if (opened.current || !requested) return
     opened.current = true
-    void open(page._id, page.revision)
+    void open(requested.page._id, requested.page.revision)
   })
   function change(definition: PageDefinition) {
     if (!draft) return
