@@ -1,7 +1,7 @@
 import { Schema } from "effect"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useQuery } from "convex/react"
-import { Pencil } from "lucide-react"
+import { EllipsisVertical, History, Pencil } from "lucide-react"
 import { api } from "../../../../convex/_generated/api"
 import { LoadingRows } from "@/components/loading-rows"
 import { DashboardEditor } from "@/components/dashboard-editor"
@@ -9,6 +9,12 @@ import { PageBlocksGrid } from "@/components/dashboard-grid"
 import { PageHeader } from "@/components/page-header"
 import { useWorkspaceCan } from "@/components/workspace-role"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Empty,
   EmptyContent,
@@ -72,6 +78,30 @@ function DashboardView() {
       </Link>
     </Button>
   )
+  const actions = (
+    <>
+      {editLink}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="icon" aria-label="Dashboard menu">
+            <EllipsisVertical aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem asChild>
+            <Link
+              to="/dashboard/workspaces/$workspaceId/pages"
+              params={{ workspaceId }}
+              search={{ revisions: page._id }}
+            >
+              <History aria-hidden />
+              Revisions
+            </Link>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  )
   const published = page.publishedRevision
   return (
     <article className="flex flex-col gap-6">
@@ -84,7 +114,7 @@ function DashboardView() {
               ? `Revision ${published}. Draft revision ${page.revision} is not published.`
               : `Revision ${published}`
         }
-        actions={editLink}
+        actions={actions}
       />
       {version === null || version.definition.blocks.length === 0 ? (
         <div className="rounded-lg border bg-card">
