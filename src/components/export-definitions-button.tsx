@@ -5,6 +5,11 @@ import { api } from "../../convex/_generated/api"
 import type { Doc } from "../../convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { download, fileStem } from "@/lib/record-export"
 
 /**
@@ -58,9 +63,21 @@ export function ExportDefinitionsButton({
   }
 
   return (
-    <Button variant="outline" disabled={exporting} onClick={exportDefinitions}>
-      <FileJson aria-hidden />
-      {exporting ? "Exporting…" : "Export definitions"}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="outline"
+          disabled={exporting}
+          onClick={exportDefinitions}
+        >
+          <FileJson aria-hidden />
+          {exporting ? "Exporting…" : "Export setup"}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-64">
+        Downloads collection fields, saved queries, recipes, and pages as JSON.
+        Records are not included.
+      </TooltipContent>
+    </Tooltip>
   )
 }
