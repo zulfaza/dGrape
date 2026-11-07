@@ -59,6 +59,25 @@
   --radius-2xl: var(--dfe-radius-note);
   --radius-3xl: var(--dfe-radius-note);
   --radius-4xl: var(--dfe-radius-note);
+
+  --radius-window: var(--dfe-radius-window);
+  --shadow-window: var(--dfe-shadow-window);
+  --shadow-mock: var(--dfe-shadow-mock);
+
+  /* Landing page. The window chrome and the dark terminal mock keep the
+     same colors in both themes. */
+  --color-window-close: #e5867a;
+  --color-window-minimize: #e6bd5b;
+  --color-window-maximize: #8cc9a7;
+  --color-terminal: #1f2622;
+  --color-terminal-foreground: #e9eaec;
+  --color-terminal-muted: #b5b8be;
+  --color-terminal-border: #2f3a33;
+  --text-2xs: 11px;
+  --leading-display: 1.05;
+  /* Top padding that rests the hero sloth's belly on the window edge. */
+  --spacing-hero-sloth: 17.5%;
+  --spacing-hero-sloth-wide: 7.8%;
 }
 
 /* DFE tokens. Keep in sync with src/design-system/theme.css and DESIGN.md. */
@@ -167,6 +186,13 @@
 }
 
 /* Landing motion. Each animation runs once per trigger; none loops. */
+/* A per-element start delay for staggered rows and bars. It does not
+   inherit, so a nested animated element starts on its own delay. */
+@property --dfe-delay {
+  syntax: "<time>";
+  inherits: false;
+  initial-value: 0ms;
+}
 @keyframes dfe-rise {
   from {
     opacity: 0;
@@ -328,6 +354,10 @@
   translate: -3% 0;
   animation: dfe-footer-wave 4.8s ease-in-out infinite;
 }
+/* Holds a looping sprite still while it is off screen. */
+.dfe-paused {
+  animation-play-state: paused;
+}
 
 @media (prefers-reduced-motion: no-preference) {
   .dfe-sloth-still {
@@ -355,11 +385,12 @@
     animation: dfe-rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
   .dfe-row-in {
-    animation: dfe-row-in 400ms ease-out both;
+    animation: dfe-row-in 400ms ease-out var(--dfe-delay, 0ms) both;
   }
   .dfe-bar-grow {
     transform-origin: bottom;
-    animation: dfe-bar-grow 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: dfe-bar-grow 500ms cubic-bezier(0.2, 0.8, 0.2, 1)
+      var(--dfe-delay, 0ms) both;
   }
   .dfe-sloth-settle {
     transform-origin: bottom center;

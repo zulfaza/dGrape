@@ -3,6 +3,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type Dispatch,
   type SetStateAction,
 } from "react"
@@ -17,6 +18,20 @@ import { cn } from "@/lib/utils"
  */
 
 const SCREEN = { width: 1440, height: 900 }
+
+/**
+ * Custom properties that the hero's classes read: the screen size and fit
+ * transform (the `aspect-`, `w-`, `h-` and `transform-` classes), the bar
+ * height, and the stagger delay of the motion classes in src/app.css.
+ */
+type HeroStyle = CSSProperties & {
+  "--hero-aspect"?: string
+  "--hero-width"?: string
+  "--hero-height"?: string
+  "--hero-transform"?: string
+  "--hero-bar-height"?: string
+  "--dfe-delay"?: string
+}
 
 type Tone = "success" | "warning" | "neutral"
 
@@ -286,12 +301,20 @@ export function HeroDashboard() {
   const [index, setIndex] = useRotation(USE_CASES.length, hovered || focused)
   const active = USE_CASES[index] ?? USE_CASES[0]
   const { ref, scale } = useFitScale()
+  const frameStyle: HeroStyle = {
+    "--hero-aspect": `${SCREEN.width} / ${SCREEN.height}`,
+  }
+  const screenStyle: HeroStyle = {
+    "--hero-width": `${SCREEN.width}px`,
+    "--hero-height": `${SCREEN.height}px`,
+    "--hero-transform": `scale(${scale})`,
+  }
 
   return (
     <div
       ref={ref}
-      className="relative w-full overflow-hidden rounded-[1.2%/1.9%] border bg-card shadow-[0_40px_80px_-40px_rgb(36_51_43/0.55)]"
-      style={{ aspectRatio: `${SCREEN.width} / ${SCREEN.height}` }}
+      className="relative aspect-(--hero-aspect) w-full overflow-hidden rounded-window border bg-card shadow-window"
+      style={frameStyle}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}
@@ -301,12 +324,8 @@ export function HeroDashboard() {
       }}
     >
       <div
-        className="dfe-anim dfe-rise absolute top-0 left-0 flex origin-top-left flex-col text-card-foreground"
-        style={{
-          width: SCREEN.width,
-          height: SCREEN.height,
-          transform: `scale(${scale})`,
-        }}
+        className="dfe-anim dfe-rise absolute top-0 left-0 flex h-(--hero-height) w-(--hero-width) origin-top-left transform-(--hero-transform) flex-col text-card-foreground"
+        style={screenStyle}
       >
         <WindowBar />
         <div className="flex min-h-0 flex-1">
@@ -322,9 +341,9 @@ function WindowBar() {
   return (
     <div className="flex h-10 shrink-0 items-center gap-4 border-b bg-secondary px-4">
       <div aria-hidden className="flex gap-2">
-        <span className="size-3 rounded-full bg-[#e5867a]" />
-        <span className="size-3 rounded-full bg-[#e6bd5b]" />
-        <span className="size-3 rounded-full bg-[#8cc9a7]" />
+        <span className="size-3 rounded-full bg-window-close" />
+        <span className="size-3 rounded-full bg-window-minimize" />
+        <span className="size-3 rounded-full bg-window-maximize" />
       </div>
       <p className="mx-auto w-[28rem] truncate rounded-md bg-card px-3 py-1 text-center text-xs text-muted-foreground">
         dfe.makarima.dev, example workspace with sample data
@@ -423,21 +442,24 @@ function Screen({ useCase }: { useCase: UseCase }) {
           </span>
         </div>
         <ul className="grid grid-cols-4 gap-4">
-          {useCase.metrics.map((metric, i) => (
-            <li
-              key={metric.label}
-              className="dfe-anim dfe-row-in rounded-lg border bg-card px-5 py-4"
-              style={{ animationDelay: `${i * 70}ms` }}
-            >
-              <p className="text-sm text-muted-foreground">{metric.label}</p>
-              <p className="mt-1 text-3xl font-semibold tabular-nums">
-                {metric.value}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {metric.note}
-              </p>
-            </li>
-          ))}
+          {useCase.metrics.map((metric, i) => {
+            const style: HeroStyle = { "--dfe-delay": `${i * 70}ms` }
+            return (
+              <li
+                key={metric.label}
+                className="dfe-anim dfe-row-in rounded-lg border bg-card px-5 py-4"
+                style={style}
+              >
+                <p className="text-sm text-muted-foreground">{metric.label}</p>
+                <p className="mt-1 text-3xl font-semibold tabular-nums">
+                  {metric.value}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {metric.note}
+                </p>
+              </li>
+            )
+          })}
         </ul>
         <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4">
           <figure className="flex flex-col gap-3 rounded-lg border bg-card p-5">
@@ -449,21 +471,24 @@ function Screen({ useCase }: { useCase: UseCase }) {
               role="img"
               aria-label={`${useCase.chart.label}, ${useCase.chart.unit}: ${useCase.chart.bars.join(", ")}`}
             >
-              {useCase.chart.bars.map((bar, i) => (
-                <span
-                  key={i}
-                  className={cn(
-                    "dfe-anim dfe-bar-grow flex-1 rounded-t-sm",
-                    i === useCase.chart.bars.length - 1
-                      ? "bg-chart-3"
-                      : "bg-chart-1"
-                  )}
-                  style={{
-                    height: `${(bar / max) * 100}%`,
-                    animationDelay: `${150 + i * 50}ms`,
-                  }}
-                />
-              ))}
+              {useCase.chart.bars.map((bar, i) => {
+                const style: HeroStyle = {
+                  "--hero-bar-height": `${(bar / max) * 100}%`,
+                  "--dfe-delay": `${150 + i * 50}ms`,
+                }
+                return (
+                  <span
+                    key={i}
+                    className={cn(
+                      "dfe-anim dfe-bar-grow h-(--hero-bar-height) flex-1 rounded-t-sm",
+                      i === useCase.chart.bars.length - 1
+                        ? "bg-chart-3"
+                        : "bg-chart-1"
+                    )}
+                    style={style}
+                  />
+                )
+              })}
             </div>
             <div
               aria-hidden
@@ -479,18 +504,21 @@ function Screen({ useCase }: { useCase: UseCase }) {
           <section className="flex flex-col gap-3 rounded-lg border bg-card p-5">
             <h4 className="text-sm font-medium">Agent activity</h4>
             <ul className="flex flex-col gap-3">
-              {useCase.activity.map((item, i) => (
-                <li
-                  key={item.action}
-                  className="dfe-anim dfe-row-in flex flex-col"
-                  style={{ animationDelay: `${200 + i * 90}ms` }}
-                >
-                  <span className="text-sm">{item.action}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {item.time}
-                  </span>
-                </li>
-              ))}
+              {useCase.activity.map((item, i) => {
+                const style: HeroStyle = { "--dfe-delay": `${200 + i * 90}ms` }
+                return (
+                  <li
+                    key={item.action}
+                    className="dfe-anim dfe-row-in flex flex-col"
+                    style={style}
+                  >
+                    <span className="text-sm">{item.action}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {item.time}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           </section>
         </div>
@@ -510,36 +538,39 @@ function Screen({ useCase }: { useCase: UseCase }) {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {useCase.rows.map((row, i) => (
-                <tr
-                  key={row.primary}
-                  className="dfe-anim dfe-row-in"
-                  style={{ animationDelay: `${300 + i * 80}ms` }}
-                >
-                  <td className="px-5 py-3">
-                    <span className="block font-medium">{row.primary}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {row.secondary}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-right tabular-nums">
-                    {row.value}
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground">
-                    {row.date}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <span
-                      className={cn(
-                        "inline-block rounded-full px-2.5 py-0.5 text-xs font-medium",
-                        TONE_CLASSES[row.status.tone]
-                      )}
-                    >
-                      {row.status.label}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {useCase.rows.map((row, i) => {
+                const style: HeroStyle = { "--dfe-delay": `${300 + i * 80}ms` }
+                return (
+                  <tr
+                    key={row.primary}
+                    className="dfe-anim dfe-row-in"
+                    style={style}
+                  >
+                    <td className="px-5 py-3">
+                      <span className="block font-medium">{row.primary}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {row.secondary}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-right tabular-nums">
+                      {row.value}
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {row.date}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <span
+                        className={cn(
+                          "inline-block rounded-full px-2.5 py-0.5 text-xs font-medium",
+                          TONE_CLASSES[row.status.tone]
+                        )}
+                      >
+                        {row.status.label}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

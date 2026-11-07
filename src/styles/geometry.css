@@ -6,6 +6,11 @@
   --dfe-radius-note: 12px;
   --dfe-shadow-overlay: 0 2px 8px rgb(0 0 0 / 0.12);
   --radius: var(--dfe-radius-panel);
+  /* Landing window frames and product mocks. The window radius is
+     relative, so it scales with the 1440x900 example screen. */
+  --dfe-radius-window: 1.2% / 1.9%;
+  --dfe-shadow-window: 0 40px 80px -40px rgb(36 51 43 / 0.55);
+  --dfe-shadow-mock: 0 24px 60px -30px rgb(36 51 43 / 0.5);
 }
 
 :is(
