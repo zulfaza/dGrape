@@ -527,9 +527,10 @@ export const layer = (baseUrl: string) =>
           })
         )
 
-      const json = (
+      /** A request with `body`, one of the typed inputs above, as JSON. */
+      const json = <Body>(
         request: HttpClientRequest.HttpClientRequest,
-        body: unknown
+        body: Body
       ) => HttpClientRequest.bodyJsonUnsafe(request, body)
 
       return {
@@ -709,8 +710,8 @@ export const layer = (baseUrl: string) =>
           send(
             HttpClientRequest.get(url("/agent/connections")).pipe(
               HttpClientRequest.setUrlParams({
-                ...(limit === undefined ? {} : { limit: String(limit) }),
-                ...(cursor === undefined ? {} : { cursor }),
+                limit,
+                cursor,
               })
             ),
             ConnectionPage
@@ -727,8 +728,8 @@ export const layer = (baseUrl: string) =>
             HttpClientRequest.get(url("/agent/records")).pipe(
               HttpClientRequest.setUrlParams({
                 collectionId,
-                ...(limit === undefined ? {} : { limit: String(limit) }),
-                ...(cursor === undefined ? {} : { cursor }),
+                limit,
+                cursor,
               })
             ),
             RecordPage
@@ -742,8 +743,8 @@ export const layer = (baseUrl: string) =>
           send(
             HttpClientRequest.get(url("/agent/artifacts")).pipe(
               HttpClientRequest.setUrlParams({
-                ...(limit === undefined ? {} : { limit: String(limit) }),
-                ...(cursor === undefined ? {} : { cursor }),
+                limit,
+                cursor,
               })
             ),
             ArtifactPage

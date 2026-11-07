@@ -224,12 +224,6 @@
       }
     },
     {
-      "files": ["src/mcp/agent-api.ts"],
-      "rules": {
-        "anti-slop/no-unknown-parameters": "off"
-      }
-    },
-    {
       "files": ["convex/http.ts"],
       "rules": {
         "anti-slop/no-unknown-parameters": "off",
@@ -350,7 +344,7 @@
       }
     },
     {
-      "files": ["convex/lib/agentRequests.ts", "src/mcp/agent-api.ts"],
+      "files": ["convex/lib/agentRequests.ts"],
       "rules": {
         "anti-slop/no-conditional-empty-object-spread": "off"
       }
