@@ -112,7 +112,8 @@ export function MultiCombobox({
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          className="w-(--radix-popover-trigger-width) p-0"
+          variant="list"
+          className="w-(--radix-popover-trigger-width)"
           onOpenAutoFocus={(event) => {
             event.preventDefault()
             inputRef.current?.focus()
