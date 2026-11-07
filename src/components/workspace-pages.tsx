@@ -1,7 +1,12 @@
 import { ArtifactPicker } from "./artifact-picker"
 import { previewKind } from "../../convex/lib/artifactPreview"
-import { useConvex, useMutation, usePaginatedQuery } from "convex/react"
-import { useRef, useState } from "react"
+import {
+  useConvex,
+  useMutation,
+  usePaginatedQuery,
+  useQuery,
+} from "convex/react"
+import { useEffect, useRef, useState } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import type { PageDefinition } from "../../convex/lib/pageDomain"
@@ -10,6 +15,7 @@ import { Input } from "./ui/input"
 import { PageBlockView, PagePreview, revisionAction } from "./page-preview"
 import { PageSourcePicker } from "./page-source-picker"
 import { useWorkspaceCan } from "@/components/workspace-role"
+import { Link } from "@tanstack/react-router"
 import { ChevronRight } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -21,6 +27,7 @@ import {
 } from "@/components/ui/empty"
 import { toast } from "@/components/ui/toast"
 import { LoadingRows } from "@/components/loading-rows"
+import { PageHeader } from "@/components/page-header"
 
 type Draft = {
   definition: PageDefinition
@@ -34,18 +41,37 @@ type Draft = {
     }
 )
 
+/**
+ * `editPageId` opens that page in the editor, as a dashboard's Edit does;
+ * `startNew` opens a new page, as the sidebar's New dashboard does.
+ */
 export function WorkspacePages({
   workspaceId,
+  editPageId,
+  startNew,
 }: {
   workspaceId: Id<"workspaces">
+  editPageId?: string
+  startNew?: boolean
 }) {
-  return <WorkspacePagesEditor key={workspaceId} workspaceId={workspaceId} />
+  return (
+    <WorkspacePagesEditor
+      key={workspaceId}
+      workspaceId={workspaceId}
+      editPageId={editPageId}
+      startNew={startNew === true}
+    />
+  )
 }
 
 function WorkspacePagesEditor({
   workspaceId,
+  editPageId,
+  startNew,
 }: {
   workspaceId: Id<"workspaces">
+  editPageId?: string
+  startNew: boolean
 }) {
   const client = useConvex()
   const canWrite = useWorkspaceCan("write")
@@ -57,12 +83,20 @@ function WorkspacePagesEditor({
     { workspaceId },
     { initialNumItems: 20 }
   )
-  const [draft, setDraft] = useState<Draft | null>(null)
+  const [draft, setDraft] = useState<Draft | null>(
+    startNew
+      ? {
+          kind: "new",
+          publishedRevision: null,
+          definition: { title: "", blocks: [{ kind: "markdown", text: "" }] },
+        }
+      : null
+  )
   const [pending, setPending] = useState(false)
   const running = useRef(false)
   const [message, setMessage] = useState("")
   const [artifactTitle, setArtifactTitle] = useState("")
-  const [dirty, setDirty] = useState(false)
+  const [dirty, setDirty] = useState(startNew)
   const [previewRevision, setPreviewRevision] = useState<number | null>(null)
   const history = usePaginatedQuery(
     api.pages.history,
@@ -105,6 +139,18 @@ function WorkspacePagesEditor({
       setPreviewRevision(null)
     })
   }
+  // Open the requested page once. It may be past the loaded rows, so look
+  // it up by id; the query also checks that it is in this workspace.
+  const opened = useRef(false)
+  const requested = useQuery(
+    api.pages.view,
+    editPageId ? { workspaceId, pageId: editPageId } : "skip"
+  )
+  useEffect(() => {
+    if (opened.current || !requested) return
+    opened.current = true
+    void open(requested.page._id, requested.page.revision)
+  })
   function change(definition: PageDefinition) {
     if (!draft) return
     setDraft({ ...draft, definition })
@@ -156,23 +202,21 @@ function WorkspacePagesEditor({
         setPreviewRevision(null)
       }}
     >
-      New page
+      New dashboard
     </Button>
   )
   return (
-    <section
-      className="flex flex-col gap-4 rounded-lg border bg-card p-5 lg:col-span-2"
-      aria-label="Workspace pages"
-    >
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-xl font-semibold">Pages</h2>
-        {newPageButton}
-      </div>
+    <section className="flex flex-col gap-6" aria-label="Dashboards">
+      <PageHeader
+        title="Dashboards"
+        description="Text, tables, metrics, and charts built from your data."
+        actions={newPageButton}
+      />
       {status === "LoadingFirstPage" && <LoadingRows label="Loading pages" />}
       {status === "Exhausted" && results.length === 0 && !draft && (
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>No pages yet</EmptyTitle>
+            <EmptyTitle>No dashboards yet</EmptyTitle>
             <EmptyDescription>
               A page shows text, tables, metrics, and charts from your data.
             </EmptyDescription>
@@ -184,11 +228,10 @@ function WorkspacePagesEditor({
         <ul className="divide-y rounded-lg border">
           {results.map((page) => (
             <li key={page._id}>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void open(page._id, page.revision)}
-                className="flex w-full items-center gap-4 px-4 py-3 text-left outline-none first:rounded-t-lg last:rounded-b-lg hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              <Link
+                to="/dashboard/workspaces/$workspaceId/pages/$pageId"
+                params={{ workspaceId, pageId: page._id }}
+                className="flex w-full items-center gap-4 px-4 py-3 text-left outline-none first:rounded-t-lg last:rounded-b-lg hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span
                   className="min-w-0 flex-1 truncate font-medium"
@@ -206,7 +249,7 @@ function WorkspacePagesEditor({
                   aria-hidden
                   className="size-4 shrink-0 text-muted-foreground"
                 />
-              </button>
+              </Link>
             </li>
           ))}
         </ul>

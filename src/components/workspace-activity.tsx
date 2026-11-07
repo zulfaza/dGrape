@@ -6,6 +6,7 @@ import type { AuditActor, AuditEvent } from "../../convex/lib/auditEvents"
 import { scopeSummary } from "@/components/scope-picker"
 import { Button } from "@/components/ui/button"
 import { LoadingRows } from "@/components/loading-rows"
+import { PageHeader } from "@/components/page-header"
 
 const PAGE_SIZE = 20
 
@@ -125,15 +126,11 @@ export function WorkspaceActivity({
   )
 
   return (
-    <section aria-labelledby="activity-heading" className="flex flex-col gap-3">
-      <div>
-        <h2 id="activity-heading" className="text-base font-semibold">
-          Activity
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Changes that you and your agents made. Values are not kept here.
-        </p>
-      </div>
+    <section aria-label="Activity" className="flex flex-col gap-6">
+      <PageHeader
+        title="Activity"
+        description="Changes that you and your agents made. Values are not kept here."
+      />
       {status === "LoadingFirstPage" ? (
         <LoadingRows label="Loading activity" />
       ) : results.length === 0 ? (

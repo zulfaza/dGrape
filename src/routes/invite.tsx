@@ -87,6 +87,9 @@ function InvitePage() {
       <Button disabled={saving || !token} onClick={join}>
         {saving ? "Joining…" : "Accept invite"}
       </Button>
+      <p className="text-xs text-muted-foreground">
+        When you join, other members of the workspace can see your email.
+      </p>
       <Link to="/dashboard/workspaces" className="text-sm underline">
         Go to your workspaces
       </Link>

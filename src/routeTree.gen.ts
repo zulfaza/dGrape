@@ -32,6 +32,7 @@ import { Route as DashboardWorkspacesWorkspaceIdJobsRouteImport } from './routes
 import { Route as DashboardWorkspacesWorkspaceIdMembersRouteImport } from './routes/dashboard/workspaces_.$workspaceId/members'
 import { Route as DashboardWorkspacesWorkspaceIdPagesRouteImport } from './routes/dashboard/workspaces_.$workspaceId/pages'
 import { Route as DashboardWorkspacesWorkspaceIdUsageRouteImport } from './routes/dashboard/workspaces_.$workspaceId/usage'
+import { Route as DashboardWorkspacesWorkspaceIdPagesPageIdRouteImport } from './routes/dashboard/workspaces_.$workspaceId/pages_.$pageId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -160,6 +161,12 @@ const DashboardWorkspacesWorkspaceIdUsageRoute =
     path: '/usage',
     getParentRoute: () => DashboardWorkspacesWorkspaceIdRouteRoute,
   } as any)
+const DashboardWorkspacesWorkspaceIdPagesPageIdRoute =
+  DashboardWorkspacesWorkspaceIdPagesPageIdRouteImport.update({
+    id: '/pages_/$pageId',
+    path: '/pages/$pageId',
+    getParentRoute: () => DashboardWorkspacesWorkspaceIdRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -185,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/workspaces/$workspaceId/pages': typeof DashboardWorkspacesWorkspaceIdPagesRoute
   '/dashboard/workspaces/$workspaceId/usage': typeof DashboardWorkspacesWorkspaceIdUsageRoute
   '/dashboard/workspaces/$workspaceId/': typeof DashboardWorkspacesWorkspaceIdIndexRoute
+  '/dashboard/workspaces/$workspaceId/pages/$pageId': typeof DashboardWorkspacesWorkspaceIdPagesPageIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -208,6 +216,7 @@ export interface FileRoutesByTo {
   '/dashboard/workspaces/$workspaceId/pages': typeof DashboardWorkspacesWorkspaceIdPagesRoute
   '/dashboard/workspaces/$workspaceId/usage': typeof DashboardWorkspacesWorkspaceIdUsageRoute
   '/dashboard/workspaces/$workspaceId': typeof DashboardWorkspacesWorkspaceIdIndexRoute
+  '/dashboard/workspaces/$workspaceId/pages/$pageId': typeof DashboardWorkspacesWorkspaceIdPagesPageIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -234,6 +243,7 @@ export interface FileRoutesById {
   '/dashboard/workspaces_/$workspaceId/pages': typeof DashboardWorkspacesWorkspaceIdPagesRoute
   '/dashboard/workspaces_/$workspaceId/usage': typeof DashboardWorkspacesWorkspaceIdUsageRoute
   '/dashboard/workspaces_/$workspaceId/': typeof DashboardWorkspacesWorkspaceIdIndexRoute
+  '/dashboard/workspaces_/$workspaceId/pages_/$pageId': typeof DashboardWorkspacesWorkspaceIdPagesPageIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -261,6 +271,7 @@ export interface FileRouteTypes {
     | '/dashboard/workspaces/$workspaceId/pages'
     | '/dashboard/workspaces/$workspaceId/usage'
     | '/dashboard/workspaces/$workspaceId/'
+    | '/dashboard/workspaces/$workspaceId/pages/$pageId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -284,6 +295,7 @@ export interface FileRouteTypes {
     | '/dashboard/workspaces/$workspaceId/pages'
     | '/dashboard/workspaces/$workspaceId/usage'
     | '/dashboard/workspaces/$workspaceId'
+    | '/dashboard/workspaces/$workspaceId/pages/$pageId'
   id:
     | '__root__'
     | '/'
@@ -309,6 +321,7 @@ export interface FileRouteTypes {
     | '/dashboard/workspaces_/$workspaceId/pages'
     | '/dashboard/workspaces_/$workspaceId/usage'
     | '/dashboard/workspaces_/$workspaceId/'
+    | '/dashboard/workspaces_/$workspaceId/pages_/$pageId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -487,6 +500,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardWorkspacesWorkspaceIdUsageRouteImport
       parentRoute: typeof DashboardWorkspacesWorkspaceIdRouteRoute
     }
+    '/dashboard/workspaces_/$workspaceId/pages_/$pageId': {
+      id: '/dashboard/workspaces_/$workspaceId/pages_/$pageId'
+      path: '/pages/$pageId'
+      fullPath: '/dashboard/workspaces/$workspaceId/pages/$pageId'
+      preLoaderRoute: typeof DashboardWorkspacesWorkspaceIdPagesPageIdRouteImport
+      parentRoute: typeof DashboardWorkspacesWorkspaceIdRouteRoute
+    }
   }
 }
 
@@ -500,6 +520,7 @@ interface DashboardWorkspacesWorkspaceIdRouteRouteChildren {
   DashboardWorkspacesWorkspaceIdPagesRoute: typeof DashboardWorkspacesWorkspaceIdPagesRoute
   DashboardWorkspacesWorkspaceIdUsageRoute: typeof DashboardWorkspacesWorkspaceIdUsageRoute
   DashboardWorkspacesWorkspaceIdIndexRoute: typeof DashboardWorkspacesWorkspaceIdIndexRoute
+  DashboardWorkspacesWorkspaceIdPagesPageIdRoute: typeof DashboardWorkspacesWorkspaceIdPagesPageIdRoute
 }
 
 const DashboardWorkspacesWorkspaceIdRouteRouteChildren: DashboardWorkspacesWorkspaceIdRouteRouteChildren =
@@ -522,6 +543,8 @@ const DashboardWorkspacesWorkspaceIdRouteRouteChildren: DashboardWorkspacesWorks
       DashboardWorkspacesWorkspaceIdUsageRoute,
     DashboardWorkspacesWorkspaceIdIndexRoute:
       DashboardWorkspacesWorkspaceIdIndexRoute,
+    DashboardWorkspacesWorkspaceIdPagesPageIdRoute:
+      DashboardWorkspacesWorkspaceIdPagesPageIdRoute,
   }
 
 const DashboardWorkspacesWorkspaceIdRouteRouteWithChildren =
