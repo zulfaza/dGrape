@@ -6,6 +6,7 @@ import {
   GitBranch,
   KeyRound,
   LayoutDashboard,
+  Menu,
   PackageOpen,
   Paperclip,
   RefreshCw,
@@ -18,6 +19,12 @@ import { HeroDashboard } from "@/components/landing/hero-dashboard"
 import { LyingSloth } from "@/components/landing/lying-sloth"
 import { HowItWorks, WorkspacesShowcase } from "@/components/landing/step-mocks"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export const Route = createFileRoute("/")({ component: Home })
 
@@ -143,6 +150,12 @@ function HeroShowcase() {
   )
 }
 
+const SECTION_LINKS = [
+  { href: "#how-it-works", label: "How it works" },
+  { href: "#features", label: "Features" },
+  { href: "#planned", label: "Planned" },
+] as const
+
 function Home() {
   const { user } = Route.useRouteContext()
   const signedIn = Boolean(user)
@@ -159,24 +172,34 @@ function Home() {
             DFE
           </Link>
           <nav aria-label="Main navigation" className="flex items-center gap-5">
-            <a
-              href="#how-it-works"
-              className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline"
-            >
-              How it works
-            </a>
-            <a
-              href="#features"
-              className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline"
-            >
-              Features
-            </a>
-            <a
-              href="#planned"
-              className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline"
-            >
-              Planned
-            </a>
+            {SECTION_LINKS.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline"
+              >
+                {link.label}
+              </a>
+            ))}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="sm:hidden"
+                  aria-label="Open menu"
+                >
+                  <Menu aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {SECTION_LINKS.map((link) => (
+                  <DropdownMenuItem key={link.href} asChild>
+                    <a href={link.href}>{link.label}</a>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button asChild variant="outline" size="sm">
               {signedIn ? (
                 <Link to="/dashboard/workspaces">Open workspaces</Link>
