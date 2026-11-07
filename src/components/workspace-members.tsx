@@ -1,8 +1,14 @@
-import { useAction, useMutation, usePaginatedQuery } from "convex/react"
-import { useState, type FormEvent } from "react"
+import {
+  useAction,
+  useMutation,
+  usePaginatedQuery,
+  useQuery,
+} from "convex/react"
+import { useRef, useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import type { WorkspaceRole } from "../../convex/lib/workspaceRoles"
+import { ConfirmButton, ConfirmDialog } from "@/components/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,6 +22,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "@/components/ui/toast"
 import { ROLE_LABELS } from "@/components/workspace-role"
+import { LoadingRows } from "@/components/loading-rows"
 
 const ROLES = ["owner", "editor", "viewer"] as const
 const INVITE_ROLES = ["editor", "viewer"] as const
@@ -52,6 +59,16 @@ function MemberList({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
   const setRole = useMutation(api.members.setRole)
   const remove = useMutation(api.members.remove)
   const [saving, setSaving] = useState(false)
+  const [roleChange, setRoleChange] = useState<{
+    userId: string
+    name: string
+    role: WorkspaceRole
+  } | null>(null)
+  // The server also refuses to leave a workspace without an owner; this
+  // only hides the controls that would fail.
+  const soleOwner = useQuery(api.members.hasSoleOwner, { workspaceId })
+  // Each row's role trigger, so focus returns to it after the confirmation.
+  const roleTriggers = useRef(new Map<string, HTMLButtonElement>())
 
   async function run(action: () => Promise<null>, done: string) {
     setSaving(true)
@@ -76,8 +93,8 @@ function MemberList({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
           Members
         </h2>
         <p className="text-sm text-muted-foreground">
-          Viewers read. Editors also change data and run jobs. Owners also
-          manage members, credentials and agent access.
+          Viewers read. Editors also edit data and run jobs. Owners also manage
+          access.
         </p>
       </div>
       {status === "LoadingFirstPage" ? (
@@ -87,66 +104,94 @@ function MemberList({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
           {results.map((member) => {
-            const name = member.isYou ? "You" : (member.email ?? "A member")
+            const name = member.email ?? (member.isYou ? "You" : "A member")
+            const lastOwner = member.role === "owner" && soleOwner === true
             return (
               <li
                 key={member.userId}
                 className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5"
               >
-                <span className="min-w-0 truncate text-sm font-medium">
+                <span
+                  className="min-w-0 truncate text-sm font-medium"
+                  title={name}
+                >
                   {name}
+                  {member.isYou && member.email && (
+                    <span className="font-normal text-muted-foreground">
+                      {" "}
+                      (you)
+                    </span>
+                  )}
                 </span>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Select
-                    value={member.role}
-                    disabled={saving}
-                    onValueChange={(value) => {
-                      const role = parseRole(value)
-                      if (role)
-                        void run(
-                          () =>
-                            setRole({
-                              workspaceId,
-                              userId: member.userId,
-                              role,
-                            }),
-                          "Role changed"
-                        )
-                    }}
-                  >
-                    <SelectTrigger
-                      size="sm"
-                      className="w-28"
-                      aria-label={`Role of ${name}`}
+                {lastOwner ? (
+                  <span className="text-sm text-muted-foreground">
+                    Owner · the only owner
+                  </span>
+                ) : (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Select
+                      value={member.role}
+                      disabled={saving}
+                      onValueChange={(value) => {
+                        const role = parseRole(value)
+                        // Open after the Select has closed and released focus.
+                        if (role && role !== member.role)
+                          window.setTimeout(() =>
+                            setRoleChange({ userId: member.userId, name, role })
+                          )
+                      }}
                     >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {ROLES.map((role) => (
-                          <SelectItem key={role} value={role}>
-                            {ROLE_LABELS[role]}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={saving}
-                    onClick={() => {
-                      if (!window.confirm(`Remove ${name} from the workspace?`))
-                        return
-                      void run(
-                        () => remove({ workspaceId, userId: member.userId }),
-                        "Member removed"
-                      )
-                    }}
-                  >
-                    Remove
-                  </Button>
-                </div>
+                      <SelectTrigger
+                        ref={(element) => {
+                          if (element)
+                            roleTriggers.current.set(member.userId, element)
+                          else roleTriggers.current.delete(member.userId)
+                        }}
+                        size="sm"
+                        className="w-28"
+                        aria-label={`Role of ${name}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {ROLES.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {ROLE_LABELS[role]}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <ConfirmButton
+                      variant="outline"
+                      size="sm"
+                      disabled={saving}
+                      title={
+                        member.isYou
+                          ? "Leave this workspace?"
+                          : `Remove ${name}?`
+                      }
+                      description={
+                        member.isYou
+                          ? "You lose access at once. An owner must invite you again."
+                          : "They lose access at once. You can invite them again."
+                      }
+                      confirmLabel={member.isYou ? "Leave" : "Remove"}
+                      destructive
+                      onConfirm={() =>
+                        void run(
+                          () => remove({ workspaceId, userId: member.userId }),
+                          member.isYou
+                            ? "You left the workspace"
+                            : "Member removed"
+                        )
+                      }
+                    >
+                      {member.isYou ? "Leave" : "Remove"}
+                    </ConfirmButton>
+                  </div>
+                )}
               </li>
             )
           })}
@@ -161,6 +206,27 @@ function MemberList({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
           Load more
         </Button>
       )}
+      <ConfirmDialog
+        open={roleChange !== null}
+        onOpenChange={(open) => {
+          if (!open) setRoleChange(null)
+        }}
+        title={
+          roleChange
+            ? `Make ${roleChange.name} ${ROLE_LABELS[roleChange.role].toLowerCase()}?`
+            : ""
+        }
+        description="The new role applies at once."
+        returnFocusTo={
+          roleChange ? roleTriggers.current.get(roleChange.userId) : null
+        }
+        confirmLabel="Change role"
+        onConfirm={() => {
+          if (!roleChange) return
+          const { userId, role } = roleChange
+          void run(() => setRole({ workspaceId, userId, role }), "Role changed")
+        }}
+      />
     </section>
   )
 }
@@ -251,6 +317,9 @@ function Invites({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
         <Button type="submit" disabled={saving}>
           {saving ? "Creating…" : "Create invite link"}
         </Button>
+        <p className="text-xs text-muted-foreground">
+          The invited person can see this workspace&apos;s data for their role.
+        </p>
       </form>
       {link && (
         <div className="flex flex-col gap-2 rounded-lg border bg-card p-3">
@@ -280,11 +349,11 @@ function Invites({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
       )}
       <h3 className="text-sm font-semibold">Pending invites</h3>
       {status === "LoadingFirstPage" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading invites…
-        </p>
+        <LoadingRows label="Loading invites" rows={2} />
       ) : results.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No pending invites.</p>
+        <p className="text-sm text-muted-foreground">
+          No pending invites. Links you create appear here until accepted.
+        </p>
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
           {results.map((invite) => (
@@ -293,7 +362,10 @@ function Invites({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
               className="flex items-center justify-between gap-3 px-3 py-2.5"
             >
               <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-sm font-medium">
+                <span
+                  className="truncate text-sm font-medium"
+                  title={invite.email}
+                >
                   {invite.email}
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -303,14 +375,18 @@ function Invites({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
                     : `Expires ${new Date(invite.expiresAt).toLocaleDateString()}`}
                 </span>
               </div>
-              <Button
+              <ConfirmButton
                 variant="outline"
                 size="sm"
                 disabled={saving}
-                onClick={() => remove(invite._id)}
+                title={`Revoke the invite for ${invite.email}?`}
+                description="The link stops working at once."
+                confirmLabel="Revoke"
+                destructive
+                onConfirm={() => void remove(invite._id)}
               >
                 Revoke
-              </Button>
+              </ConfirmButton>
             </li>
           ))}
         </ul>
