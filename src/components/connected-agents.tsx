@@ -5,6 +5,7 @@ import type { Id } from "../../convex/_generated/dataModel"
 import { scopeSummary } from "@/components/scope-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ConfirmButton } from "@/components/confirm-dialog"
 import { toast } from "@/components/ui/toast"
 
 /**
@@ -42,14 +43,17 @@ export function ConnectedAgents({
         Connected agents
       </h3>
       <p className="text-sm text-muted-foreground">
-        Agents that you approved with a code on the connect page.
+        Agents you approved with a code.
       </p>
       {status === "LoadingFirstPage" ? (
         <p role="status" className="text-sm text-muted-foreground">
           Loading agents…
         </p>
       ) : results.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No connected agents.</p>
+        <p className="text-sm text-muted-foreground">
+          No connected agents. Ask your agent to connect to this workspace, then
+          approve its code.
+        </p>
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
           {results.map((agent) => (
@@ -58,7 +62,10 @@ export function ConnectedAgents({
               className="flex items-center justify-between gap-3 px-3 py-2.5"
             >
               <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-sm font-medium">
+                <span
+                  className="truncate text-sm font-medium"
+                  title={agent.email}
+                >
                   {agent.email}
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -70,14 +77,18 @@ export function ConnectedAgents({
                 </span>
               </div>
               {agent.status === "claimed" ? (
-                <Button
+                <ConfirmButton
                   variant="outline"
                   size="sm"
                   disabled={saving}
-                  onClick={() => remove(agent._id)}
+                  title={`Disconnect ${agent.email}?`}
+                  description="The agent loses access at once. It must ask for a new code to connect again."
+                  confirmLabel="Disconnect"
+                  destructive
+                  onConfirm={() => void remove(agent._id)}
                 >
                   Disconnect
-                </Button>
+                </ConfirmButton>
               ) : (
                 <Badge variant="secondary">Disconnected</Badge>
               )}

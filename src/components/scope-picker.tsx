@@ -4,6 +4,7 @@ import {
   SCOPE_PRESETS,
   type AgentScope,
 } from "../../convex/lib/agentScope"
+import { ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
@@ -66,31 +67,49 @@ export function ScopePicker({
           </Button>
         ))}
       </div>
-      {OFFERED_SCOPES.map((scope) => (
-        <div key={scope} className="flex items-start gap-2">
-          <Checkbox
-            id={`${id}-${scope}`}
-            aria-describedby={`${id}-${scope}-help`}
-            checked={value.includes(scope)}
-            onCheckedChange={(checked) =>
-              onChange(
-                OFFERED_SCOPES.filter((s) =>
-                  s === scope ? checked === true : value.includes(s)
-                )
-              )
-            }
+      <details
+        className="group"
+        open={
+          !PRESETS.some((preset) => sameScopes(value, SCOPE_PRESETS[preset]))
+        }
+      >
+        <summary className="inline-flex cursor-pointer items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ChevronRight
+            aria-hidden
+            className="size-4 transition-transform group-open:rotate-90 motion-reduce:transition-none"
           />
-          <div className="flex flex-col gap-0.5">
-            <Label htmlFor={`${id}-${scope}`}>{scope}</Label>
-            <p
-              id={`${id}-${scope}-help`}
-              className="text-xs text-muted-foreground"
-            >
-              {SCOPE_DESCRIPTIONS[scope]}
-            </p>
-          </div>
+          Choose permissions
+        </summary>
+        <div className="mt-3 grid gap-2">
+          {OFFERED_SCOPES.map((scope) => (
+            <div key={scope} className="flex items-start gap-2">
+              <Checkbox
+                id={`${id}-${scope}`}
+                aria-describedby={`${id}-${scope}-help`}
+                checked={value.includes(scope)}
+                onCheckedChange={(checked) =>
+                  onChange(
+                    OFFERED_SCOPES.filter((s) =>
+                      s === scope ? checked === true : value.includes(s)
+                    )
+                  )
+                }
+              />
+              <div className="flex flex-col gap-0.5">
+                <Label htmlFor={`${id}-${scope}`}>
+                  {SCOPE_DESCRIPTIONS[scope]}
+                </Label>
+                <code
+                  id={`${id}-${scope}-help`}
+                  className="font-mono text-xs text-muted-foreground"
+                >
+                  {scope}
+                </code>
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      </details>
       {value.length === 0 && (
         <p role="alert" className="text-sm text-destructive">
           Choose at least one scope.

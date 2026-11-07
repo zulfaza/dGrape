@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ConfirmButton } from "@/components/confirm-dialog"
 import { toast } from "@/components/ui/toast"
 
 export class AgentAccessBoundary extends Component<
@@ -64,16 +65,11 @@ export function AgentAccess({
   ])
   const [token, setToken] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [showInactive, setShowInactive] = useState(false)
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const duration = Number(days)
-    if (
-      !days.trim() ||
-      !Number.isFinite(duration) ||
-      !Number.isInteger(duration) ||
-      duration < 1 ||
-      duration > 30
-    ) {
+    if (!Number.isInteger(duration) || duration < 1 || duration > 30) {
       toast.error("Enter 1 to 30 days")
       return
     }
@@ -104,6 +100,10 @@ export function AgentAccess({
     }
   }
   const now = Date.now()
+  const isActive = (grant: (typeof results)[number]) =>
+    grant.state === "active" && grant.expiresAt > now
+  const inactive = results.filter((grant) => !isActive(grant)).length
+  const shown = showInactive ? results : results.filter(isActive)
   return (
     <aside
       aria-labelledby="agent-access-heading"
@@ -116,9 +116,8 @@ export function AgentAccess({
             Connect your agent
           </h2>
           <p className="text-sm">
-            Keep your current agent. Give it a credential, and it can read this
-            workspace, or also create collections and write records, through MCP
-            or the HTTP API.
+            Give your agent a credential to use this workspace through MCP or
+            the HTTP API.
           </p>
         </div>
       </div>
@@ -127,7 +126,8 @@ export function AgentAccess({
           <div className="flex items-center gap-3">
             <Mascot pose="celebrate" size={56} />
             <p className="text-sm font-medium">
-              Copy this credential now. You cannot see it again.
+              Copy this credential now. You cannot see it again. Anyone who has
+              it gets this access.
             </p>
           </div>
           <code className="rounded-sm bg-muted p-2 text-xs break-all">
@@ -158,7 +158,7 @@ export function AgentAccess({
               variant="outline"
               onClick={() => setToken(null)}
             >
-              Done
+              I saved it
             </Button>
           </div>
         </div>
@@ -173,22 +173,25 @@ export function AgentAccess({
             onChange={setScopes}
             disabled={saving}
           />
-          <div className="grid grid-cols-[7rem] gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="grant-days">Days</Label>
+          <div className="grid gap-2">
+            <Label htmlFor="grant-days">Expires after</Label>
+            <div className="flex items-center gap-2">
               <Input
                 id="grant-days"
+                type="number"
+                min={1}
+                max={30}
+                required
+                className="w-24"
                 value={days}
                 onChange={(e) => setDays(e.target.value)}
                 disabled={saving}
-                inputMode="numeric"
-                aria-describedby="grant-days-help"
               />
+              <span className="text-sm text-muted-foreground">
+                days (1 to 30)
+              </span>
             </div>
           </div>
-          <p id="grant-days-help" className="text-sm text-muted-foreground">
-            The credential expires after 1 to 30 days.
-          </p>
           <Button type="submit" disabled={saving}>
             {saving ? "Creating…" : "Create credential"}
           </Button>
@@ -205,12 +208,14 @@ export function AgentAccess({
           <p role="status" className="text-sm text-muted-foreground">
             Loading credentials…
           </p>
-        ) : results.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No credentials yet.</p>
+        ) : shown.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No active credentials.
+          </p>
         ) : (
           <ul className="divide-y rounded-lg border bg-card">
-            {results.map((grant) => {
-              const active = grant.state === "active" && grant.expiresAt > now
+            {shown.map((grant) => {
+              const active = isActive(grant)
               return (
                 <li
                   key={grant._id}
@@ -221,20 +226,25 @@ export function AgentAccess({
                       {scopeSummary(grant.scopes)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {active
-                        ? `Expires ${new Date(grant.expiresAt).toLocaleDateString()}`
-                        : `Created ${new Date(grant._creationTime).toLocaleDateString()}`}
+                      Created{" "}
+                      {new Date(grant._creationTime).toLocaleDateString()}
+                      {active &&
+                        ` · expires ${new Date(grant.expiresAt).toLocaleDateString()}`}
                     </span>
                   </div>
                   {active ? (
-                    <Button
+                    <ConfirmButton
                       variant="outline"
                       size="sm"
                       disabled={saving || token !== null}
-                      onClick={() => remove(grant._id)}
+                      title="Revoke this credential?"
+                      description="Agents that use it lose access at once."
+                      confirmLabel="Revoke"
+                      destructive
+                      onConfirm={() => void remove(grant._id)}
                     >
                       Revoke
-                    </Button>
+                    </ConfirmButton>
                   ) : (
                     <Badge variant="secondary">
                       {grant.state === "revoked" ? "Revoked" : "Expired"}
@@ -244,6 +254,18 @@ export function AgentAccess({
               )
             })}
           </ul>
+        )}
+        {inactive > 0 && (
+          <Button
+            variant="link"
+            size="sm"
+            className="-ml-3 self-start text-muted-foreground"
+            onClick={() => setShowInactive(!showInactive)}
+          >
+            {showInactive
+              ? "Hide revoked and expired"
+              : `Show ${inactive} revoked or expired`}
+          </Button>
         )}
         {status === "CanLoadMore" && (
           <Button
