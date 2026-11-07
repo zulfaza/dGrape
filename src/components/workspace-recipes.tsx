@@ -33,6 +33,24 @@ import { Separator } from "./ui/separator"
 import { Skeleton } from "./ui/skeleton"
 import { SourceFreshness } from "./source-freshness"
 import { useWorkspaceCan } from "@/components/workspace-role"
+import { ConfirmButton } from "@/components/confirm-dialog"
+import { toast } from "@/components/ui/toast"
+import { errorMessage } from "@/lib/error-message"
+import { formatDateTime } from "@/lib/format-time"
+
+/** Run states as people read them, with a badge that marks failures. */
+const RUN_STATE = {
+  pending: { label: "Waiting", variant: "outline" },
+  running: { label: "Running", variant: "outline" },
+  succeeded: { label: "Succeeded", variant: "secondary" },
+  failed: { label: "Failed", variant: "destructive" },
+  cancelled: { label: "Cancelled", variant: "outline" },
+  skipped: { label: "Skipped", variant: "outline" },
+  started: { label: "Running", variant: "outline" },
+} as const satisfies Record<
+  Doc<"recipeRuns">["state"] | Doc<"recipeStepAttempts">["state"],
+  { label: string; variant: "outline" | "secondary" | "destructive" }
+>
 
 const sample: typeof Recipe.Type = {
   steps: [{ kind: "artifact", name: "report.json", format: "json" }],
@@ -49,25 +67,24 @@ const decodeSample = Schema.decodeUnknownSync(
   Schema.fromJsonString(PreviewInput.fields.sample)
 )
 type Intent = { key: string; runId: Id<"recipeRuns"> | null }
-type Perform = (action: () => Promise<void>) => Promise<void>
+/** Runs one change; on success shows `done` in a toast. */
+type Perform = (action: () => Promise<void>, done: string) => Promise<void>
 
 function useOperation() {
   const locked = useRef(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState("")
-  const perform: Perform = async (action) => {
+  const perform: Perform = async (action, done) => {
     if (locked.current) return
     locked.current = true
     setBusy(true)
     setMessage("")
     try {
       await action()
-      setMessage("Saved.")
+      toast.success(done)
     } catch (error) {
       setMessage(
-        Schema.is(Schema.instanceOf(Error))(error)
-          ? error.message
-          : "Action failed. Check access and try again."
+        errorMessage(error, "Could not save. Check your access and try again.")
       )
     } finally {
       locked.current = false
@@ -134,7 +151,7 @@ function PageMore({
 
 function Feedback({ message }: { message: string }) {
   return message ? (
-    <Alert>
+    <Alert variant="destructive">
       <AlertDescription>{message}</AlertDescription>
     </Alert>
   ) : null
@@ -198,9 +215,8 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
           New recipe
         </Button>
       </div>
-      <p>
-        Versions cannot change. To edit a recipe, publish a new version.
-        Schedules stay pinned to their version.
+      <p className="text-sm text-muted-foreground">
+        A version cannot change. To edit a recipe, publish a new version.
       </p>
       <Feedback message={operation.message} />
       {draft && (
@@ -217,7 +233,7 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
               })
               setVersionId(id)
               setDraft(null)
-            })
+            }, "Recipe version published")
           }}
         >
           <FieldGroup>
@@ -291,9 +307,10 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
                     } catch (error) {
                       preview = {
                         ok: false,
-                        error: Schema.is(Schema.instanceOf(Error))(error)
-                          ? error.message
-                          : "Preview failed. Check the JSON and try again.",
+                        error: errorMessage(
+                          error,
+                          "Check the JSON and try again."
+                        ),
                       }
                     }
                     setDraft((latest) =>
@@ -323,7 +340,7 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
           </FieldGroup>
         </form>
       )}
-      <h3>Versions</h3>
+      <h3 className="text-base font-semibold">Versions</h3>
       {versions.status === "Exhausted" && versions.results.length === 0 && (
         <NoItems label="No recipes. Create a recipe to start." />
       )}
@@ -333,16 +350,20 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
             key={item._id}
             className="flex flex-wrap items-center justify-between gap-2"
           >
-            <span>
-              {item.name} · {new Date(item._creationTime).toISOString()}{" "}
-              <code>{item._id}</code>
+            <span className="min-w-0">
+              <span className="font-medium">{item.name}</span>{" "}
+              <span className="text-sm text-muted-foreground">
+                {formatDateTime(item._creationTime)}
+              </span>
             </span>
             <Button
               variant="outline"
+              size="sm"
               aria-pressed={version?._id === item._id}
               onClick={() => setVersionId(item._id)}
             >
-              Open version<span className="sr-only"> {item._id}</span>
+              {version?._id === item._id ? "Open" : "Open version"}
+              <span className="sr-only"> {item.name}</span>
             </Button>
           </li>
         ))}
@@ -365,18 +386,11 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
         />
       )}
       <Separator />
-      <h3>Schedules (UTC)</h3>
-      <dl className="grid gap-1 sm:grid-cols-[auto_1fr] sm:gap-x-3">
-        <dt className="font-medium">Overlap</dt>
-        <dd>
-          Skip. A due run is skipped while the schedule's prior run is active.
-        </dd>
-        <dt className="font-medium">Catch-up</dt>
-        <dd>
-          Coalesce. After missed times, one run starts for the latest due time
-          only.
-        </dd>
-      </dl>
+      <h3 className="text-base font-semibold">Schedules</h3>
+      <p className="text-sm text-muted-foreground">
+        A schedule skips a time while its last run is still running. After
+        missed times, it runs once.
+      </p>
       {schedules.status === "Exhausted" && schedules.results.length === 0 && (
         <NoItems label="No schedules. Open a version to add one." />
       )}
@@ -387,10 +401,10 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
       </ul>
       <PageMore {...schedules} label="schedules" />
       <Separator />
-      <h3>Source freshness</h3>
+      <h3 className="text-base font-semibold">Source freshness</h3>
       <SourceFreshnessList workspaceId={workspaceId} />
       <Separator />
-      <h3>Runs</h3>
+      <h3 className="text-base font-semibold">Runs</h3>
       {runs.status === "Exhausted" && runs.results.length === 0 && (
         <NoItems label="No runs. Open a version to run it." />
       )}
@@ -399,6 +413,9 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
           <RunRow
             key={item._id}
             item={item}
+            versionName={
+              versions.results.find((v) => v._id === item.versionId)?.name
+            }
             selected={item._id === selectedRun?._id}
             onSelect={() => setRunId(item._id)}
           />
@@ -462,14 +479,12 @@ function VersionControls({
   const { busy, message, perform } = useOperation()
   const [mode, setMode] = useState<"once" | "cron">("once")
   const [timingText, setTimingText] = useState("")
-  const [member, setMember] = useState("")
   const [intent, setIntent] = useState(intents.get(version._id))
   const canManage = permissions?.canManage === true
   const canRun = permissions?.canRun === true
   return (
     <div className="flex flex-col gap-4">
-      <h3>{version.name} · Selected version</h3>
-      <code>{version._id}</code>
+      <h3 className="text-base font-semibold">{version.name}</h3>
       <ol className="list-inside list-decimal">
         {version.recipe.steps.map((step, index) => (
           <li key={index}>{step.kind}</li>
@@ -517,7 +532,7 @@ function VersionControls({
               const completed = { key: pending.key, runId: id }
               intents.set(version._id, completed)
               setIntent(completed)
-            })
+            }, "Run started")
           }
         >
           {intent && intent.runId === null ? "Retry same run" : "Run version"}
@@ -535,17 +550,6 @@ function VersionControls({
           </Button>
         )}
       </div>
-      {intent && (
-        <p>
-          Run key: <code>{intent.key}</code>
-          {intent.runId && (
-            <>
-              {" "}
-              · Run: <code>{intent.runId}</code>
-            </>
-          )}
-        </p>
-      )}
       <form
         onSubmit={(event) => {
           event.preventDefault()
@@ -557,7 +561,7 @@ function VersionControls({
             validateTiming(timing)
             await schedule({ versionId: version._id, timing })
             setTimingText("")
-          })
+          }, "Schedule added")
         }}
       >
         <FieldGroup>
@@ -599,9 +603,8 @@ function VersionControls({
             />
             <FieldDescription>
               {mode === "once"
-                ? "Use YYYY-MM-DDTHH:mm:ssZ. The time must be in the future."
-                : "Minute, hour, day, month, weekday (0–6). Example: 0 9 * * * runs daily at 09:00 UTC."}{" "}
-              This schedule uses the selected version.
+                ? "A future time, as YYYY-MM-DDTHH:mm:ssZ."
+                : "Minute, hour, day, month, weekday. 0 9 * * * runs daily at 09:00 UTC."}
             </FieldDescription>
           </Field>
           <Button disabled={busy || !canManage} type="submit">
@@ -610,59 +613,94 @@ function VersionControls({
         </FieldGroup>
       </form>
       {canManage && (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            void perform(async () => {
-              await access({
-                versionId: version._id,
-                userId: member.trim(),
-                allowed: true,
-              })
-            })
-          }}
-        >
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="recipe-member">Member user ID</FieldLabel>
-              <Input
-                id="recipe-member"
-                required
-                value={member}
-                disabled={busy}
-                onChange={(e) => setMember(e.target.value)}
-              />
-              <FieldDescription>
-                Run access permits run and cancel. It does not permit schedule
-                or grant changes. Only this version's creator can change access.
-              </FieldDescription>
-            </Field>
-            <div className="flex flex-wrap gap-2">
-              <Button disabled={busy} type="submit">
-                Grant run access
-              </Button>
-              <Button
-                disabled={busy || !member.trim()}
-                variant="outline"
-                type="button"
-                onClick={() =>
-                  void perform(async () => {
-                    await access({
-                      versionId: version._id,
-                      userId: member.trim(),
-                      allowed: false,
-                    })
-                  })
-                }
-              >
-                Revoke run access
-              </Button>
-            </div>
-          </FieldGroup>
-        </form>
+        <RunAccess
+          versionId={version._id}
+          busy={busy}
+          onChange={(userId, allowed) =>
+            void perform(
+              async () => {
+                await access({ versionId: version._id, userId, allowed })
+              },
+              allowed ? "Run access granted" : "Run access removed"
+            )
+          }
+        />
       )}
       <Feedback message={message} />
     </div>
+  )
+}
+
+/** Members who can run this version, for its creator to grant or remove. */
+function RunAccess({
+  versionId,
+  busy,
+  onChange,
+}: {
+  versionId: Id<"recipeVersions">
+  busy: boolean
+  onChange: (userId: string, allowed: boolean) => void
+}) {
+  const members = useQuery(api.recipes.runAccessMembers, { versionId })
+  return (
+    <section className="flex flex-col gap-2" aria-label="Run access">
+      <h4 className="text-sm font-semibold">Run access</h4>
+      <p className="text-sm text-muted-foreground">
+        Members with run access can start and cancel runs of this version.
+      </p>
+      {members === undefined ? (
+        <Skeleton className="h-10 w-full" />
+      ) : members.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No other owners or editors yet.
+        </p>
+      ) : (
+        <ul className="divide-y rounded-lg border bg-card">
+          {members.map((member) => {
+            const name = member.email ?? "A member"
+            return (
+              <li
+                key={member.userId}
+                className="flex items-center justify-between gap-3 px-3 py-2"
+              >
+                <span className="min-w-0 truncate text-sm" title={name}>
+                  {name}
+                  {!member.canRun && (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · cannot run now
+                    </span>
+                  )}
+                </span>
+                {member.hasAccess ? (
+                  <ConfirmButton
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    title={`Remove run access for ${name}?`}
+                    description="They can no longer start or cancel runs of this version."
+                    confirmLabel="Remove access"
+                    destructive
+                    onConfirm={() => onChange(member.userId, false)}
+                  >
+                    Remove access
+                  </ConfirmButton>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => onChange(member.userId, true)}
+                  >
+                    Allow runs
+                  </Button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }
 
@@ -702,27 +740,40 @@ function ScheduleRow({
   return (
     <li className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">
-          {item.enabled ? "Enabled" : "Disabled"}
-        </Badge>
+        <Badge variant="secondary">{item.enabled ? "Enabled" : "Paused"}</Badge>
         <span>
-          {item.timing.kind === "cron"
-            ? item.timing.expression
-            : new Date(item.timing.at).toISOString()}
+          {item.timing.kind === "cron" ? (
+            <>
+              <code className="font-mono text-sm">
+                {item.timing.expression}
+              </code>{" "}
+              (UTC)
+            </>
+          ) : (
+            formatDateTime(item.timing.at)
+          )}
         </span>
         <Button
           variant="outline"
+          size="sm"
           disabled={busy || !canManage}
           onClick={() =>
-            void perform(async () => {
-              await setEnabled({ scheduleId: item._id, enabled: !item.enabled })
-            })
+            void perform(
+              async () => {
+                await setEnabled({
+                  scheduleId: item._id,
+                  enabled: !item.enabled,
+                })
+              },
+              item.enabled ? "Schedule paused" : "Schedule enabled"
+            )
           }
         >
-          {item.enabled ? "Disable" : "Enable"}
+          {item.enabled ? "Pause" : "Enable"}
         </Button>
         <Button
           variant="outline"
+          size="sm"
           disabled={busy || !canManage || edit !== null}
           onClick={() =>
             setEdit({
@@ -738,12 +789,11 @@ function ScheduleRow({
           Edit
         </Button>
       </div>
-      <p>
-        Version: <code>{item.versionId}</code> · Next:{" "}
-        {new Date(item.nextAt).toISOString()} (UTC) · Revision:{" "}
-        {item.revision ?? 0}
+      <p className="text-sm text-muted-foreground">
+        {versions.find((v) => v._id === item.versionId)?.name ??
+          "An older version"}
+        {item.enabled && ` · next run ${formatDateTime(item.nextAt)}`}
       </p>
-      <code>{item._id}</code>
       {edit && (
         <form
           onSubmit={(event) => {
@@ -761,7 +811,7 @@ function ScheduleRow({
                 timing,
               })
               setEdit(null)
-            })
+            }, "Schedule saved")
           }}
         >
           <FieldGroup>
@@ -784,12 +834,12 @@ function ScheduleRow({
                   <SelectGroup>
                     {!versions.some((v) => v._id === item.versionId) && (
                       <SelectItem value={item.versionId}>
-                        {item.versionId}
+                        Current version
                       </SelectItem>
                     )}
                     {versions.map((version) => (
                       <SelectItem key={version._id} value={version._id}>
-                        {version.name} · {version._id}
+                        {version.name} · {formatDateTime(version._creationTime)}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -856,10 +906,12 @@ function SourceFreshnessList({
 
 function RunRow({
   item,
+  versionName,
   selected,
   onSelect,
 }: {
   item: Doc<"recipeRuns">
+  versionName: string | undefined
   selected: boolean
   onSelect: () => void
 }) {
@@ -877,67 +929,65 @@ function RunRow({
   const active = item.state === "pending" || item.state === "running"
   const retryable = item.state === "failed" || item.state === "cancelled"
   return (
-    <li className="flex flex-col gap-2">
+    <li className="flex flex-col gap-1">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">{item.state}</Badge>
-        <code>{item._id}</code>
-        <Button variant="outline" aria-pressed={selected} onClick={onSelect}>
-          Step history
-        </Button>
-        <Button
-          variant="outline"
-          disabled={
-            busy ||
-            !active ||
-            item.cancelRequested ||
-            permissions?.canRun !== true
-          }
-          onClick={() =>
-            void perform(async () => {
-              await cancel({ runId: item._id })
-            })
-          }
-        >
-          {item.cancelRequested ? "Cancel requested" : "Cancel run"}
-        </Button>
-        {retryable && (
+        <Badge variant={RUN_STATE[item.state].variant}>
+          {RUN_STATE[item.state].label}
+        </Badge>
+        <span className="font-medium">{versionName ?? "Recipe run"}</span>
+        <span className="text-sm text-muted-foreground">
+          {formatDateTime(item._creationTime)} ·{" "}
+          {item.retryOf ? "Retry" : item.scheduleId ? "Scheduled" : "Manual"}
+        </span>
+        <div className="ml-auto flex flex-wrap gap-2">
           <Button
             variant="outline"
-            disabled={
-              busy || retryIntent.runId !== null || permissions?.canRun !== true
-            }
-            onClick={() =>
-              void perform(async () => {
-                const runId = await retry({
-                  runId: item._id,
-                  idempotencyKey: retryIntent.key,
-                })
-                setRetryIntent({ key: retryIntent.key, runId })
-              })
-            }
+            size="sm"
+            aria-pressed={selected}
+            onClick={onSelect}
           >
-            {retryIntent.runId ? "Retried" : "Retry run"}
+            Steps
           </Button>
-        )}
+          {active && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={
+                busy || item.cancelRequested || permissions?.canRun !== true
+              }
+              onClick={() =>
+                void perform(async () => {
+                  await cancel({ runId: item._id })
+                }, "Cancel requested")
+              }
+            >
+              {item.cancelRequested ? "Cancelling…" : "Cancel run"}
+            </Button>
+          )}
+          {retryable && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={
+                busy ||
+                retryIntent.runId !== null ||
+                permissions?.canRun !== true
+              }
+              onClick={() =>
+                void perform(async () => {
+                  const runId = await retry({
+                    runId: item._id,
+                    idempotencyKey: retryIntent.key,
+                  })
+                  setRetryIntent({ key: retryIntent.key, runId })
+                }, "Retry started")
+              }
+            >
+              {retryIntent.runId ? "Retried" : "Retry"}
+            </Button>
+          )}
+        </div>
       </div>
-      <p>
-        Version: <code>{item.versionId}</code> ·{" "}
-        {item.retryOf ? (
-          <>
-            Retry of <code>{item.retryOf}</code>
-          </>
-        ) : item.scheduleId ? (
-          "Scheduled"
-        ) : (
-          "Manual"
-        )}{" "}
-        · {new Date(item._creationTime).toISOString()} (UTC)
-      </p>
-      {retryIntent.runId && (
-        <p>
-          Retry run: <code>{retryIntent.runId}</code>
-        </p>
-      )}
       <Feedback message={message} />
     </li>
   )
@@ -951,20 +1001,27 @@ function RunHistory({ runId }: { runId: Id<"recipeRuns"> }) {
   )
   return (
     <div className="flex flex-col gap-3">
-      <h3>Step attempts · {runId}</h3>
+      <h3 className="text-base font-semibold">Steps of the selected run</h3>
       {history.status === "Exhausted" && history.results.length === 0 && (
         <NoItems label="No step attempts yet." />
       )}
       <ol className="flex flex-col gap-2">
         {history.results.map((attempt) => (
-          <li key={attempt._id}>
-            Step {attempt.step + 1} · Attempt {attempt.attempt} ·{" "}
-            <Badge variant="secondary">{attempt.state}</Badge> ·{" "}
-            {new Date(attempt.startedAt).toISOString()}
-            {attempt.finishedAt !== undefined && (
-              <> · Finished {new Date(attempt.finishedAt).toISOString()}</>
+          <li key={attempt._id} className="flex flex-wrap items-center gap-2">
+            <Badge variant={RUN_STATE[attempt.state].variant}>
+              {RUN_STATE[attempt.state].label}
+            </Badge>
+            <span>
+              Step {attempt.step + 1}, attempt {attempt.attempt}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {formatDateTime(attempt.startedAt)}
+            </span>
+            {attempt.error && (
+              <span className="w-full text-sm text-destructive">
+                {attempt.error}
+              </span>
             )}
-            {attempt.error && <p>{attempt.error}</p>}
           </li>
         ))}
       </ol>

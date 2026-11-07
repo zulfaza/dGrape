@@ -1,10 +1,10 @@
 import { Match } from "effect"
 import type { SourceStatus } from "../../convex/lib/sourceSync"
 import { Badge } from "./ui/badge"
+import { formatDateTime } from "@/lib/format-time"
 
 function Time({ at }: { at: number }) {
-  const iso = new Date(at).toISOString()
-  return <time dateTime={iso}>{iso} (UTC)</time>
+  return <time dateTime={new Date(at).toISOString()}>{formatDateTime(at)}</time>
 }
 
 /**
@@ -21,38 +21,42 @@ export function SourceFreshness({ source }: { source: SourceStatus }) {
       {Match.value(source.freshness).pipe(
         Match.discriminatorsExhaustive("kind")({
           never_synced: () => (
-            <Badge variant="outline">Not synced by a recipe</Badge>
+            <span className="text-sm text-muted-foreground">
+              Not synced by a recipe
+            </span>
           ),
           synced: (freshness) =>
             freshness.staleAfter !== null && now > freshness.staleAfter ? (
               <>
                 <Badge variant="destructive">Stale</Badge>
-                <span>
-                  Data from <Time at={freshness.lastSuccessfulSyncAt} />. Stale
-                  since <Time at={freshness.staleAfter} />
+                <span className="text-sm text-muted-foreground">
+                  Data from <Time at={freshness.lastSuccessfulSyncAt} />. A
+                  scheduled sync is late.
                 </span>
               </>
             ) : (
               <>
                 <Badge variant="secondary">Synced</Badge>
-                <Time at={freshness.lastSuccessfulSyncAt} />
+                <span className="text-sm text-muted-foreground">
+                  <Time at={freshness.lastSuccessfulSyncAt} />
+                </span>
               </>
             ),
           stale: (freshness) => (
             <>
               <Badge variant="destructive">Stale</Badge>
-              <span>
-                Data from <Time at={freshness.lastSuccessfulSyncAt} />. Sync
-                failed at <Time at={freshness.lastFailedAt} />
+              <span className="text-sm text-muted-foreground">
+                Data from <Time at={freshness.lastSuccessfulSyncAt} />. The sync
+                failed at <Time at={freshness.lastFailedAt} />.
               </span>
             </>
           ),
           failed: (freshness) => (
             <>
               <Badge variant="destructive">Sync failed</Badge>
-              <span>
-                No successful sync. Last failure at{" "}
-                <Time at={freshness.lastFailedAt} />
+              <span className="text-sm text-muted-foreground">
+                Never synced. Last failure at{" "}
+                <Time at={freshness.lastFailedAt} />.
               </span>
             </>
           ),
