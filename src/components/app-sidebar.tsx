@@ -2,6 +2,7 @@ import * as React from "react"
 import {
   CalendarClock,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
@@ -22,7 +23,7 @@ import {
   useParams,
   useRouterState,
 } from "@tanstack/react-router"
-import { useConvexAuth, usePaginatedQuery } from "convex/react"
+import { useConvexAuth, usePaginatedQuery, useQuery } from "convex/react"
 import type { User } from "@workos/authkit-tanstack-react-start"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -209,11 +210,21 @@ export function AppSidebar({
             workspaceId={workspaceId}
             segment={segment}
             workspaces={workspaces.results}
+            loadMore={
+              workspaces.status === "CanLoadMore"
+                ? () => workspaces.loadMore(20)
+                : null
+            }
           />
         ) : (
           <DashboardsNav
             loading={workspaces.status === "LoadingFirstPage"}
             workspaces={workspaces.results}
+            loadMore={
+              workspaces.status === "CanLoadMore"
+                ? () => workspaces.loadMore(20)
+                : null
+            }
             currentWorkspaceId={workspaceId}
             currentPageId={pageId}
           />
@@ -252,11 +263,14 @@ export function AppSidebar({
 function DashboardsNav({
   loading,
   workspaces,
+  loadMore,
   currentWorkspaceId,
   currentPageId,
 }: {
   loading: boolean
   workspaces: ReadonlyArray<WorkspaceRow>
+  /** Loads the next page of workspaces, or null when all are loaded. */
+  loadMore: (() => void) | null
   currentWorkspaceId: string | undefined
   currentPageId: string | undefined
 }) {
@@ -278,6 +292,14 @@ function DashboardsNav({
             currentPageId={currentPageId}
           />
         ))}
+        {loadMore && (
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={loadMore}>
+              <ChevronDown />
+              <span>More workspaces</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        )}
         <SidebarMenuItem>
           <SidebarMenuButton asChild>
             <Link
@@ -385,13 +407,22 @@ function SettingsNav({
   workspaceId,
   segment,
   workspaces,
+  loadMore,
 }: {
   workspaceId: string
   segment: string
   workspaces: ReadonlyArray<WorkspaceRow>
+  loadMore: (() => void) | null
 }) {
   const navigate = useNavigate()
-  const current = workspaces.find((workspace) => workspace._id === workspaceId)
+  const { isAuthenticated } = useConvexAuth()
+  // The open workspace can be past the loaded list; read it directly then.
+  const listed = workspaces.find((workspace) => workspace._id === workspaceId)
+  const fetched = useQuery(
+    api.workspaces.get,
+    isAuthenticated && !listed ? { workspaceId } : "skip"
+  )
+  const current = listed ?? fetched
   return (
     <>
       <SidebarGroup>
@@ -433,6 +464,16 @@ function SettingsNav({
                     )}
                   </DropdownMenuItem>
                 ))}
+                {loadMore && (
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault()
+                      loadMore()
+                    }}
+                  >
+                    More workspaces
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuItem>

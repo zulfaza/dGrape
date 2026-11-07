@@ -96,6 +96,18 @@ function WorkspaceHome() {
           ))}
         </ul>
       )}
+      {pages.status === "CanLoadMore" && (
+        <Button
+          variant="outline"
+          className="self-start"
+          onClick={() => pages.loadMore(20)}
+        >
+          Load more
+        </Button>
+      )}
+      {pages.status === "LoadingMore" && (
+        <LoadingRows label="Loading more dashboards" rows={1} />
+      )}
     </section>
   )
 }
