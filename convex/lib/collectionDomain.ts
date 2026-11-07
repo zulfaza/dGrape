@@ -1,4 +1,11 @@
 import { v, type Infer } from "convex/values"
+import {
+  isBoolean,
+  isNonFiniteNumber,
+  isNumber,
+  isPlainObject,
+  isText,
+} from "./valueGuards"
 
 /**
  * Rules for runtime-defined collections and their records. Both the signed-in
@@ -196,7 +203,7 @@ const FIELD_TYPES: Record<CollectionField["type"], true> = {
 
 /** Shared by HTTP parsers and human forms; field kinds keep scalar wire values. */
 export function isFieldType(value: unknown): value is CollectionField["type"] {
-  return typeof value === "string" && Object.hasOwn(FIELD_TYPES, value)
+  return isText(value) && Object.hasOwn(FIELD_TYPES, value)
 }
 
 /** True for a field whose value comes from its list of options. */
@@ -215,7 +222,7 @@ export function isIndexableType(type: CollectionField["type"]): boolean {
 export function isObjectValue(
   value: RecordValue | undefined
 ): value is ObjectValue {
-  return typeof value === "object" && !Array.isArray(value)
+  return isPlainObject(value)
 }
 
 export function isNumericField(type: CollectionField["type"]): boolean {
@@ -258,8 +265,7 @@ export function recordLabel(
 ): string {
   for (const field of fields) {
     const value = record.values[field.id]
-    if (field.type === "text" && typeof value === "string" && value !== "")
-      return value
+    if (field.type === "text" && isText(value) && value !== "") return value
   }
   return record._id
 }
@@ -292,19 +298,23 @@ const OBJECT_KEY = /^(?![$_])[\x20-\x7e]{1,100}$/
 /** Any JSON value; the nested validators above are special cases of it. */
 type Json = JsonLeaf | Json[] | { [key: string]: Json }
 
+/** True for the object member of a JSON value. */
+function isJsonObject(item: Json): item is { [key: string]: Json } {
+  return isPlainObject(item)
+}
+
 /** What makes an object value invalid, or null when it is valid. */
 function objectProblem(value: ObjectValue): string | null {
   if (JSON.stringify(value).length > MAX_OBJECT_LENGTH)
     return `must be at most ${MAX_OBJECT_LENGTH} characters as JSON`
   const pending: Json[] = [value]
   for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
-    if (typeof item === "number" && !Number.isFinite(item))
-      return "must contain only finite numbers"
-    if (item === null || typeof item !== "object") continue
+    if (isNonFiniteNumber(item)) return "must contain only finite numbers"
     if (Array.isArray(item)) {
       pending.push(...item)
       continue
     }
+    if (!isJsonObject(item)) continue
     for (const [key, child] of Object.entries(item)) {
       if (!OBJECT_KEY.test(key))
         return 'must have keys of 1 to 100 printable ASCII characters that do not start with "$" or "_"'
@@ -444,7 +454,7 @@ function checkChoice(
   value: RecordValue | undefined
 ): Checked<RecordValue> {
   if (field.type === "select") {
-    if (typeof value === "string" && field.options.includes(value))
+    if (isText(value) && field.options.includes(value))
       return { ok: true, value }
     return invalid(
       `Field "${field.id}" must be one of: ${field.options.join(", ")}`
@@ -489,7 +499,7 @@ export function checkRecordValues(
       if (!checked.ok) return checked
       textLength += [checked.value].flat().join("").length
     } else if (field.type === "text") {
-      if (typeof value !== "string" || value.length > MAX_TEXT_LENGTH)
+      if (!isText(value) || value.length > MAX_TEXT_LENGTH)
         return invalid(
           `Field "${field.id}" must be text of at most ${MAX_TEXT_LENGTH} characters`
         )
@@ -499,19 +509,19 @@ export function checkRecordValues(
         )
       textLength += value.length
     } else if (field.type === "currency") {
-      if (typeof value !== "string" || !/^[A-Z]{3}$/.test(value))
+      if (!isText(value) || !/^[A-Z]{3}$/.test(value))
         return invalid(
           `Field "${field.id}" must be a three-letter uppercase currency code`
         )
       textLength += value.length
     } else if (field.type === "integer") {
-      if (typeof value !== "number" || !Number.isSafeInteger(value))
+      if (!isNumber(value) || !Number.isSafeInteger(value))
         return invalid(
           `Field "${field.id}" must be a safe integer (minor units for money)`
         )
     } else if (field.type === "timestamp") {
       if (
-        typeof value !== "number" ||
+        !isNumber(value) ||
         !Number.isSafeInteger(value) ||
         Math.abs(value) > MAX_TIMESTAMP
       )
@@ -519,19 +529,19 @@ export function checkRecordValues(
           `Field "${field.id}" must be a timestamp: integer milliseconds since 1970-01-01T00:00:00Z`
         )
     } else if (field.type === "date") {
-      if (typeof value !== "string" || !isDateOnly(value))
+      if (!isText(value) || !isDateOnly(value))
         return invalid(
           `Field "${field.id}" must be a calendar date as YYYY-MM-DD`
         )
       textLength += value.length
     } else if (field.type === "recordReference") {
       // convex/lib/references.ts checks that the record exists.
-      if (typeof value !== "string" || value.length > MAX_REFERENCE_LENGTH)
+      if (!isText(value) || value.length > MAX_REFERENCE_LENGTH)
         return invalid(
           `Field "${field.id}" must be the ID of a record in collection ${field.collectionId}`
         )
     } else if (field.type === "artifactReference") {
-      if (typeof value !== "string" || value.length > MAX_REFERENCE_LENGTH)
+      if (!isText(value) || value.length > MAX_REFERENCE_LENGTH)
         return invalid(
           `Field "${field.id}" must be the ID of an artifact in this workspace`
         )
@@ -544,15 +554,15 @@ export function checkRecordValues(
       if (problem) return invalid(`Field "${field.id}" ${problem}`)
       textLength += JSON.stringify(value).length
     } else if (field.type === "secretRef") {
-      if (typeof value !== "string" || value.length > MAX_REFERENCE_LENGTH)
+      if (!isText(value) || value.length > MAX_REFERENCE_LENGTH)
         return invalid(
           `Field "${field.id}" must be the ID of a workspace secret in this workspace`
         )
     } else if (field.type === "number") {
-      if (typeof value !== "number" || !Number.isFinite(value))
+      if (!isNumber(value) || !Number.isFinite(value))
         return invalid(`Field "${field.id}" must be a finite number`)
     } else if (field.type === "boolean") {
-      if (typeof value !== "boolean")
+      if (!isBoolean(value))
         return invalid(`Field "${field.id}" must be true or false`)
     }
   }
@@ -598,13 +608,13 @@ const CREDENTIAL_PATTERNS: ReadonlyArray<{ kind: string; pattern: RegExp }> = [
 function credentialKind(value: RecordValue): string | null {
   const pending: Json[] = [value]
   for (let item = pending.pop(); item !== undefined; item = pending.pop()) {
-    if (typeof item === "string") {
+    if (isText(item)) {
       const match = CREDENTIAL_PATTERNS.find(({ pattern }) =>
         pattern.test(item)
       )
       if (match) return match.kind
     } else if (Array.isArray(item)) pending.push(...item)
-    else if (item !== null && typeof item === "object")
+    else if (isJsonObject(item))
       pending.push(...Object.keys(item), ...Object.values(item))
   }
   return null
