@@ -1,3 +1,4 @@
+import { Option, Schema } from "effect"
 import { httpAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import {
@@ -51,24 +52,39 @@ export function oauthError(status: number, error: string, description: string) {
   )
 }
 
-async function readJson(request: Request): Promise<unknown> {
-  const text = await request.text()
-  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return undefined
-  try {
-    return JSON.parse(text)
-  } catch {
-    return undefined
-  }
-}
+/** The fields `POST /agent/identity` reads. Other fields are ignored. */
+const RegisterRequest = Schema.Struct({
+  type: Schema.optionalKey(Schema.Unknown),
+  login_hint: Schema.optionalKey(Schema.Unknown),
+})
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
+/** The fields `POST /agent/identity/claim` reads. Other fields are ignored. */
+const NewClaimRequest = Schema.Struct({
+  claim_token: Schema.String,
+  email: Schema.optionalKey(Schema.Unknown),
+})
+
+const isText = Schema.is(Schema.String)
+
+/**
+ * Reads a JSON body of at most 4 KiB and decodes it with `schema`. Returns
+ * `None` when the body is too large, is not JSON, or does not match.
+ */
+async function readJson<S extends Schema.Codec<unknown, unknown>>(
+  request: Request,
+  schema: S
+): Promise<Option.Option<S["Type"]>> {
+  const text = await request.text()
+  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES)
+    return Option.none()
+  return Schema.decodeUnknownOption(Schema.fromJsonString(schema))(text)
 }
 
 export const register = httpAction(async (ctx, request) => {
-  const body = await readJson(request)
-  if (!isObject(body))
+  const decoded = await readJson(request, RegisterRequest)
+  if (Option.isNone(decoded))
     return oauthError(400, "invalid_request", "Send a JSON object.")
+  const body = decoded.value
   if (body.type === "anonymous")
     return oauthError(
       400,
@@ -77,7 +93,9 @@ export const register = httpAction(async (ctx, request) => {
     )
   if (body.type !== "service_auth")
     return oauthError(400, "invalid_request", 'Set "type" to "service_auth".')
-  const loginHint = parseLoginHint(body.login_hint)
+  const loginHint = isText(body.login_hint)
+    ? parseLoginHint(body.login_hint)
+    : null
   if (!loginHint)
     return oauthError(
       400,
@@ -136,10 +154,11 @@ function claimBlock(attemptToken: string, userCode: string) {
  * registration, for example after `expired_token`.
  */
 export const newClaim = httpAction(async (ctx, request) => {
-  const body = await readJson(request)
-  if (!isObject(body) || typeof body.claim_token !== "string")
+  const decoded = await readJson(request, NewClaimRequest)
+  if (Option.isNone(decoded))
     return oauthError(400, "invalid_request", "Send { claim_token, email }.")
-  const email = parseLoginHint(body.email)
+  const body = decoded.value
+  const email = isText(body.email) ? parseLoginHint(body.email) : null
   if (!email)
     return oauthError(
       400,
@@ -205,7 +224,17 @@ async function readForm(request: Request) {
   return new URLSearchParams(text)
 }
 
-function tokenResponse(body: Record<string, unknown>) {
+/** A successful `/oauth2/token` body. Only the claim grant has an assertion. */
+type TokenResponse = {
+  access_token: string
+  token_type: "Bearer"
+  expires_in: number
+  scope: string
+  identity_assertion?: string
+  assertion_expires?: string
+}
+
+function tokenResponse(body: TokenResponse) {
   return Response.json(body, { headers: noStore })
 }
 

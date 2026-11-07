@@ -165,13 +165,6 @@
   ],
   "overrides": [
     {
-      "files": ["convex/lib/agentRegistration.ts"],
-      "rules": {
-        "anti-slop/no-unknown-parameters": "off",
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
       "files": ["convex/lib/collectionDomain.ts"],
       "rules": {
         "anti-slop/no-runtime-typeof": "off"
@@ -194,14 +187,6 @@
     {
       "files": ["convex/lib/recipeDomain.ts"],
       "rules": {
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
-      "files": ["convex/agentIdentityHttp.ts"],
-      "rules": {
-        "anti-slop/no-unknown-returns": "off",
-        "anti-slop/no-unsafe-dictionary-type": "off",
         "anti-slop/no-runtime-typeof": "off"
       }
     },
