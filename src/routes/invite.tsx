@@ -6,11 +6,13 @@ import {
 } from "@tanstack/react-router"
 import { getAuth, getSignInUrl } from "@workos/authkit-tanstack-react-start"
 import { useAction } from "convex/react"
+import { Schema } from "effect"
 import { useState } from "react"
 import { api } from "../../convex/_generated/api"
 import { Mascot } from "@/components/mascot"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { SearchText } from "@/lib/search-params"
 
 /**
  * The invite page. An owner sends this link to one email address. The
@@ -18,9 +20,9 @@ import { Button } from "@/components/ui/button"
  * invited role.
  */
 export const Route = createFileRoute("/invite")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    token: typeof search.token === "string" ? search.token : "",
-  }),
+  validateSearch: Schema.toStandardSchemaV1(
+    Schema.Struct({ token: SearchText })
+  ),
   // The link carries a token, so do not send it to other sites.
   head: () => ({ meta: [{ name: "referrer", content: "no-referrer" }] }),
   loader: async ({ location }) => {

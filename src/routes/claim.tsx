@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router"
 import { getAuth, getSignInUrl } from "@workos/authkit-tanstack-react-start"
 import { useAction, usePaginatedQuery, useQuery } from "convex/react"
+import { Schema } from "effect"
 import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -20,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { LoadingRows } from "@/components/loading-rows"
+import { SearchText } from "@/lib/search-params"
 
 /**
  * The auth.md claim page. An agent sends the user here with a claim link
@@ -28,12 +30,9 @@ import { LoadingRows } from "@/components/loading-rows"
  * then can the agent get a token.
  */
 export const Route = createFileRoute("/claim")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    claim_attempt_token:
-      typeof search.claim_attempt_token === "string"
-        ? search.claim_attempt_token
-        : "",
-  }),
+  validateSearch: Schema.toStandardSchemaV1(
+    Schema.Struct({ claim_attempt_token: SearchText })
+  ),
   // The link carries a token, so do not send it to other sites.
   head: () => ({ meta: [{ name: "referrer", content: "no-referrer" }] }),
   loader: async ({ location }) => {

@@ -590,23 +590,23 @@ input {
   border-radius: 50%;
   background: currentColor;
 }
-.design-system .ds-status-neutral {
+.design-system .ds-status[data-tone="neutral"] {
   background: var(--muted);
   color: var(--muted-foreground);
 }
-.design-system .ds-status-success {
+.design-system .ds-status[data-tone="success"] {
   background: var(--success-surface);
   color: var(--success);
 }
-.design-system .ds-status-warning {
+.design-system .ds-status[data-tone="warning"] {
   background: var(--warning-surface);
   color: var(--warning);
 }
-.design-system .ds-status-accent {
+.design-system .ds-status[data-tone="accent"] {
   background: var(--accent);
   color: var(--accent-foreground);
 }
-.design-system .ds-status-destructive {
+.design-system .ds-status[data-tone="destructive"] {
   background: var(--destructive-surface);
   color: var(--destructive);
 }
@@ -850,6 +850,8 @@ input {
   overflow: hidden;
 }
 .color-pair > div {
+  background: var(--pair-bg);
+  color: var(--pair-fg);
   height: 100px;
   padding: 17px;
   font-size: 30px;
@@ -937,6 +939,7 @@ input {
   color: var(--muted-foreground);
 }
 .spacing-ladder span {
+  width: var(--bar-width);
   height: 10px;
   border-radius: 1px;
   background: var(--primary);
@@ -955,6 +958,7 @@ input {
   flex: 1;
 }
 .radius-ladder > div > span {
+  border-radius: var(--corner-radius);
   width: 46px;
   height: 46px;
   background: var(--muted);

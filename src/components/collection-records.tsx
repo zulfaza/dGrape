@@ -11,7 +11,7 @@ import { api } from "../../convex/_generated/api"
 import type { Doc, Id } from "../../convex/_generated/dataModel"
 import type { RecordQuery } from "../../convex/lib/recordQuery"
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react"
-import { Match } from "effect"
+import { Match, Predicate } from "effect"
 import { AddFieldDialog } from "@/components/add-field-dialog"
 import { ChangeSchemaDialog } from "@/components/change-schema-dialog"
 import {
@@ -104,11 +104,11 @@ function editValues(fields: Field[], values: Values): Draft["values"] {
       return [
         [
           field.id,
-          field.type === "timestamp" && typeof value === "number"
+          field.type === "timestamp" && Predicate.isNumber(value)
             ? timestampInputText(value)
             : isObjectValue(value)
               ? JSON.stringify(value, null, 2)
-              : typeof value === "boolean" || Array.isArray(value)
+              : Predicate.isBoolean(value) || Array.isArray(value)
                 ? value
                 : String(value),
         ],
@@ -174,20 +174,20 @@ export function CollectionRecords({
       // unchanged timestamp keeps its stored value.
       if (
         field.type === "timestamp" &&
-        typeof stored === "number" &&
+        Predicate.isNumber(stored) &&
         value === timestampInputText(stored)
       ) {
         values[field.id] = stored
         continue
       }
-      if (field.type === "object" && typeof value === "string") {
+      if (field.type === "object" && Predicate.isString(value)) {
         const parsed = parseObjectText(value)
         if (!parsed.ok) {
           toast.error(`${field.label}: ${parsed.message}`)
           return
         }
         values[field.id] = parsed.value
-      } else if (typeof value === "string") {
+      } else if (Predicate.isString(value)) {
         const parsed = fromInputText(field.type, value)
         if (!parsed.ok) {
           toast.error(parsed.message)
@@ -410,7 +410,7 @@ export function CollectionRecords({
                     >
                       {(field.type === "recordReference" ||
                         field.type === "artifactReference") &&
-                      typeof record.values[field.id] === "string" ? (
+                      Predicate.isString(record.values[field.id]) ? (
                         <ReferenceLabel
                           collectionId={collectionId}
                           id={String(record.values[field.id])}
@@ -802,9 +802,9 @@ function formatValue(field: Field, value: Values[string] | undefined) {
   if (value === undefined) return ""
   if (field.type === "boolean") return value === true ? "Yes" : "No"
   if (field.type === "secretRef") return "Secret reference"
-  if (field.type === "timestamp" && typeof value === "number")
+  if (field.type === "timestamp" && Predicate.isNumber(value))
     return new Date(value).toLocaleString()
   if (Array.isArray(value)) return value.join(", ")
-  if (typeof value === "number") return value.toLocaleString()
+  if (Predicate.isNumber(value)) return value.toLocaleString()
   return valueText(value)
 }

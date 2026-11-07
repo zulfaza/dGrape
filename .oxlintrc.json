@@ -193,12 +193,6 @@
       }
     },
     {
-      "files": ["src/components/collection-records.tsx"],
-      "rules": {
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
       "files": ["convex/lib/agentRegistration.ts"],
       "rules": {
         "anti-slop/no-unknown-parameters": "off",
@@ -224,21 +218,9 @@
       }
     },
     {
-      "files": ["src/lib/record-export.ts"],
-      "rules": {
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
       "files": ["src/components/ui/sidebar.tsx"],
       "rules": {
         "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
-      "files": ["src/mcp/agent-api.ts"],
-      "rules": {
-        "anti-slop/no-unknown-parameters": "off"
       }
     },
     {
@@ -246,13 +228,6 @@
       "rules": {
         "anti-slop/no-unknown-parameters": "off",
         "anti-slop/no-unknown-returns": "off",
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
-      "files": ["src/routes/claim.tsx", "src/routes/invite.tsx"],
-      "rules": {
-        "anti-slop/no-unsafe-dictionary-type": "off",
         "anti-slop/no-runtime-typeof": "off"
       }
     },
@@ -340,18 +315,6 @@
       }
     },
     {
-      "files": ["src/design-system/main.tsx"],
-      "rules": {
-        "shadcn/no-inline-styles": [
-          "error",
-          {
-            "allow": ["background", "color", "width", "borderRadius"]
-          }
-        ],
-        "shadcn/require-static-classes": "off"
-      }
-    },
-    {
       "files": ["src/routes/index.tsx"],
       "rules": {
         "shadcn/no-arbitrary-values": [
@@ -363,20 +326,13 @@
       }
     },
     {
-      "files": [
-        "convex/lib/agentAuthDiscovery.ts",
-        "src/routes/dashboard/route.tsx"
-      ],
+      "files": ["convex/lib/agentAuthDiscovery.ts"],
       "rules": {
         "anti-slop/no-known-value-widening": "off"
       }
     },
     {
-      "files": [
-        "convex/lib/agentRequests.ts",
-        "src/lib/record-export.ts",
-        "src/mcp/agent-api.ts"
-      ],
+      "files": ["convex/lib/agentRequests.ts"],
       "rules": {
         "anti-slop/no-conditional-empty-object-spread": "off"
       }
