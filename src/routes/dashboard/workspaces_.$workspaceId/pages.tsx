@@ -10,10 +10,7 @@ export const Route = createFileRoute(
 )({
   component: PagesSection,
   validateSearch: Schema.toStandardSchemaV1(
-    Schema.Struct({
-      edit: Schema.optional(Schema.String),
-      new: Schema.optional(Schema.Boolean),
-    })
+    Schema.Struct({ revisions: Schema.optional(Schema.String) })
   ),
 })
 
@@ -25,8 +22,7 @@ function PagesSection() {
     <WorkspacePages
       key={workspace._id}
       workspaceId={workspace._id}
-      editPageId={search.edit}
-      startNew={search.new === true}
+      revisionsPageId={search.revisions}
     />
   ) : (
     <LoadingRows label="Loading" />
