@@ -174,8 +174,12 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             {segment && workspaceId ? (
-              <SidebarMenuButton asChild>
-                <Link to="/dashboard/workspaces">
+              <SidebarMenuButton asChild tooltip="Back to dashboards">
+                <Link
+                  to="/dashboard/workspaces/$workspaceId"
+                  params={{ workspaceId }}
+                  aria-label="Settings. Back to dashboards"
+                >
                   <ChevronLeft />
                   <span className="font-semibold">Settings</span>
                 </Link>
