@@ -3,7 +3,7 @@ import { useQuery } from "convex/react"
 import { Pencil } from "lucide-react"
 import { api } from "../../../../convex/_generated/api"
 import { LoadingRows } from "@/components/loading-rows"
-import { PageBlockView } from "@/components/page-preview"
+import { PageBlocksGrid } from "@/components/dashboard-grid"
 import { PageHeader } from "@/components/page-header"
 import { useWorkspaceCan } from "@/components/workspace-role"
 import { Button } from "@/components/ui/button"
@@ -80,17 +80,11 @@ function DashboardView() {
           </Empty>
         </div>
       ) : (
-        <div className="flex flex-col gap-6 break-words [&_a]:underline [&_h1]:text-2xl [&_h2]:text-xl [&_pre]:overflow-auto [&_ul]:list-disc [&_ul]:pl-5">
-          {version.definition.blocks.map((block, index) => (
-            <PageBlockView
-              key={index}
-              workspaceId={workspace._id}
-              stored={{ pageId: page._id, revision: version.revision }}
-              blockIndex={index}
-              block={block}
-            />
-          ))}
-        </div>
+        <PageBlocksGrid
+          workspaceId={workspace._id}
+          stored={{ pageId: page._id, revision: version.revision }}
+          blocks={version.definition.blocks}
+        />
       )}
     </article>
   )

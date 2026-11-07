@@ -12,7 +12,8 @@ import type { Id } from "../../convex/_generated/dataModel"
 import type { PageDefinition } from "../../convex/lib/pageDomain"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
-import { PageBlockView, PagePreview, revisionAction } from "./page-preview"
+import { PagePreview, revisionAction } from "./page-preview"
+import { PageBlocksGrid } from "./dashboard-grid"
 import { PageSourcePicker } from "./page-source-picker"
 import { useWorkspaceCan } from "@/components/workspace-role"
 import { Link } from "@tanstack/react-router"
@@ -416,22 +417,15 @@ function WorkspacePagesEditor({
             )}
             <div className="min-w-0">
               <h3 className="mb-4 font-semibold">Preview</h3>
-              <div className="space-y-4 break-words [&_a]:underline [&_h1]:text-2xl [&_h2]:text-xl [&_pre]:overflow-auto [&_ul]:list-disc [&_ul]:pl-5">
-                {draft.definition.blocks.map((block, index) => (
-                  <div key={index}>
-                    <PageBlockView
-                      workspaceId={workspaceId}
-                      stored={
-                        draft.kind === "saved" && !dirty
-                          ? { pageId: draft.pageId, revision: draft.revision }
-                          : null
-                      }
-                      blockIndex={index}
-                      block={block}
-                    />
-                  </div>
-                ))}
-              </div>
+              <PageBlocksGrid
+                workspaceId={workspaceId}
+                stored={
+                  draft.kind === "saved" && !dirty
+                    ? { pageId: draft.pageId, revision: draft.revision }
+                    : null
+                }
+                blocks={draft.definition.blocks}
+              />
             </div>
           </div>
           <div className="flex flex-wrap gap-3">

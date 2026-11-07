@@ -1,5 +1,4 @@
 import { useAction } from "convex/react"
-import { Match } from "effect"
 import { useEffect, useState } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -69,48 +68,5 @@ export function HtmlSnapshotFrame({
       srcDoc={staticSnapshot(html)}
       className={className}
     />
-  )
-}
-
-/** Page block for an HTML report artifact; shows its report data time. */
-export function HtmlReportBlock({
-  artifactId,
-  title,
-}: {
-  artifactId: Id<"artifacts">
-  title: string
-}) {
-  const preview = useArtifactPreview(artifactId)
-  return (
-    <section className="flex flex-col gap-2">
-      <h4 className="font-semibold">{title}</h4>
-      {Match.value(preview).pipe(
-        Match.when({ status: "loading" }, () => (
-          <p role="status">Loading report…</p>
-        )),
-        Match.when({ status: "unavailable" }, ({ message }) => (
-          <p role="status">{message}</p>
-        )),
-        Match.orElse(({ kind, text, capturedAt }) =>
-          kind === "html" ? (
-            <>
-              <p className="text-xs text-muted-foreground">
-                Report data captured{" "}
-                <time dateTime={new Date(capturedAt).toISOString()}>
-                  {new Date(capturedAt).toLocaleString()}
-                </time>
-              </p>
-              <HtmlSnapshotFrame
-                html={text}
-                title={`${title} static snapshot`}
-                className="h-[60vh] w-full rounded-md border"
-              />
-            </>
-          ) : (
-            <p role="status">This file is not an HTML report.</p>
-          )
-        )
-      )}
-    </section>
   )
 }

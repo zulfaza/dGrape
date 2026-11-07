@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useMemo, type ReactNode } from "react"
 import { Chart } from "@tanstack/charts/react"
 import { defineChart } from "@tanstack/charts/scene"
 import { areaY } from "@tanstack/charts/area"
@@ -12,6 +12,7 @@ import { tooltip } from "@tanstack/charts/tooltip"
 import type { ChartSpec, PageBlock } from "../../convex/lib/pageDomain"
 import type { RecordValue } from "../../convex/lib/collectionDomain"
 import { valueText } from "../lib/field-types"
+import { useElementHeight } from "../hooks/use-element-height"
 
 type ChartBlock = Extract<PageBlock, { kind: "chart" }>
 type CategorySpec = Exclude<ChartSpec, { type: "scatter" }>
@@ -28,7 +29,8 @@ const sliceColors = [1, 2, 3, 4, 5].map((n) => `var(--chart-${n})`)
 const sliceColor = (index: number) =>
   sliceColors[index % sliceColors.length] ?? "var(--primary)"
 
-function finite(value: RecordValue | undefined) {
+/** A stored value as a finite number, or null. */
+export function finite(value: RecordValue | undefined) {
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Numeric chart geometry requires finite stored numbers.
   return typeof value === "number" && Number.isFinite(value) ? value : null
 }
@@ -113,9 +115,9 @@ function CategoryChart({
   const missing = data.filter((row) => row.value === null).length
   const pieTotal = data.reduce((sum, row) => sum + (row.value ?? 0), 0)
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-2 text-xs">
       {missing > 0 && (
-        <p role="status">
+        <p role="status" className="text-muted-foreground">
           {missing} missing or invalid numeric values
           {spec.type === "pie" ? " (pie values must be zero or more)" : ""};
           gaps are not zero.
@@ -128,15 +130,22 @@ function CategoryChart({
       ) : spec.type === "pie" && pieTotal === 0 ? (
         <p>All values are zero; there are no slices to show.</p>
       ) : (
-        <Chart
-          definition={definition}
-          height={300}
-          ariaLabel={`${title}: ${spec.type} chart of ${valueLabel} by ${labelLabel}`}
-          ariaDescription={`${keyboardHelp} Values follow saved query order.`}
+        <FillChart
+          chart={(height) => (
+            <Chart
+              definition={definition}
+              height={height}
+              ariaLabel={`${title}: ${spec.type} chart of ${valueLabel} by ${labelLabel}`}
+              ariaDescription={`${keyboardHelp} Values follow saved query order.`}
+            />
+          )}
         />
       )}
       {spec.type === "pie" && pieTotal > 0 && (
-        <ul aria-label={`${title} legend`} className="flex flex-wrap gap-3">
+        <ul
+          aria-label={`${title} legend`}
+          className="flex shrink-0 flex-wrap gap-3"
+        >
           {data.map((row) =>
             row.value === null ? null : (
               <li key={row.id} className="flex items-center gap-1">
@@ -154,7 +163,7 @@ function CategoryChart({
           )}
         </ul>
       )}
-      <details>
+      <details className="shrink-0">
         <summary>View data table</summary>
         <table className="w-full text-left">
           <caption>{title} · source values</caption>
@@ -188,6 +197,19 @@ function CategoryChart({
           </tbody>
         </table>
       </details>
+    </div>
+  )
+}
+
+/**
+ * A chart that fills the space its panel leaves for it. The chart sits in an
+ * absolute layer, so its own height never grows the panel.
+ */
+function FillChart({ chart }: { chart: (height: number) => ReactNode }) {
+  const { ref, height } = useElementHeight<HTMLDivElement>()
+  return (
+    <div ref={ref} className="relative min-h-32 flex-1">
+      {height > 0 && <div className="absolute inset-0">{chart(height)}</div>}
     </div>
   )
 }
@@ -317,9 +339,9 @@ function ScatterChart({
     (row) => row.x === null || row.value === null
   ).length
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-2 text-xs">
       {missing > 0 && (
-        <p role="status">
+        <p role="status" className="text-muted-foreground">
           {missing} points have a missing or invalid coordinate and are not
           plotted.
         </p>
@@ -329,14 +351,18 @@ function ScatterChart({
       ) : data.length === missing ? (
         <p>No numeric points to chart.</p>
       ) : (
-        <Chart
-          definition={definition}
-          height={300}
-          ariaLabel={`${title}: scatter chart of ${yLabel} against ${xLabel}`}
-          ariaDescription={keyboardHelp}
+        <FillChart
+          chart={(height) => (
+            <Chart
+              definition={definition}
+              height={height}
+              ariaLabel={`${title}: scatter chart of ${yLabel} against ${xLabel}`}
+              ariaDescription={keyboardHelp}
+            />
+          )}
         />
       )}
-      <details>
+      <details className="shrink-0">
         <summary>View data table</summary>
         <table className="w-full text-left">
           <caption>{title} · source values</caption>
