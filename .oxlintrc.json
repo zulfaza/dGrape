@@ -165,22 +165,6 @@
   ],
   "overrides": [
     {
-      "files": ["convex/http.ts"],
-      "rules": {
-        "anti-slop/no-unknown-parameters": "off",
-        "anti-slop/no-unknown-returns": "off",
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
-      "files": ["convex/lib/agentRequests.ts"],
-      "rules": {
-        "anti-slop/no-unsafe-dictionary-type": "off",
-        "anti-slop/no-runtime-typeof": "off",
-        "anti-slop/no-unknown-parameters": "off"
-      }
-    },
-    {
       "files": ["src/components/landing/hero-dashboard.tsx"],
       "rules": {
         "shadcn/no-arbitrary-values": [
@@ -244,12 +228,6 @@
             "allow": ["layout", "pt-[17.5%]", "pt-[7.8%]", "leading-[1.05]"]
           }
         ]
-      }
-    },
-    {
-      "files": ["convex/lib/agentRequests.ts"],
-      "rules": {
-        "anti-slop/no-conditional-empty-object-spread": "off"
       }
     },
     {

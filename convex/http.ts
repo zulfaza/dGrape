@@ -11,7 +11,8 @@ import * as Migrations from "./lib/agentMigrationTransport"
 import * as Pages from "./lib/agentPageTransport"
 import * as Queries from "./lib/agentQueryTransport"
 import { httpRouter } from "convex/server"
-import { ConvexError } from "convex/values"
+import { ConvexError, type Value } from "convex/values"
+import { Schema } from "effect"
 import type { Id } from "./_generated/dataModel"
 import { httpAction, type ActionCtx } from "./_generated/server"
 import { downloadUrl } from "./artifacts"
@@ -39,8 +40,10 @@ import {
   parseCreateCollection,
   parseCreateRecord,
   parseDeleteRecord,
-  parseQueryRecords,
   parseUpdateRecord,
+  queryRecordsParser,
+  requestParser,
+  type RequestParser,
 } from "./lib/agentRequests"
 
 import { save as saveSecret, options as secretOptions } from "./secretSettings"
@@ -60,20 +63,32 @@ function reply(status: number, body: string) {
   return new Response(body, { status, headers: corsHeaders })
 }
 
-function replyJson(status: number, body: unknown) {
+function replyJson(status: number, body: Value) {
   return Response.json(body, { status, headers: corsHeaders })
 }
 
-/** Reads a JSON body of at most MAX_BODY_BYTES; undefined when it is not. */
-async function readJson(request: Request): Promise<unknown> {
+/**
+ * Reads a JSON body of at most MAX_BODY_BYTES and parses it with `parse`.
+ * Null when the body is larger, is not JSON, or does not parse.
+ */
+async function readJson<A>(
+  request: Request,
+  parse: RequestParser<A>
+): Promise<A | null> {
   const text = await request.text()
-  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return undefined
+  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return null
   try {
-    return JSON.parse(text)
+    return parse(JSON.parse(text))
   } catch {
-    return undefined
+    return null
   }
 }
+
+const parseQueryRecords = queryRecordsParser(MAX_PAGE_SIZE, MAX_CURSOR_BYTES)
+const parseUploadRequest = requestParser(Schema.Struct({ name: Schema.String }))
+const parseCompleteUpload = requestParser(
+  Schema.Struct({ uploadId: Schema.String })
+)
 
 type WriteFailure = { status: "denied" | "invalid"; message: string }
 
@@ -336,7 +351,7 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
     if (!token) return unauthorized()
-    const body = parseCreateRecord(await readJson(request))
+    const body = await readJson(request, parseCreateRecord)
     if (!body)
       return replyJson(400, {
         error:
@@ -361,7 +376,7 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
     if (!token) return unauthorized()
-    const body = parseUpdateRecord(await readJson(request))
+    const body = await readJson(request, parseUpdateRecord)
     if (!body)
       return replyJson(400, {
         error:
@@ -393,7 +408,7 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
     if (!token) return unauthorized()
-    const body = parseDeleteRecord(await readJson(request))
+    const body = await readJson(request, parseDeleteRecord)
     if (!body)
       return replyJson(400, {
         error:
@@ -435,11 +450,7 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
     if (!token) return unauthorized()
-    const body = parseQueryRecords(
-      await readJson(request),
-      MAX_PAGE_SIZE,
-      MAX_CURSOR_BYTES
-    )
+    const body = await readJson(request, parseQueryRecords)
     if (!body)
       return replyJson(400, {
         error: `Send JSON: { collectionId, fieldId, order?: "asc" | "desc", where?: { eq } | { lower?, upper? }, limit?: 1 to ${MAX_PAGE_SIZE}, cursor? }. A bound is { value, inclusive? }.`,
@@ -473,7 +484,7 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
     if (!token) return unauthorized()
-    const body = parseCreateCollection(await readJson(request))
+    const body = await readJson(request, parseCreateCollection)
     if (!body)
       return replyJson(400, {
         error:
@@ -504,7 +515,7 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const token = bearerToken(request)
     if (!token) return unauthorized()
-    const body = parseAddField(await readJson(request))
+    const body = await readJson(request, parseAddField)
     if (!body)
       return replyJson(400, {
         error:
@@ -641,14 +652,8 @@ http.route({
     try {
       const grant = await credential(ctx, request, ["artifacts.write"])
       if (grant instanceof Response) return grant
-      const body = await readJson(request)
-      if (
-        typeof body !== "object" ||
-        body === null ||
-        !("name" in body) ||
-        typeof body.name !== "string"
-      )
-        return replyJson(400, { error: "Send JSON: { name }." })
+      const body = await readJson(request, parseUploadRequest)
+      if (!body) return replyJson(400, { error: "Send JSON: { name }." })
       const result = await ctx.runMutation(internal.artifacts.insertUpload, {
         workspaceId: grant.workspaceId,
         name: body.name,
@@ -676,14 +681,8 @@ http.route({
     try {
       const grant = await credential(ctx, request, ["artifacts.write"])
       if (grant instanceof Response) return grant
-      const body = await readJson(request)
-      if (
-        typeof body !== "object" ||
-        body === null ||
-        !("uploadId" in body) ||
-        typeof body.uploadId !== "string"
-      )
-        return replyJson(400, { error: "Send JSON: { uploadId }." })
+      const body = await readJson(request, parseCompleteUpload)
+      if (!body) return replyJson(400, { error: "Send JSON: { uploadId }." })
       const result = await ctx.runAction(
         internal.artifacts.completeUploadForWorkspace,
         { workspaceId: grant.workspaceId, key: body.uploadId }
