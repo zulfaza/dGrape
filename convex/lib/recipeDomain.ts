@@ -1,5 +1,11 @@
 import { v, type Infer } from "convex/values"
 import { indexValueValidator, recordValuesValidator } from "./collectionDomain"
+import {
+  isNonFiniteNumber,
+  isNumber,
+  isText,
+  sameScalarType,
+} from "./valueGuards"
 
 const rangeBoundValidator = v.union(v.string(), v.number())
 /** Inclusive bounds. A row matches only when its value has the type of the bounds. */
@@ -207,13 +213,12 @@ function checkRange({ min, max }: Range) {
   if (min === undefined && max === undefined)
     throw new Error("A range needs a min or a max")
   if (min !== undefined && max !== undefined) {
-    if (typeof min !== typeof max)
+    if (!sameScalarType(min, max))
       throw new Error("Range bounds must have the same type")
     if (min > max) throw new Error("Range min must not exceed max")
   }
   for (const bound of [min, max])
-    if (typeof bound === "number" && !Number.isFinite(bound))
-      throw new Error("Range bounds must be finite")
+    if (isNonFiniteNumber(bound)) throw new Error("Range bounds must be finite")
 }
 
 function own(row: RecipeRow, key: string) {
@@ -221,8 +226,8 @@ function own(row: RecipeRow, key: string) {
 }
 function inRange(value: RecipeRow[string] | undefined, { min, max }: Range) {
   const bound = min ?? max
-  if (typeof value !== "string" && typeof value !== "number") return false
-  if (typeof value !== typeof bound) return false
+  if (!isText(value) && !isNumber(value)) return false
+  if (bound === undefined || !sameScalarType(value, bound)) return false
   return (
     (min === undefined || value >= min) && (max === undefined || value <= max)
   )
@@ -264,7 +269,7 @@ function aggregate(rows: RecipeRow[], step: AggregateStep): RecipeRow[] {
         : step.field
           ? own(row, step.field)
           : undefined
-    if (typeof amount !== "number" || !Number.isFinite(amount))
+    if (!isNumber(amount) || !Number.isFinite(amount))
       throw new Error(`Aggregate ${step.operation} needs finite numbers`)
     const encoded = JSON.stringify(key)
     const current = groups.get(encoded)
@@ -284,7 +289,7 @@ function aggregate(rows: RecipeRow[], step: AggregateStep): RecipeRow[] {
 export function checkBudget(rows: RecipeRow[], limits: Recipe["limits"]) {
   for (const row of rows)
     for (const value of Object.values(row)) {
-      if (typeof value === "number" && !Number.isFinite(value))
+      if (isNonFiniteNumber(value))
         throw new Error("Recipe values must be finite")
     }
   if (rows.length > limits.rows) throw new Error("Recipe row limit exceeded")
@@ -362,7 +367,7 @@ type OutputStep = Extract<RecipeStep, { kind: "upsert" | "snapshot" }>
 /** The source identity of an upsert row: a string or number of 1 to 200 characters. */
 export function sourceKey(row: RecipeRow, identityField: string): string {
   const value = own(row, identityField)
-  if (typeof value !== "string" && typeof value !== "number")
+  if (!isText(value) && !isNumber(value))
     throw new Error("Source identity must be a string or number")
   const key = String(value)
   if (!key.trim() || key.length > 200)
