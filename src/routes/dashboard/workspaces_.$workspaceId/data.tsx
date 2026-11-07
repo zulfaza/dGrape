@@ -67,7 +67,7 @@ function DataSection() {
   return (
     <section aria-label="Collections" className="flex flex-col gap-6">
       <PageHeader
-        title="Data"
+        title="Collections"
         description="Collections hold your records. Open one to view and edit them."
         actions={
           workspace && (

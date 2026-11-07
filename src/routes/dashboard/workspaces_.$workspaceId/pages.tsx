@@ -10,19 +10,23 @@ export const Route = createFileRoute(
 )({
   component: PagesSection,
   validateSearch: Schema.toStandardSchemaV1(
-    Schema.Struct({ edit: Schema.optional(Schema.String) })
+    Schema.Struct({
+      edit: Schema.optional(Schema.String),
+      new: Schema.optional(Schema.Boolean),
+    })
   ),
 })
 
 function PagesSection() {
   const { workspaceId } = Route.useParams()
-  const { edit } = Route.useSearch()
+  const search = Route.useSearch()
   const workspace = useQuery(api.workspaces.get, { workspaceId })
   return workspace ? (
     <WorkspacePages
       key={workspace._id}
       workspaceId={workspace._id}
-      editPageId={edit}
+      editPageId={search.edit}
+      startNew={search.new === true}
     />
   ) : (
     <LoadingRows label="Loading" />

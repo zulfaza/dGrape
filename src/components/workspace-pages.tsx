@@ -41,19 +41,25 @@ type Draft = {
     }
 )
 
-/** `editPageId` opens that page in the editor, as a dashboard's Edit does. */
+/**
+ * `editPageId` opens that page in the editor, as a dashboard's Edit does;
+ * `startNew` opens a new page, as the sidebar's New dashboard does.
+ */
 export function WorkspacePages({
   workspaceId,
   editPageId,
+  startNew,
 }: {
   workspaceId: Id<"workspaces">
   editPageId?: string
+  startNew?: boolean
 }) {
   return (
     <WorkspacePagesEditor
       key={workspaceId}
       workspaceId={workspaceId}
       editPageId={editPageId}
+      startNew={startNew === true}
     />
   )
 }
@@ -61,9 +67,11 @@ export function WorkspacePages({
 function WorkspacePagesEditor({
   workspaceId,
   editPageId,
+  startNew,
 }: {
   workspaceId: Id<"workspaces">
   editPageId?: string
+  startNew: boolean
 }) {
   const client = useConvex()
   const canWrite = useWorkspaceCan("write")
@@ -75,12 +83,20 @@ function WorkspacePagesEditor({
     { workspaceId },
     { initialNumItems: 20 }
   )
-  const [draft, setDraft] = useState<Draft | null>(null)
+  const [draft, setDraft] = useState<Draft | null>(
+    startNew
+      ? {
+          kind: "new",
+          publishedRevision: null,
+          definition: { title: "", blocks: [{ kind: "markdown", text: "" }] },
+        }
+      : null
+  )
   const [pending, setPending] = useState(false)
   const running = useRef(false)
   const [message, setMessage] = useState("")
   const [artifactTitle, setArtifactTitle] = useState("")
-  const [dirty, setDirty] = useState(false)
+  const [dirty, setDirty] = useState(startNew)
   const [previewRevision, setPreviewRevision] = useState<number | null>(null)
   const history = usePaginatedQuery(
     api.pages.history,
@@ -186,13 +202,13 @@ function WorkspacePagesEditor({
         setPreviewRevision(null)
       }}
     >
-      New page
+      New dashboard
     </Button>
   )
   return (
-    <section className="flex flex-col gap-6" aria-label="Pages">
+    <section className="flex flex-col gap-6" aria-label="Dashboards">
       <PageHeader
-        title="Pages"
+        title="Dashboards"
         description="Text, tables, metrics, and charts built from your data."
         actions={newPageButton}
       />
@@ -200,7 +216,7 @@ function WorkspacePagesEditor({
       {status === "Exhausted" && results.length === 0 && !draft && (
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>No pages yet</EmptyTitle>
+            <EmptyTitle>No dashboards yet</EmptyTitle>
             <EmptyDescription>
               A page shows text, tables, metrics, and charts from your data.
             </EmptyDescription>

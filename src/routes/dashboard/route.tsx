@@ -141,13 +141,9 @@ function ConvexAuthGate({
   )
 }
 
-const DASHBOARD_PAGE_TITLES: Record<string, string> = {
-  "/dashboard/workspaces": "Workspaces",
-}
-
 const WORKSPACE_SECTION_TITLES: Record<string, string> = {
-  pages: "Pages",
-  data: "Data",
+  pages: "Dashboards",
+  data: "Collections",
   jobs: "Jobs",
   connections: "Connections",
   artifacts: "Files",
@@ -158,25 +154,28 @@ const WORKSPACE_SECTION_TITLES: Record<string, string> = {
 
 type Crumb = { label: string; href: string }
 
+/**
+ * Breadcrumbs for the two sidebar modes: "Settings / workspace / section"
+ * on a settings page, and "workspace / Dashboard" on a dashboard.
+ */
 function buildBreadcrumbs(
   pathname: string,
   workspaceName: string | null
 ): Crumb[] {
-  const crumbs: Crumb[] = [{ label: "Dashboard", href: "/dashboard" }]
-  if (pathname !== "/dashboard" && DASHBOARD_PAGE_TITLES[pathname]) {
-    crumbs.push({ label: DASHBOARD_PAGE_TITLES[pathname], href: pathname })
-  } else if (pathname.startsWith("/dashboard/workspaces/")) {
-    const [workspaceId, section] = pathname
-      .slice("/dashboard/workspaces/".length)
-      .split("/")
-    const workspaceHref = `/dashboard/workspaces/${workspaceId}`
-    crumbs.push(
-      { label: "Workspaces", href: "/dashboard/workspaces" },
-      { label: workspaceName ?? "Workspace", href: workspaceHref }
-    )
-    const sectionTitle = section && WORKSPACE_SECTION_TITLES[section]
-    if (sectionTitle)
-      crumbs.push({ label: sectionTitle, href: `${workspaceHref}/${section}` })
-  }
-  return crumbs
+  if (!pathname.startsWith("/dashboard/workspaces/"))
+    return [{ label: "Workspaces", href: "/dashboard/workspaces" }]
+  const [workspaceId, section, pageId] = pathname
+    .slice("/dashboard/workspaces/".length)
+    .split("/")
+  const workspaceHref = `/dashboard/workspaces/${workspaceId}`
+  const workspace = { label: workspaceName ?? "Workspace", href: workspaceHref }
+  if (section === "pages" && pageId)
+    return [workspace, { label: "Dashboard", href: pathname }]
+  const sectionTitle = section && WORKSPACE_SECTION_TITLES[section]
+  if (!sectionTitle) return [workspace]
+  return [
+    { label: "Settings", href: `${workspaceHref}/data` },
+    workspace,
+    { label: sectionTitle, href: `${workspaceHref}/${section}` },
+  ]
 }
