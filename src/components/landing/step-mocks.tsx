@@ -70,25 +70,27 @@ function MockWindow({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-xl border shadow-[0_24px_60px_-30px_rgb(36_51_43/0.5)]",
-        dark ? "border-[#2f3a33] bg-[#1f2622] text-[#e9eaec]" : "bg-card"
+        "overflow-hidden rounded-xl border shadow-mock",
+        dark
+          ? "border-terminal-border bg-terminal text-terminal-foreground"
+          : "bg-card"
       )}
     >
       <div
         className={cn(
           "flex items-center gap-3 border-b px-4 py-2.5",
-          dark ? "border-[#2f3a33]" : "bg-secondary"
+          dark ? "border-terminal-border" : "bg-secondary"
         )}
       >
         <div aria-hidden className="flex gap-1.5">
-          <span className="size-2.5 rounded-full bg-[#e5867a]" />
-          <span className="size-2.5 rounded-full bg-[#e6bd5b]" />
-          <span className="size-2.5 rounded-full bg-[#8cc9a7]" />
+          <span className="size-2.5 rounded-full bg-window-close" />
+          <span className="size-2.5 rounded-full bg-window-minimize" />
+          <span className="size-2.5 rounded-full bg-window-maximize" />
         </div>
         <p
           className={cn(
             "truncate text-xs",
-            dark ? "text-[#b5b8be]" : "text-muted-foreground"
+            dark ? "text-terminal-muted" : "text-muted-foreground"
           )}
         >
           {title}
@@ -238,7 +240,7 @@ function RecordsMock({ step }: { step: number }) {
                   <span className="flex items-center gap-2 font-medium">
                     {record.company}
                     {i === shown.length - 1 && (
-                      <span className="rounded-full bg-mascot-surface px-2 py-0.5 text-[11px] font-medium text-accent-foreground">
+                      <span className="rounded-full bg-mascot-surface px-2 py-0.5 text-2xs font-medium text-accent-foreground">
                         Added by agent
                       </span>
                     )}

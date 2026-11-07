@@ -193,31 +193,6 @@
           }
         ]
       }
-    },
-    {
-      "files": ["src/components/landing/step-mocks.tsx"],
-      "rules": {
-        "shadcn/no-arbitrary-values": [
-          "error",
-          {
-            "allow": [
-              "layout",
-              "shadow-[0_24px_60px_-30px_rgb(36_51_43/0.5)]",
-              "border-[#2f3a33]",
-              "bg-[#1f2622]",
-              "text-[#e9eaec]",
-              "bg-[#e5867a]",
-              "bg-[#e6bd5b]",
-              "bg-[#8cc9a7]",
-              "text-[#b5b8be]",
-              "text-[13px]",
-              "text-[#8cc9a7]",
-              "bg-[#e9eaec]",
-              "text-[11px]"
-            ]
-          }
-        ]
-      }
     }
   ]
 }

@@ -6,6 +6,8 @@
   --dfe-radius-note: 12px;
   --dfe-shadow-overlay: 0 2px 8px rgb(0 0 0 / 0.12);
   --radius: var(--dfe-radius-panel);
+  /* Landing product mocks. */
+  --dfe-shadow-mock: 0 24px 60px -30px rgb(36 51 43 / 0.5);
 }
 
 :is(

@@ -60,7 +60,18 @@
   --radius-3xl: var(--dfe-radius-note);
   --radius-4xl: var(--dfe-radius-note);
 
-  /* Landing page. */
+  --shadow-mock: var(--dfe-shadow-mock);
+
+  /* Landing page. The window chrome and the dark terminal mock keep the
+     same colors in both themes. */
+  --color-window-close: #e5867a;
+  --color-window-minimize: #e6bd5b;
+  --color-window-maximize: #8cc9a7;
+  --color-terminal: #1f2622;
+  --color-terminal-foreground: #e9eaec;
+  --color-terminal-muted: #b5b8be;
+  --color-terminal-border: #2f3a33;
+  --text-2xs: 11px;
   --leading-display: 1.05;
   /* Top padding that rests the hero sloth's belly on the window edge. */
   --spacing-hero-sloth: 17.5%;
