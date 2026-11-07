@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { LoadingRows } from "@/components/loading-rows"
 
 /**
  * The auth.md claim page. An agent sends the user here with a claim link
@@ -77,7 +78,10 @@ function ClaimPage() {
   // Only owners can connect an agent to a workspace.
   const owned = workspaces.results.filter((w) => w.role === "owner")
   const confirm = useAction(api.agentRegistrations.confirmClaim)
-  const [workspaceId, setWorkspaceId] = useState<Id<"workspaces"> | null>(null)
+  const [chosenId, setWorkspaceId] = useState<Id<"workspaces"> | null>(null)
+  // With one owned workspace there is nothing to choose.
+  const workspaceId =
+    chosenId ?? (owned.length === 1 ? (owned[0]?._id ?? null) : null)
   // Read-only is the default; the user must choose more.
   const [scopes, setScopes] = useState<Array<AgentScope>>([
     ...SCOPE_PRESETS.readonly,
@@ -127,11 +131,7 @@ function ClaimPage() {
         </>
       )
     if (details === undefined || workspaces.status === "LoadingFirstPage")
-      return (
-        <p role="status" className="text-muted-foreground">
-          Loading…
-        </p>
-      )
+      return <LoadingRows label="Loading" rows={2} />
     const sameAccount = details.email === email
     return (
       <>
@@ -201,9 +201,16 @@ function ClaimPage() {
                   maxLength={6}
                   required
                   className="font-mono tracking-widest"
+                  aria-describedby="claim-code-hint"
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                 />
+                <p
+                  id="claim-code-hint"
+                  className="text-xs text-muted-foreground"
+                >
+                  The 6-digit code your agent shows you.
+                </p>
               </div>
             </fieldset>
             {error && (
@@ -219,6 +226,10 @@ function ClaimPage() {
             >
               {saving ? "Connecting…" : "Connect agent"}
             </Button>
+            <p className="text-xs text-muted-foreground">
+              The agent can use this workspace with these permissions until you
+              disconnect it. Its actions show in Activity.
+            </p>
           </form>
         )}
       </>
