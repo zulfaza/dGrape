@@ -347,6 +347,36 @@ export const get = query({
   },
 })
 
+/**
+ * A page as viewers see it: the published revision, or the latest draft
+ * when none is published. Takes the id as text from a URL, and returns
+ * null when it names no page in this workspace.
+ */
+export const view = query({
+  args: { workspaceId: v.id("workspaces"), pageId: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      page: pageValidator,
+      version: v.union(pageVersionValidator, v.null()),
+      bindings: v.array(v.union(v.string(), v.null())),
+    })
+  ),
+  handler: async (ctx, { workspaceId, pageId: raw }) => {
+    await requireMembership(ctx, workspaceId, "read")
+    const pageId = ctx.db.normalizeId("pages", raw)
+    if (!pageId) return null
+    const page = await ctx.db.get(pageId)
+    if (!page || page.workspaceId !== workspaceId) return null
+    return getPage(
+      ctx,
+      workspaceId,
+      pageId,
+      page.publishedRevision ?? page.revision
+    )
+  },
+})
+
 export const list = query({
   args: {
     workspaceId: v.id("workspaces"),

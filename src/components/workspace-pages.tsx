@@ -1,7 +1,7 @@
 import { ArtifactPicker } from "./artifact-picker"
 import { previewKind } from "../../convex/lib/artifactPreview"
 import { useConvex, useMutation, usePaginatedQuery } from "convex/react"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import type { PageDefinition } from "../../convex/lib/pageDomain"
@@ -10,6 +10,7 @@ import { Input } from "./ui/input"
 import { PageBlockView, PagePreview, revisionAction } from "./page-preview"
 import { PageSourcePicker } from "./page-source-picker"
 import { useWorkspaceCan } from "@/components/workspace-role"
+import { Link } from "@tanstack/react-router"
 import { ChevronRight } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -35,18 +36,29 @@ type Draft = {
     }
 )
 
+/** `editPageId` opens that page in the editor, as a dashboard's Edit does. */
 export function WorkspacePages({
   workspaceId,
+  editPageId,
 }: {
   workspaceId: Id<"workspaces">
+  editPageId?: string
 }) {
-  return <WorkspacePagesEditor key={workspaceId} workspaceId={workspaceId} />
+  return (
+    <WorkspacePagesEditor
+      key={workspaceId}
+      workspaceId={workspaceId}
+      editPageId={editPageId}
+    />
+  )
 }
 
 function WorkspacePagesEditor({
   workspaceId,
+  editPageId,
 }: {
   workspaceId: Id<"workspaces">
+  editPageId?: string
 }) {
   const client = useConvex()
   const canWrite = useWorkspaceCan("write")
@@ -106,6 +118,15 @@ function WorkspacePagesEditor({
       setPreviewRevision(null)
     })
   }
+  // Open the requested page once its row has loaded.
+  const opened = useRef(false)
+  useEffect(() => {
+    if (opened.current || !editPageId) return
+    const page = results.find((item) => item._id === editPageId)
+    if (!page) return
+    opened.current = true
+    void open(page._id, page.revision)
+  })
   function change(definition: PageDefinition) {
     if (!draft) return
     setDraft({ ...draft, definition })
@@ -183,11 +204,10 @@ function WorkspacePagesEditor({
         <ul className="divide-y rounded-lg border">
           {results.map((page) => (
             <li key={page._id}>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void open(page._id, page.revision)}
-                className="flex w-full items-center gap-4 px-4 py-3 text-left outline-none first:rounded-t-lg last:rounded-b-lg hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              <Link
+                to="/dashboard/workspaces/$workspaceId/pages/$pageId"
+                params={{ workspaceId, pageId: page._id }}
+                className="flex w-full items-center gap-4 px-4 py-3 text-left outline-none first:rounded-t-lg last:rounded-b-lg hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span
                   className="min-w-0 flex-1 truncate font-medium"
@@ -205,7 +225,7 @@ function WorkspacePagesEditor({
                   aria-hidden
                   className="size-4 shrink-0 text-muted-foreground"
                 />
-              </button>
+              </Link>
             </li>
           ))}
         </ul>
