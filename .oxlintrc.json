@@ -181,12 +181,6 @@
       }
     },
     {
-      "files": ["convex/agentRegistrations.ts"],
-      "rules": {
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
       "files": ["src/components/landing/hero-dashboard.tsx"],
       "rules": {
         "shadcn/no-arbitrary-values": [
