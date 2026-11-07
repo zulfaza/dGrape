@@ -366,20 +366,32 @@ export const list = query({
     workspaceId: v.id("workspaces"),
     paginationOpts: paginationOptsValidator,
   },
-  returns: paginationResultValidator(artifactValidator),
+  returns: paginationResultValidator(
+    v.object({ ...artifactValidator.fields, createdByYou: v.boolean() })
+  ),
   handler: async (ctx, { workspaceId, paginationOpts }) => {
-    await requireMembership(ctx, workspaceId, "read")
+    const caller = await requireMembership(ctx, workspaceId, "read")
     if (
       !Number.isInteger(paginationOpts.numItems) ||
       paginationOpts.numItems < 1 ||
       paginationOpts.numItems > 50
     )
       throw new Error("Invalid page size")
-    return ctx.db
+    const result = await ctx.db
       .query("artifacts")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
       .order("desc")
       .paginate(paginationOpts)
+    // Member emails are for owners only, so the list says only "you".
+    return {
+      ...result,
+      page: result.page.map((artifact) => ({
+        ...artifact,
+        createdByYou:
+          artifact.createdBy.kind === "user" &&
+          artifact.createdBy.userId === caller.userId,
+      })),
+    }
   },
 })
 
