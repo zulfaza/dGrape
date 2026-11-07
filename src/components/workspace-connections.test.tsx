@@ -27,6 +27,13 @@ function service(
     update: unavailable,
   }
 }
+// jsdom has no ResizeObserver; the Radix checkbox measures itself with one.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 afterEach(() => {
   cleanup()
   vi.resetAllMocks()

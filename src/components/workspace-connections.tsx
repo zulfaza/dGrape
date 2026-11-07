@@ -14,6 +14,22 @@ import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Field, FieldGroup, FieldLabel } from "./ui/field"
 import { Badge } from "./ui/badge"
+import { Checkbox } from "./ui/checkbox"
+import { Label } from "./ui/label"
+import { toast } from "./ui/toast"
+import { ConfirmButton } from "./confirm-dialog"
+import { CopyButton } from "./copy-button"
+
+/** What each credential state means to the person who manages it. */
+const SECRET_STATUS = {
+  pending: { label: "Not saved yet", variant: "outline" },
+  ready: { label: "Ready", variant: "secondary" },
+  deleting: { label: "Deleting", variant: "outline" },
+  deleted: { label: "Deleted", variant: "outline" },
+} as const satisfies Record<
+  WorkspaceConnectionService["secrets"]["results"][number]["status"],
+  { label: string; variant: "outline" | "secondary" }
+>
 
 type Mutation<Ref extends FunctionReference<"mutation">> = (
   args: FunctionArgs<Ref>
@@ -129,19 +145,22 @@ export function WorkspaceConnectionsView({
     removeConnection,
     update,
   } = service
-  const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
   const [selected, setSelected] = useState<Id<"secretRefs"> | null>(null)
-  async function perform(task: () => Promise<void>) {
+  /** Runs one change and reports it in a toast. Returns true on success. */
+  async function perform(
+    task: () => Promise<void>,
+    done: string,
+    failed: string
+  ): Promise<boolean> {
     setBusy(true)
-    setMessage("")
     try {
       await task()
-      setMessage("Settings saved")
+      toast.success(done)
+      return true
     } catch {
-      setMessage(
-        "Could not save settings. Check access and configuration, then retry."
-      )
+      toast.error(failed)
+      return false
     } finally {
       setBusy(false)
     }
@@ -153,8 +172,8 @@ export function WorkspaceConnectionsView({
     >
       <h2 className="text-xl font-semibold">Connections</h2>
       <p className="text-sm text-muted-foreground">
-        Enter credentials here. Agents use reference IDs. Deleting a stored
-        credential does not revoke the token at its source.
+        Store API keys for your connections. Agents see only the reference ID,
+        never the key.
       </p>
       <form
         onSubmit={(event) => {
@@ -165,26 +184,37 @@ export function WorkspaceConnectionsView({
             label: data.get("label"),
             value: data.get("credential"),
           })
-          form.reset()
           if (Option.isNone(parsed)) return
           const { label, value } = parsed.value
-          void perform(async () => {
-            const id = await prepare({
-              workspaceId,
-              label,
-              private: data.get("private") === "on",
-            })
-            await update(id, 1, value)
+          void perform(
+            async () => {
+              const id = await prepare({
+                workspaceId,
+                label,
+                private: data.get("private") === "on",
+              })
+              await update(id, 1, value)
+            },
+            "Credential stored",
+            "Could not store the credential. Try again."
+          ).then((stored) => {
+            if (stored) form.reset()
           })
         }}
       >
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="secret-label">Credential label</FieldLabel>
-            <Input id="secret-label" name="label" required maxLength={80} />
+            <FieldLabel htmlFor="secret-label">Name</FieldLabel>
+            <Input
+              id="secret-label"
+              name="label"
+              required
+              maxLength={80}
+              placeholder="GitHub token"
+            />
           </Field>
           <Field>
-            <FieldLabel htmlFor="new-credential">Credential</FieldLabel>
+            <FieldLabel htmlFor="new-credential">API key or token</FieldLabel>
             <Input
               id="new-credential"
               name="credential"
@@ -194,32 +224,45 @@ export function WorkspaceConnectionsView({
               maxLength={8192}
             />
           </Field>
-          <Field>
-            <FieldLabel>
-              <input name="private" type="checkbox" defaultChecked /> Private to
-              me
-            </FieldLabel>
-          </Field>
+          <div className="flex items-center gap-2">
+            <Checkbox id="secret-private" name="private" defaultChecked />
+            <Label htmlFor="secret-private">Only I can manage it</Label>
+          </div>
           <Button disabled={busy} type="submit">
             Store credential
           </Button>
         </FieldGroup>
       </form>
       {secrets.status === "LoadingFirstPage" && (
-        <p role="status">Loading credentials…</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading credentials…
+        </p>
+      )}
+      {secrets.status === "Exhausted" && secrets.results.length === 0 && (
+        <p className="border-t pt-3 text-sm text-muted-foreground">
+          No stored credentials. Add one above to create a connection.
+        </p>
       )}
       {secrets.results.map((secret) => (
         <div key={secret.id} className="flex flex-col gap-2 border-t pt-3">
-          <div className="flex items-center gap-2">
-            <span>{secret.label}</span>
-            <Badge variant="secondary">{secret.status}</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{secret.label}</span>
+            <Badge variant={SECRET_STATUS[secret.status].variant}>
+              {SECRET_STATUS[secret.status].label}
+            </Badge>
+            <span className="ml-auto flex items-center gap-1">
+              <code className="font-mono text-xs text-muted-foreground">
+                {secret.id}
+              </code>
+              <CopyButton value={secret.id} label="reference ID" />
+            </span>
           </div>
-          <code className="text-xs break-all">{secret.id}</code>
           {secret.canManage && secret.status === "ready" && (
             <div className="flex flex-wrap gap-2">
               <Button
                 disabled={busy}
                 variant="outline"
+                size="sm"
                 onClick={() => setSelected(secret.id)}
               >
                 Use in connection
@@ -227,88 +270,122 @@ export function WorkspaceConnectionsView({
               <Button
                 disabled={busy}
                 variant="outline"
+                size="sm"
                 onClick={() =>
-                  void perform(async () => {
-                    await rotate({
-                      secretRef: secret.id,
-                      revision: secret.revision,
-                    })
-                  })
+                  void perform(
+                    () =>
+                      rotate({
+                        secretRef: secret.id,
+                        revision: secret.revision,
+                      }).then(() => undefined),
+                    "Enter the new value below",
+                    "Could not start the replacement. Try again."
+                  )
                 }
               >
-                Rotate
+                Replace value
               </Button>
-              <Button
+              <ConfirmButton
                 disabled={busy}
                 variant="outline"
-                onClick={() =>
-                  void perform(async () => {
-                    await beginDelete({
-                      secretRef: secret.id,
-                      revision: secret.revision,
-                    })
-                    await update(secret.id, secret.revision, "")
-                  })
+                size="sm"
+                title={`Delete ${secret.label}?`}
+                description="Connections that use it stop working. The key stays valid at its source until you revoke it there."
+                confirmLabel="Delete"
+                destructive
+                onConfirm={() =>
+                  void perform(
+                    async () => {
+                      await beginDelete({
+                        secretRef: secret.id,
+                        revision: secret.revision,
+                      })
+                      await update(secret.id, secret.revision, "")
+                    },
+                    "Credential deleted",
+                    "Could not delete the credential. Try again."
+                  )
                 }
               >
-                Delete stored credential
-              </Button>
+                Delete
+              </ConfirmButton>
             </div>
           )}
           {secret.canManage && secret.status === "pending" && (
-            <Button
-              disabled={busy}
-              variant="outline"
-              onClick={() =>
-                void perform(async () => {
-                  await beginDelete({
-                    secretRef: secret.id,
-                    revision: secret.revision,
-                  })
-                  await update(secret.id, secret.revision, "")
-                })
-              }
-            >
-              Cancel pending credential
-            </Button>
-          )}
-          {secret.canManage && secret.status === "pending" && (
             <form
+              className="flex flex-col gap-2"
               onSubmit={(event) => {
                 event.preventDefault()
                 const form = event.currentTarget
                 const value = Schema.decodeUnknownOption(Schema.String)(
                   new FormData(form).get("credential")
                 )
-                form.reset()
-                if (Option.isSome(value))
-                  void perform(() =>
-                    update(secret.id, secret.revision, value.value)
-                  )
+                if (Option.isNone(value)) return
+                void perform(
+                  () => update(secret.id, secret.revision, value.value),
+                  "Credential saved",
+                  "Could not save the value. Try again."
+                ).then((saved) => {
+                  if (saved) form.reset()
+                })
               }}
             >
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor={`credential-${secret.id}`}>
-                    Replacement credential (leave empty to reconcile)
-                  </FieldLabel>
-                  <Input
-                    id={`credential-${secret.id}`}
-                    name="credential"
-                    type="password"
-                    autoComplete="new-password"
-                    maxLength={8192}
-                  />
-                </Field>
-                <Button disabled={busy}>Save or reconcile</Button>
-              </FieldGroup>
+              <Label htmlFor={`credential-${secret.id}`}>New value</Label>
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  id={`credential-${secret.id}`}
+                  name="credential"
+                  type="password"
+                  autoComplete="new-password"
+                  maxLength={8192}
+                  className="min-w-0 flex-1"
+                  aria-describedby={`credential-${secret.id}-hint`}
+                />
+                <Button disabled={busy}>Save</Button>
+                <ConfirmButton
+                  type="button"
+                  disabled={busy}
+                  variant="outline"
+                  title={`Discard ${secret.label}?`}
+                  description="The unsaved value is removed."
+                  confirmLabel="Discard"
+                  destructive
+                  onConfirm={() =>
+                    void perform(
+                      async () => {
+                        await beginDelete({
+                          secretRef: secret.id,
+                          revision: secret.revision,
+                        })
+                        await update(secret.id, secret.revision, "")
+                      },
+                      "Credential discarded",
+                      "Could not discard the credential. Try again."
+                    )
+                  }
+                >
+                  Discard
+                </ConfirmButton>
+              </div>
+              <p
+                id={`credential-${secret.id}-hint`}
+                className="text-xs text-muted-foreground"
+              >
+                Leave it empty to retry the last value you sent.
+              </p>
             </form>
           )}
           {secret.canManage && secret.status === "deleting" && (
             <Button
               disabled={busy}
+              size="sm"
+              className="self-start"
               onClick={() =>
-                void perform(() => update(secret.id, secret.revision, ""))
+                void perform(
+                  () => update(secret.id, secret.revision, ""),
+                  "Credential deleted",
+                  "Could not delete the credential. Try again."
+                )
               }
             >
               Retry deletion
@@ -343,23 +420,27 @@ export function WorkspaceConnectionsView({
             })
             if (Option.isNone(parsed)) return
             const { label, origin, path, fields } = parsed.value
-            void perform(async () => {
-              await createConnection({
-                workspaceId,
-                secretRef: selected,
-                label,
-                origin,
-                routes: [
-                  {
-                    path,
-                    method: "GET",
-                    queryKeys: ["cursor"],
-                    fields: fields.split(",").map((f) => f.trim()),
-                  },
-                ],
-              })
-              setSelected(null)
-            })
+            void perform(
+              async () => {
+                await createConnection({
+                  workspaceId,
+                  secretRef: selected,
+                  label,
+                  origin,
+                  routes: [
+                    {
+                      path,
+                      method: "GET",
+                      queryKeys: ["cursor"],
+                      fields: fields.split(",").map((f) => f.trim()),
+                    },
+                  ],
+                })
+                setSelected(null)
+              },
+              "Connection created",
+              "Could not create the connection. Check the origin and route."
+            )
           }}
         >
           <FieldGroup>
@@ -406,14 +487,18 @@ export function WorkspaceConnectionsView({
               variant="outline"
               disabled={busy}
               onClick={() =>
-                void perform(async () => {
-                  await createGithubConnection({
-                    workspaceId,
-                    secretRef: selected,
-                    label: "GitHub",
-                  })
-                  setSelected(null)
-                })
+                void perform(
+                  async () => {
+                    await createGithubConnection({
+                      workspaceId,
+                      secretRef: selected,
+                      label: "GitHub",
+                    })
+                    setSelected(null)
+                  },
+                  "GitHub connection created",
+                  "Could not create the GitHub connection. Try again."
+                )
               }
             >
               Create GitHub read-only connection
@@ -430,28 +515,48 @@ export function WorkspaceConnectionsView({
       )}
       {connections.results.map((connection) => (
         <div className="flex flex-col gap-2 border-t pt-3" key={connection.id}>
-          <strong>{connection.label}</strong>
-          <code className="text-xs break-all">{connection.id}</code>
-          <p className="text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{connection.label}</span>
+            <span className="ml-auto flex items-center gap-1">
+              <code className="font-mono text-xs text-muted-foreground">
+                {connection.id}
+              </code>
+              <CopyButton value={connection.id} label="connection ID" />
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground">
             {connection.kind === "github"
               ? `GitHub reads: ${connection.reads.join(", ")}`
               : `${connection.origin}${connection.routes[0]?.path ?? ""}`}
           </p>
-          <Button
+          <ConfirmButton
             variant="outline"
+            size="sm"
+            className="self-start"
             disabled={busy}
-            onClick={() =>
-              void perform(async () => {
-                await removeConnection({ connectionId: connection.id })
-              })
+            title={`Remove ${connection.label}?`}
+            description="Recipes that call it fail until you add a new connection."
+            confirmLabel="Remove"
+            destructive
+            onConfirm={() =>
+              void perform(
+                () =>
+                  removeConnection({ connectionId: connection.id }).then(
+                    () => undefined
+                  ),
+                "Connection removed",
+                "Could not remove the connection. Try again."
+              )
             }
           >
             Remove connection
-          </Button>
+          </ConfirmButton>
         </div>
       ))}
       {connections.status === "LoadingFirstPage" && (
-        <p role="status">Loading connections…</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading connections…
+        </p>
       )}
       {(connections.status === "CanLoadMore" ||
         connections.status === "LoadingMore") && (
@@ -466,7 +571,6 @@ export function WorkspaceConnectionsView({
             : "Load more connections"}
         </Button>
       )}
-      {message && <p role="status">{message}</p>}
     </section>
   )
 }
