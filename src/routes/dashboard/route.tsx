@@ -10,6 +10,10 @@ import { Fragment, type ReactNode } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { NotFound } from "@/components/not-found"
 import {
+  useWorkspaceName,
+  WorkspaceNameProvider,
+} from "@/components/workspace-name"
+import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -44,46 +48,62 @@ function DashboardLayout() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
-  const crumbs = buildBreadcrumbs(pathname)
   return (
-    <SidebarProvider>
-      <AppSidebar user={user} />
-      <SidebarInset className="h-svh min-h-0 overflow-x-hidden">
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-card">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
-            <Breadcrumb>
-              <BreadcrumbList>
-                {crumbs.map((crumb, index) => {
-                  const isLast = index === crumbs.length - 1
-                  return (
-                    <Fragment key={crumb.href}>
-                      <BreadcrumbItem>
-                        {isLast ? (
-                          <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                        ) : (
-                          <BreadcrumbLink asChild>
-                            <Link to={crumb.href}>{crumb.label}</Link>
-                          </BreadcrumbLink>
-                        )}
-                      </BreadcrumbItem>
-                      {!isLast && <BreadcrumbSeparator />}
-                    </Fragment>
-                  )
-                })}
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-        </header>
-        <ConvexAuthGate pathname={pathname}>
-          <Outlet />
-        </ConvexAuthGate>
-      </SidebarInset>
-    </SidebarProvider>
+    <WorkspaceNameProvider>
+      <SidebarProvider>
+        <AppSidebar user={user} />
+        <SidebarInset className="h-svh min-h-0 overflow-x-hidden">
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-card">
+            <div className="flex items-center gap-2 px-4">
+              <SidebarTrigger className="-ml-1" />
+              <Separator
+                orientation="vertical"
+                className="mr-2 data-[orientation=vertical]:h-4"
+              />
+              <DashboardBreadcrumbs pathname={pathname} />
+            </div>
+          </header>
+          <ConvexAuthGate pathname={pathname}>
+            <Outlet />
+          </ConvexAuthGate>
+        </SidebarInset>
+      </SidebarProvider>
+    </WorkspaceNameProvider>
+  )
+}
+
+function DashboardBreadcrumbs({ pathname }: { pathname: string }) {
+  const crumbs = buildBreadcrumbs(pathname, useWorkspaceName())
+  return (
+    <Breadcrumb className="min-w-0">
+      <BreadcrumbList className="flex-nowrap">
+        {crumbs.map((crumb, index) => {
+          const isLast = index === crumbs.length - 1
+          return (
+            <Fragment key={crumb.href}>
+              <BreadcrumbItem className="min-w-0">
+                {isLast ? (
+                  <BreadcrumbPage>
+                    <span className="block max-w-56 truncate">
+                      {crumb.label}
+                    </span>
+                  </BreadcrumbPage>
+                ) : (
+                  <BreadcrumbLink asChild>
+                    <Link to={crumb.href}>
+                      <span className="block max-w-56 truncate">
+                        {crumb.label}
+                      </span>
+                    </Link>
+                  </BreadcrumbLink>
+                )}
+              </BreadcrumbItem>
+              {!isLast && <BreadcrumbSeparator />}
+            </Fragment>
+          )
+        })}
+      </BreadcrumbList>
+    </Breadcrumb>
   )
 }
 
@@ -134,11 +154,17 @@ const WORKSPACE_SECTION_TITLES: Record<string, string> = {
   jobs: "Jobs",
   connections: "Connections",
   artifacts: "Artifacts",
+  members: "Members",
+  activity: "Activity",
+  usage: "Usage",
 }
 
 type Crumb = { label: string; href: string }
 
-function buildBreadcrumbs(pathname: string): Crumb[] {
+function buildBreadcrumbs(
+  pathname: string,
+  workspaceName: string | null
+): Crumb[] {
   const crumbs: Crumb[] = [{ label: "Dashboard", href: "/dashboard" }]
   if (pathname !== "/dashboard" && DASHBOARD_PAGE_TITLES[pathname]) {
     crumbs.push({ label: DASHBOARD_PAGE_TITLES[pathname], href: pathname })
@@ -149,7 +175,7 @@ function buildBreadcrumbs(pathname: string): Crumb[] {
     const workspaceHref = `/dashboard/workspaces/${workspaceId}`
     crumbs.push(
       { label: "Workspaces", href: "/dashboard/workspaces" },
-      { label: "Workspace", href: workspaceHref }
+      { label: workspaceName ?? "Workspace", href: workspaceHref }
     )
     const sectionTitle = section && WORKSPACE_SECTION_TITLES[section]
     if (sectionTitle)
