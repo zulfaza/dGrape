@@ -111,6 +111,7 @@ export function AppSidebar({
               <SidebarMenuButton asChild tooltip="Workspaces">
                 <Link
                   activeProps={ACTIVE_LINK_PROPS}
+                  activeOptions={{ exact: true }}
                   to="/dashboard/workspaces"
                 >
                   <PanelsTopLeft />
