@@ -229,17 +229,6 @@
           }
         ]
       }
-    },
-    {
-      "files": ["src/components/landing/waving-sloth.tsx"],
-      "rules": {
-        "shadcn/no-inline-styles": [
-          "error",
-          {
-            "allow": ["animationPlayState"]
-          }
-        ]
-      }
     }
   ]
 }

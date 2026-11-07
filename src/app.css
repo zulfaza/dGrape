@@ -328,6 +328,10 @@
   translate: -3% 0;
   animation: dfe-footer-wave 4.8s ease-in-out infinite;
 }
+/* Holds a looping sprite still while it is off screen. */
+.dfe-paused {
+  animation-play-state: paused;
+}
 
 @media (prefers-reduced-motion: no-preference) {
   .dfe-sloth-still {

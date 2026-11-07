@@ -1,4 +1,5 @@
 import { Mascot } from "@/components/mascot"
+import { cn } from "@/lib/utils"
 
 /** The two atlas cells keep the body still and let the arm turn at its root. */
 export function WavingSloth({
@@ -14,8 +15,10 @@ export function WavingSloth({
       <div className="dfe-sloth-puppet relative hidden aspect-square w-full">
         <span className="dfe-sloth-sprite dfe-wave-sprite dfe-wave-body" />
         <span
-          className="dfe-anim dfe-sloth-sprite dfe-wave-sprite dfe-wave-arm"
-          style={{ animationPlayState: active ? "running" : "paused" }}
+          className={cn(
+            "dfe-anim dfe-sloth-sprite dfe-wave-sprite dfe-wave-arm",
+            !active && "dfe-paused"
+          )}
         />
       </div>
     </div>
