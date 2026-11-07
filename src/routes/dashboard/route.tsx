@@ -141,16 +141,16 @@ function ConvexAuthGate({
   )
 }
 
-const WORKSPACE_SECTION_TITLES: Record<string, string> = {
-  pages: "Dashboards",
-  data: "Collections",
-  jobs: "Jobs",
-  connections: "Connections",
-  artifacts: "Files",
-  members: "Members",
-  activity: "Activity",
-  usage: "Usage",
-}
+const WORKSPACE_SECTION_TITLES = new Map([
+  ["pages", "Dashboards"],
+  ["data", "Collections"],
+  ["jobs", "Jobs"],
+  ["connections", "Connections"],
+  ["artifacts", "Files"],
+  ["members", "Members"],
+  ["activity", "Activity"],
+  ["usage", "Usage"],
+])
 
 type Crumb = { label: string; href: string }
 
@@ -171,7 +171,7 @@ function buildBreadcrumbs(
   const workspace = { label: workspaceName ?? "Workspace", href: workspaceHref }
   if (section === "pages" && pageId)
     return [workspace, { label: "Dashboard", href: pathname }]
-  const sectionTitle = section && WORKSPACE_SECTION_TITLES[section]
+  const sectionTitle = section && WORKSPACE_SECTION_TITLES.get(section)
   if (!sectionTitle) return [workspace]
   return [
     { label: "Settings", href: `${workspaceHref}/data` },

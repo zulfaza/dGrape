@@ -356,10 +356,7 @@
       }
     },
     {
-      "files": [
-        "convex/lib/agentAuthDiscovery.ts",
-        "src/routes/dashboard/route.tsx"
-      ],
+      "files": ["convex/lib/agentAuthDiscovery.ts"],
       "rules": {
         "anti-slop/no-known-value-widening": "off"
       }
