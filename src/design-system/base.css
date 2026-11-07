@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/jetbrains-mono";
 @import "../styles/geometry.css";
+@import "../styles/component-theme.css";
 
 @custom-variant dark (&:is(.dark *));
 
