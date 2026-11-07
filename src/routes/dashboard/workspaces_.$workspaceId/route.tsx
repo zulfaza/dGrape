@@ -1,6 +1,7 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router"
+import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router"
 import { useQuery } from "convex/react"
 import { api } from "../../../../convex/_generated/api"
+import { SettingsLayout, settingsSegment } from "@/components/settings-nav"
 import { usePublishWorkspaceName } from "@/components/workspace-name"
 import { WorkspaceRoleProvider } from "@/components/workspace-role"
 
@@ -18,10 +19,24 @@ function WorkspaceLayout() {
   const { workspaceId } = Route.useParams()
   const workspace = useQuery(api.workspaces.get, { workspaceId })
   usePublishWorkspaceName(workspace?.name)
+  const segment = settingsSegment(
+    useRouterState({ select: (state) => state.location.pathname })
+  )
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-8 md:px-8">
       <WorkspaceRoleProvider role={workspace?.role ?? null}>
-        <Outlet />
+        {segment ? (
+          <SettingsLayout
+            workspaceId={workspaceId}
+            workspaceName={workspace?.name}
+            role={workspace?.role}
+            segment={segment}
+          >
+            <Outlet />
+          </SettingsLayout>
+        ) : (
+          <Outlet />
+        )}
       </WorkspaceRoleProvider>
     </main>
   )
