@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ROLE_LABELS } from "@/components/workspace-role"
+import { useNewDashboard } from "@/components/new-dashboard"
 import {
   Sidebar,
   SidebarContent,
@@ -332,6 +333,7 @@ function WorkspaceTree({
     { initialNumItems: 10 }
   )
   const canWrite = workspace.role !== "viewer"
+  const newDashboard = useNewDashboard(workspace._id)
   return (
     <Collapsible asChild defaultOpen className="group/tree">
       <SidebarMenuItem>
@@ -384,14 +386,14 @@ function WorkspaceTree({
             {canWrite && pages.status !== "LoadingFirstPage" && (
               <SidebarMenuSubItem>
                 <SidebarMenuSubButton asChild>
-                  <Link
-                    to="/dashboard/workspaces/$workspaceId/pages"
-                    params={{ workspaceId: workspace._id }}
-                    search={{ new: true }}
+                  <button
+                    type="button"
+                    disabled={newDashboard.pending}
+                    onClick={newDashboard.create}
                   >
                     <Plus />
                     <span className="text-sidebar-muted">New dashboard</span>
-                  </Link>
+                  </button>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
             )}
