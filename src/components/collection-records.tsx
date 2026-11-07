@@ -10,7 +10,7 @@ import { useState, type FormEvent } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Doc, Id } from "../../convex/_generated/dataModel"
 import type { RecordQuery } from "../../convex/lib/recordQuery"
-import { ChevronLeft, Plus, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react"
 import { Match } from "effect"
 import { AddFieldDialog } from "@/components/add-field-dialog"
 import { ChangeSchemaDialog } from "@/components/change-schema-dialog"
@@ -299,9 +299,7 @@ export function CollectionRecords({
         </Button>
         <PageHeader
           title={collection.name}
-          description={
-            fields.length === 1 ? "1 field" : `${fields.length} fields`
-          }
+          description={recordSummary(results.length, status, query !== null)}
           actions={
             <>
               <ExportRecordsButton collection={collection} disabled={saving} />
@@ -359,10 +357,14 @@ export function CollectionRecords({
             <EmptyHeader>
               <EmptyTitle>No records match</EmptyTitle>
               <EmptyDescription>
-                Records with no value for the sort field are not shown. Change
-                the filter, or sort by order added to see every record.
+                Records with an empty sort field are not shown.
               </EmptyDescription>
             </EmptyHeader>
+            <EmptyContent>
+              <Button variant="outline" onClick={() => setQuery(null)}>
+                Clear filter
+              </Button>
+            </EmptyContent>
           </Empty>
         ) : results.length === 0 ? (
           <Empty>
@@ -410,6 +412,7 @@ export function CollectionRecords({
                           ? "px-4 py-3 text-right tabular-nums"
                           : "max-w-80 truncate px-4 py-3"
                       }
+                      title={cellTitle(field, record.values[field.id])}
                     >
                       {(field.type === "recordReference" ||
                         field.type === "artifactReference") &&
@@ -458,21 +461,21 @@ export function CollectionRecords({
           </p>
         )}
       </section>
-      <section
-        aria-labelledby="api-heading"
-        className="flex flex-col gap-2 border-t pt-6"
-      >
-        <h2 id="api-heading" className="text-base font-semibold">
+      <details className="group text-sm">
+        <summary className="inline-flex cursor-pointer items-center gap-1 text-muted-foreground hover:text-foreground">
+          <ChevronRight
+            aria-hidden
+            className="size-4 transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          />
           Read with the HTTP API
-        </h2>
+        </summary>
         {apiUrl ? (
-          <>
-            <p className="text-sm text-muted-foreground">
-              Send a workspace credential in the Authorization header as Bearer,
-              a space, then the credential.
+          <div className="mt-3 flex flex-col gap-2">
+            <p className="text-muted-foreground">
+              Send a workspace credential as a Bearer token.
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <code className="min-w-0 flex-1 rounded-sm bg-muted px-2 py-1.5 text-xs break-all">
+              <code className="min-w-0 flex-1 rounded-sm bg-muted px-2 py-1.5 font-mono text-xs break-all">
                 {apiUrl}
               </code>
               <Button
@@ -487,16 +490,16 @@ export function CollectionRecords({
                   }
                 }}
               >
-                Copy API URL
+                Copy URL
               </Button>
             </div>
-          </>
+          </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-3 text-muted-foreground">
             API URL unavailable. Set VITE_CONVEX_SITE_URL to enable it.
           </p>
         )}
-      </section>
+      </details>
       <Dialog
         open={draft !== null}
         onOpenChange={(open) => {
@@ -782,6 +785,25 @@ function ReferenceLabel({
  * Shows a stored value as text: booleans read as Yes or No, and timestamps
  * in local time.
  */
+/** "6 records", "20+ records", or "3 matching records" for the loaded set. */
+function recordSummary(
+  loaded: number,
+  status: "LoadingFirstPage" | "CanLoadMore" | "LoadingMore" | "Exhausted",
+  filtered: boolean
+): string | undefined {
+  if (status === "LoadingFirstPage") return undefined
+  const count = status === "Exhausted" ? `${loaded}` : `${loaded}+`
+  const noun = loaded === 1 && status === "Exhausted" ? "record" : "records"
+  return filtered ? `${count} matching ${noun}` : `${count} ${noun}`
+}
+
+/** Full text for a cell that can truncate; references have their own. */
+function cellTitle(field: Field, value: Values[string] | undefined) {
+  if (field.type === "recordReference" || field.type === "artifactReference")
+    return undefined
+  return formatValue(field, value) || undefined
+}
+
 function formatValue(field: Field, value: Values[string] | undefined) {
   if (value === undefined) return ""
   if (field.type === "boolean") return value === true ? "Yes" : "No"

@@ -3,6 +3,7 @@ import {
   checkRecordValues,
 } from "../../convex/lib/collectionDomain"
 import { useState, type FormEvent } from "react"
+import { X } from "lucide-react"
 import type { Doc } from "../../convex/_generated/dataModel"
 import type { RecordQuery } from "../../convex/lib/recordQuery"
 import { Button } from "@/components/ui/button"
@@ -84,7 +85,7 @@ export function RecordQueryBar({
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div className="grid gap-2">
-        <Label htmlFor="query-field">Sort by</Label>
+        <Label htmlFor="query-field">Sort and filter by</Label>
         <Select value={query?.fieldId ?? ADDED} onValueChange={selectField}>
           <SelectTrigger id="query-field" className="w-44">
             <SelectValue />
@@ -197,7 +198,7 @@ export function RecordQueryBar({
                   type={inputType(field.type)}
                   step={inputStep(field.type)}
                   maxLength={200}
-                  placeholder="Any value"
+                  placeholder="Exact value"
                   value={filterText}
                   onChange={(e) => setFilterText(e.target.value)}
                 />
@@ -207,6 +208,16 @@ export function RecordQueryBar({
               </Button>
             </form>
           )}
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setFilterText("")
+              onChange(null)
+            }}
+          >
+            <X aria-hidden />
+            Clear
+          </Button>
         </>
       )}
     </div>
