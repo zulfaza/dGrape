@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
 import { useWorkspaceCan } from "@/components/workspace-role"
+import { LoadingRows } from "@/components/loading-rows"
 
 function formatAmount(value: number, unit: BudgetSpec["unit"]) {
   switch (unit) {
@@ -41,6 +42,25 @@ function formatAmount(value: number, unit: BudgetSpec["unit"]) {
   }
 }
 
+/**
+ * The unit a budget is typed in. Bytes use MB and milliseconds use seconds,
+ * so nobody types 1073741824; the form converts back to the stored unit.
+ */
+const INPUT_UNITS: Record<
+  BudgetSpec["unit"],
+  { suffix: string; factor: number }
+> = {
+  count: { suffix: "", factor: 1 },
+  bytes: { suffix: "MB", factor: 1024 ** 2 },
+  ms: { suffix: "s", factor: 1000 },
+  days: { suffix: "days", factor: 1 },
+}
+
+/** The stored amount in the input unit, exact enough to convert back. */
+function toInput(value: number, unit: BudgetSpec["unit"]) {
+  return String(Number((value / INPUT_UNITS[unit].factor).toFixed(9)))
+}
+
 type Usage = FunctionReturnType<typeof api.workspaceBudgets.usage>
 
 /** A lower bound while a count is still being scanned. */
@@ -58,7 +78,7 @@ function usedFor(key: BudgetKey, usage: Usage): Used {
         value: largest.records?.count ?? 0,
         // Another collection that is still counting could be larger.
         partial: usage.collections.some((c) => c.records?.kind !== "counted"),
-        note: largest.name,
+        note: `In ${largest.name}`,
       }
     }
     case "indexedFieldsPerCollection": {
@@ -99,12 +119,7 @@ export function WorkspaceUsage({
   const budgets = useQuery(api.workspaceBudgets.get, { workspaceId })
   const usage = useQuery(api.workspaceBudgets.usage, { workspaceId })
   const canManage = useWorkspaceCan("manage")
-  if (!budgets || !usage)
-    return (
-      <p role="status" className="text-sm text-muted-foreground">
-        Loading usage…
-      </p>
-    )
+  if (!budgets || !usage) return <LoadingRows label="Loading usage" />
   return (
     <div className="flex flex-col gap-8">
       <section aria-labelledby="usage-heading" className="flex flex-col gap-3">
@@ -113,17 +128,17 @@ export function WorkspaceUsage({
             Usage
           </h2>
           <p className="text-sm text-muted-foreground">
-            Work that would go over a budget does not start. A lower budget
+            Work that would go over a limit does not start. Lowering a limit
             never deletes data.
           </p>
         </div>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Budget</TableHead>
-              <TableHead className="text-right">In use</TableHead>
-              <TableHead className="text-right">Budget</TableHead>
-              <TableHead className="text-right">Ceiling</TableHead>
+              <TableHead>Limit</TableHead>
+              <TableHead className="w-48">In use</TableHead>
+              <TableHead className="text-right">Your limit</TableHead>
+              <TableHead className="text-right">Highest allowed</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -133,19 +148,15 @@ export function WorkspaceUsage({
               return (
                 <TableRow key={key}>
                   <TableCell>{spec.label}</TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="tabular-nums">
                     {used === null ? (
-                      "—"
+                      <span className="text-muted-foreground">—</span>
                     ) : (
-                      <>
-                        {used.partial ? "≥ " : ""}
-                        {formatAmount(used.value, spec.unit)}
-                        {used.note ? (
-                          <span className="block text-xs text-muted-foreground">
-                            {used.note}
-                          </span>
-                        ) : null}
-                      </>
+                      <UsageBar
+                        used={used}
+                        limit={budgets.budgets[key]}
+                        unit={spec.unit}
+                      />
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -163,7 +174,7 @@ export function WorkspaceUsage({
           {usage.recentRuns.count > 0
             ? `Run figures use the last ${usage.recentRuns.count} runs. `
             : ""}
-          “≥” marks a count that is still being calculated.
+          “≥” marks a count that is still running.
         </p>
       </section>
       <section
@@ -190,7 +201,7 @@ export function WorkspaceUsage({
                   <TableCell>{c.name}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {c.records === null
-                      ? "Not counted yet"
+                      ? "Not counted"
                       : `${c.records.kind === "counted" ? "" : "≥ "}${c.records.count.toLocaleString()}`}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -232,7 +243,8 @@ function BudgetForm({
       const initial: Partial<Record<BudgetKey, string>> = {}
       for (const key of BUDGET_KEYS) {
         const value = overrides[key]
-        if (value !== undefined) initial[key] = String(value)
+        if (value !== undefined)
+          initial[key] = toInput(value, BUDGET_SPECS[key].unit)
       }
       return initial
     }
@@ -245,10 +257,21 @@ function BudgetForm({
     for (const key of BUDGET_KEYS) {
       const text = values[key]?.trim()
       if (!text) continue
-      const value = Number(text)
-      const { label, min, max } = BUDGET_SPECS[key]
+      // An untouched field keeps its stored value; the input is rounded.
+      const stored = overrides[key]
+      if (
+        stored !== undefined &&
+        text === toInput(stored, BUDGET_SPECS[key].unit)
+      ) {
+        next[key] = stored
+        continue
+      }
+      const { label, min, max, unit } = BUDGET_SPECS[key]
+      const value = Math.round(Number(text) * INPUT_UNITS[unit].factor)
       if (!Number.isSafeInteger(value) || value < min || value > max) {
-        toast.error(`${label} must be an integer from ${min} to ${max}`)
+        toast.error(
+          `${label} must be from ${formatAmount(min, unit)} to ${formatAmount(max, unit)}`
+        )
         return
       }
       next[key] = value
@@ -271,8 +294,7 @@ function BudgetForm({
           Change budgets
         </h2>
         <p className="text-sm text-muted-foreground">
-          Leave a field empty to use the default. Amounts use the base unit:
-          bytes, milliseconds or days.
+          Leave a field empty to use the default.
         </p>
       </div>
       <form onSubmit={submit} className="flex flex-col gap-4">
@@ -285,20 +307,28 @@ function BudgetForm({
                 <label htmlFor={id} className="text-sm font-medium">
                   {spec.label}
                 </label>
-                <Input
-                  id={id}
-                  inputMode="numeric"
-                  placeholder={String(spec.default)}
-                  value={values[key] ?? ""}
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      [key]: event.target.value,
-                    }))
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  {spec.min} to {spec.max}. Default{" "}
+                <div className="flex items-center gap-2">
+                  <Input
+                    id={id}
+                    inputMode="decimal"
+                    placeholder={toInput(spec.default, spec.unit)}
+                    aria-describedby={`${id}-hint`}
+                    value={values[key] ?? ""}
+                    onChange={(event) =>
+                      setValues((current) => ({
+                        ...current,
+                        [key]: event.target.value,
+                      }))
+                    }
+                  />
+                  {INPUT_UNITS[spec.unit].suffix && (
+                    <span className="shrink-0 text-sm text-muted-foreground">
+                      {INPUT_UNITS[spec.unit].suffix}
+                    </span>
+                  )}
+                </div>
+                <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+                  Up to {formatAmount(spec.max, spec.unit)}. Default{" "}
                   {formatAmount(spec.default, spec.unit)}.
                 </p>
               </div>
@@ -320,5 +350,48 @@ function BudgetForm({
         </div>
       </form>
     </section>
+  )
+}
+
+/** The amount in use, with a bar that turns red near the limit. */
+function UsageBar({
+  used,
+  limit,
+  unit,
+}: {
+  used: NonNullable<Used>
+  limit: number
+  unit: BudgetSpec["unit"]
+}) {
+  const share = limit > 0 ? used.value / limit : used.value > 0 ? Infinity : 0
+  return (
+    <div className="flex flex-col gap-1">
+      <span>
+        {used.partial ? "≥ " : ""}
+        {formatAmount(used.value, unit)}
+        <span
+          className={share > 1 ? "text-destructive" : "text-muted-foreground"}
+        >
+          {" "}
+          ·{" "}
+          {share === Infinity
+            ? "over the limit"
+            : `${Math.round(share * 100)}%`}
+        </span>
+      </span>
+      <progress
+        value={Math.min(share, 1)}
+        max={1}
+        aria-hidden
+        className={
+          share >= 0.8
+            ? "h-1.5 w-full appearance-none overflow-hidden rounded-full bg-muted [&::-moz-progress-bar]:bg-destructive [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-destructive"
+            : "h-1.5 w-full appearance-none overflow-hidden rounded-full bg-muted [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary"
+        }
+      />
+      {used.note && (
+        <span className="text-xs text-muted-foreground">{used.note}</span>
+      )}
+    </div>
   )
 }

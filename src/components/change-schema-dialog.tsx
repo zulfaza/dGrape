@@ -42,6 +42,7 @@ import {
   fromInputText,
   parseOptionLines,
 } from "@/lib/field-types"
+import { LoadingRows } from "@/components/loading-rows"
 
 type FieldType = CollectionField["type"]
 type Migration = Doc<"schemaMigrations">
@@ -172,21 +173,19 @@ export function ChangeSchemaDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" disabled={disabled}>
-          Change schema
+          Edit fields
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Change schema</DialogTitle>
+          <DialogTitle>Edit fields</DialogTitle>
           <DialogDescription>
             Change field types, required fields, options, or indexes, or remove
             fields. A dry run first finds the records that do not fit.
           </DialogDescription>
         </DialogHeader>
         {latest === undefined ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            Loading…
-          </p>
+          <LoadingRows label="Loading fields" />
         ) : migrationId ? (
           <MigrationReport
             migrationId={migrationId}
@@ -414,12 +413,7 @@ function MigrationReport({
     }
   }
 
-  if (migration === undefined)
-    return (
-      <p role="status" className="text-sm text-muted-foreground">
-        Loading the plan…
-      </p>
-    )
+  if (migration === undefined) return <LoadingRows label="Loading the plan" />
   const { state } = migration
   return (
     <div className="flex flex-col gap-4">

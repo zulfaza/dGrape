@@ -39,8 +39,14 @@ import {
   buildField,
   FIELD_TYPE_LABELS,
   FIELD_TYPES,
+  fieldIdFromLabel,
   parseOptionLines,
 } from "@/lib/field-types"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 type FieldType = CollectionField["type"]
 type Field = {
@@ -53,6 +59,8 @@ type Field = {
   target: Id<"collections"> | null
   indexed: boolean
   optional?: true
+  /** The ID follows the label until the user types an ID. */
+  idEdited: boolean
 }
 
 const emptyField = (): Field => ({
@@ -62,6 +70,7 @@ const emptyField = (): Field => ({
   options: "",
   target: null,
   indexed: false,
+  idEdited: false,
 })
 
 /** Opens a form that creates a collection with typed fields. */
@@ -183,6 +192,7 @@ export function CreateCollectionDialog({
                           : null,
                       indexed: field.indexed === true,
                       optional: field.optional,
+                      idEdited: true,
                     }))
                   )
                 }}
@@ -207,11 +217,8 @@ export function CreateCollectionDialog({
           <fieldset className="flex flex-col gap-3" disabled={saving}>
             <legend className="mb-1 text-sm font-medium">Fields</legend>
             <p className="text-sm text-muted-foreground">
-              The ID is what agents and the API use. Use lowercase letters,
-              numbers, and underscores. Mark fields as indexed to sort and
-              filter by them
-              {maxIndexed !== undefined && ` (at most ${maxIndexed})`}. Indexed
-              text is at most 200 characters.
+              Agents use the ID. Index a field to sort and filter by it
+              {maxIndexed !== undefined && ` (at most ${maxIndexed})`}.
             </p>
             {fields.map((field, index) => (
               <div
@@ -226,7 +233,15 @@ export function CreateCollectionDialog({
                     maxLength={100}
                     required
                     onChange={(e) =>
-                      updateField(index, { label: e.target.value })
+                      updateField(
+                        index,
+                        field.idEdited
+                          ? { label: e.target.value }
+                          : {
+                              label: e.target.value,
+                              id: fieldIdFromLabel(e.target.value),
+                            }
+                      )
                     }
                   />
                 </div>
@@ -239,7 +254,9 @@ export function CreateCollectionDialog({
                     pattern="[a-z][a-z0-9_]*"
                     required
                     className="font-mono"
-                    onChange={(e) => updateField(index, { id: e.target.value })}
+                    onChange={(e) =>
+                      updateField(index, { id: e.target.value, idEdited: true })
+                    }
                   />
                 </div>
                 <div className="grid gap-2">
@@ -277,18 +294,23 @@ export function CreateCollectionDialog({
                   />
                   <Label htmlFor={`indexed-${index}`}>Indexed</Label>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Remove field ${index + 1}`}
-                  disabled={fields.length === 1}
-                  onClick={() =>
-                    setFields(fields.filter((_, i) => i !== index))
-                  }
-                >
-                  <Trash2 aria-hidden />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove field ${index + 1}`}
+                      disabled={fields.length === 1}
+                      onClick={() =>
+                        setFields(fields.filter((_, i) => i !== index))
+                      }
+                    >
+                      <Trash2 aria-hidden />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Remove field</TooltipContent>
+                </Tooltip>
                 {field.type === "recordReference" && (
                   <div className="grid gap-2 sm:col-span-5">
                     <Label htmlFor={`target-${index}`}>Collection</Label>

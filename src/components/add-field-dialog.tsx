@@ -36,6 +36,7 @@ import {
   buildField,
   FIELD_TYPE_LABELS,
   FIELD_TYPES,
+  fieldIdFromLabel,
   parseOptionLines,
 } from "@/lib/field-types"
 
@@ -63,6 +64,8 @@ export function AddFieldDialog({
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState("")
   const [id, setId] = useState("")
+  // The ID follows the label until the user types an ID.
+  const [idEdited, setIdEdited] = useState(false)
   const [type, setType] = useState<FieldType>("text")
   const [options, setOptions] = useState("")
   const [target, setTarget] = useState<Id<"collections"> | null>(null)
@@ -98,6 +101,7 @@ export function AddFieldDialog({
       await addField({ collectionId, field })
       setLabel("")
       setId("")
+      setIdEdited(false)
       setType("text")
       setOptions("")
       setTarget(null)
@@ -143,7 +147,10 @@ export function AddFieldDialog({
                 value={label}
                 maxLength={100}
                 required
-                onChange={(e) => setLabel(e.target.value)}
+                onChange={(e) => {
+                  setLabel(e.target.value)
+                  if (!idEdited) setId(fieldIdFromLabel(e.target.value))
+                }}
               />
             </div>
             <div className="grid gap-2">
@@ -154,9 +161,19 @@ export function AddFieldDialog({
                 maxLength={64}
                 pattern="[a-z][a-z0-9_]*"
                 required
+                aria-describedby="new-field-id-hint"
                 className="font-mono"
-                onChange={(e) => setId(e.target.value)}
+                onChange={(e) => {
+                  setIdEdited(true)
+                  setId(e.target.value)
+                }}
               />
+              <p
+                id="new-field-id-hint"
+                className="text-xs text-muted-foreground"
+              >
+                Agents use this ID. Lowercase letters, digits, and _.
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="new-field-type">Type</Label>
@@ -209,7 +226,7 @@ export function AddFieldDialog({
                 onCheckedChange={(checked) => setIndexed(checked === true)}
               />
               <Label htmlFor="new-field-indexed">
-                Index to sort and filter by this field
+                Allow sorting and filtering by this field
               </Label>
             </div>
             {!canIndex && (

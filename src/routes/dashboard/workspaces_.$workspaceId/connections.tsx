@@ -4,6 +4,7 @@ import { api } from "../../../../convex/_generated/api"
 import { AgentAccess, AgentAccessBoundary } from "@/components/agent-access"
 import { ConnectedAgents } from "@/components/connected-agents"
 import { WorkspaceConnections } from "@/components/workspace-connections"
+import { LoadingRows } from "@/components/loading-rows"
 
 export const Route = createFileRoute(
   "/dashboard/workspaces_/$workspaceId/connections"
@@ -14,7 +15,7 @@ export const Route = createFileRoute(
 function ConnectionsSection() {
   const { workspaceId } = Route.useParams()
   const workspace = useQuery(api.workspaces.get, { workspaceId })
-  if (!workspace) return null
+  if (!workspace) return <LoadingRows label="Loading" />
   if (workspace.role !== "owner")
     return (
       <p className="text-sm text-muted-foreground">

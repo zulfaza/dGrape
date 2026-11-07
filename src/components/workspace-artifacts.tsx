@@ -6,12 +6,19 @@ import {
   useQuery,
 } from "convex/react"
 import { Download, Eye, Trash2, Upload } from "lucide-react"
-import { useRef, useState, type ChangeEvent } from "react"
+import { useRef, useState, type ChangeEvent, type ReactNode } from "react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
+import { ConfirmButton } from "@/components/confirm-dialog"
 import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { toast } from "@/components/ui/toast"
 import { useWorkspaceCan } from "@/components/workspace-role"
+import { LoadingRows } from "@/components/loading-rows"
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -86,8 +93,7 @@ export function WorkspaceArtifacts({
     }
   }
 
-  async function deleteArtifact(artifactId: Id<"artifacts">, name: string) {
-    if (!window.confirm(`Delete ${name}? You cannot undo this.`)) return
+  async function deleteArtifact(artifactId: Id<"artifacts">) {
     setBusy(true)
     try {
       if ((await remove({ artifactId })) === "referenced")
@@ -118,7 +124,7 @@ export function WorkspaceArtifacts({
             Files
           </h2>
           <p className="text-sm text-muted-foreground">
-            Reports and files that you or your agents keep in this workspace.
+            Reports and files kept by you and your agents.
           </p>
         </div>
         <input
@@ -136,16 +142,19 @@ export function WorkspaceArtifacts({
             onClick={() => input.current?.click()}
           >
             <Upload aria-hidden />
-            {busy ? "Working…" : "Upload file"}
+            {busy ? "Uploading…" : "Upload file"}
           </Button>
         )}
       </div>
       {status === "LoadingFirstPage" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading files…
-        </p>
+        <LoadingRows label="Loading files" />
       ) : results.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No files yet.</p>
+        <p className="text-sm text-muted-foreground">
+          No files yet.{" "}
+          {canWrite
+            ? "Upload one, or let your agent save reports here."
+            : "Files that members and agents save appear here."}
+        </p>
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
           {results.map((artifact) => (
@@ -154,7 +163,10 @@ export function WorkspaceArtifacts({
               className="flex items-center justify-between gap-3 px-3 py-2.5"
             >
               <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-sm font-medium">
+                <span
+                  className="truncate text-sm font-medium"
+                  title={artifact.name}
+                >
                   {artifact.name}
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -162,43 +174,55 @@ export function WorkspaceArtifacts({
                   {new Date(artifact._creationTime).toLocaleDateString()} ·{" "}
                   {artifact.createdBy.kind === "agent"
                     ? "By an agent"
-                    : "By a member"}
+                    : artifact.createdByYou
+                      ? "By you"
+                      : "By a member"}
                 </span>
               </div>
               <div className="flex shrink-0 gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Preview ${artifact.name}`}
-                  onClick={(event) => {
-                    previewTrigger.current = event.currentTarget
-                    setPreview({
-                      id: artifact._id,
-                      name: artifact.name,
-                      contentType: artifact.contentType,
-                    })
-                  }}
-                >
-                  <Eye aria-hidden />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Download ${artifact.name}`}
-                  onClick={() => download(artifact._id)}
-                >
-                  <Download aria-hidden />
-                </Button>
-                {canWrite && (
+                <IconAction label="Preview">
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={`Preview ${artifact.name}`}
+                    onClick={(event) => {
+                      previewTrigger.current = event.currentTarget
+                      setPreview({
+                        id: artifact._id,
+                        name: artifact.name,
+                        contentType: artifact.contentType,
+                      })
+                    }}
+                  >
+                    <Eye aria-hidden />
+                  </Button>
+                </IconAction>
+                <IconAction label="Download">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Download ${artifact.name}`}
+                    onClick={() => download(artifact._id)}
+                  >
+                    <Download aria-hidden />
+                  </Button>
+                </IconAction>
+                {canWrite && (
+                  <ConfirmButton
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-destructive"
                     aria-label={`Delete ${artifact.name}`}
+                    tooltip="Delete"
                     disabled={busy}
-                    onClick={() => deleteArtifact(artifact._id, artifact.name)}
+                    title={`Delete ${artifact.name}?`}
+                    description="You cannot undo this."
+                    confirmLabel="Delete"
+                    destructive
+                    onConfirm={() => void deleteArtifact(artifact._id)}
                   >
                     <Trash2 aria-hidden />
-                  </Button>
+                  </ConfirmButton>
                 )}
               </div>
             </li>
@@ -215,5 +239,21 @@ export function WorkspaceArtifacts({
         </Button>
       )}
     </section>
+  )
+}
+
+/** A visible name for an icon-only button, on hover and keyboard focus. */
+function IconAction({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }

@@ -26,6 +26,7 @@ import { ChevronRight, Plus } from "lucide-react"
 import { Mascot } from "@/components/mascot"
 import { PageHeader } from "@/components/page-header"
 import { ROLE_LABELS } from "@/components/workspace-role"
+import { LoadingRows } from "@/components/loading-rows"
 
 export const Route = createFileRoute("/dashboard/workspaces")({
   component: WorkspacesPage,
@@ -48,9 +49,7 @@ function WorkspacesPage() {
         actions={<CreateWorkspaceDialog />}
       />
       {status === "LoadingFirstPage" ? (
-        <p role="status" className="text-muted-foreground">
-          Loading workspaces…
-        </p>
+        <LoadingRows label="Loading workspaces" />
       ) : results.length === 0 ? (
         <Empty className="rounded-xl border bg-card">
           <EmptyHeader>
@@ -76,7 +75,9 @@ function WorkspacesPage() {
                 params={{ workspaceId: workspace._id }}
                 className="flex items-center justify-between gap-4 px-5 py-4 text-base font-medium outline-none first:rounded-t-lg last:rounded-b-lg hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="truncate">{workspace.name}</span>
+                <span className="truncate" title={workspace.name}>
+                  {workspace.name}
+                </span>
                 <span className="ml-auto text-sm font-normal text-muted-foreground">
                   {ROLE_LABELS[workspace.role]}
                 </span>

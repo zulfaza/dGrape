@@ -10,6 +10,17 @@ import { Input } from "./ui/input"
 import { PageBlockView, PagePreview, revisionAction } from "./page-preview"
 import { PageSourcePicker } from "./page-source-picker"
 import { useWorkspaceCan } from "@/components/workspace-role"
+import { ChevronRight } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import { toast } from "@/components/ui/toast"
+import { LoadingRows } from "@/components/loading-rows"
 
 type Draft = {
   definition: PageDefinition
@@ -68,7 +79,7 @@ function WorkspacePagesEditor({
       await action()
     } catch {
       setMessage(
-        "Could not complete this action. Check the title and block bindings. If another member changed this page, copy your edits before opening it again."
+        "Could not save. Check the title and blocks. If someone else changed this page, copy your edits and reopen it."
       )
     } finally {
       running.current = false
@@ -123,13 +134,31 @@ function WorkspacePagesEditor({
       }
       await (action === "rollback" ? rollback(args) : publish(args))
       setDraft({ ...draft, publishedRevision: revision })
-      setMessage(
+      toast.success(
         action === "rollback"
-          ? `Rolled back to revision ${revision}.`
-          : `Published revision ${revision}.`
+          ? `Rolled back to revision ${revision}`
+          : `Published revision ${revision}`
       )
     })
   }
+  const newPageButton = canWrite && (
+    <Button
+      disabled={pending}
+      onClick={() => {
+        if (!canLeave()) return
+        setDraft({
+          kind: "new",
+          publishedRevision: null,
+          definition: { title: "", blocks: [{ kind: "markdown", text: "" }] },
+        })
+        setDirty(true)
+        setMessage("")
+        setPreviewRevision(null)
+      }}
+    >
+      New page
+    </Button>
+  )
   return (
     <section
       className="flex flex-col gap-4 rounded-lg border bg-card p-5 lg:col-span-2"
@@ -137,53 +166,51 @@ function WorkspacePagesEditor({
     >
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl font-semibold">Pages</h2>
-        <Button
-          hidden={!canWrite}
-          disabled={pending}
-          onClick={() => {
-            if (!canLeave()) return
-            setDraft({
-              kind: "new",
-              publishedRevision: null,
-              definition: {
-                title: "Untitled page",
-                blocks: [{ kind: "markdown", text: "" }],
-              },
-            })
-            setDirty(true)
-            setMessage("")
-            setPreviewRevision(null)
-          }}
-        >
-          New page
-        </Button>
+        {newPageButton}
       </div>
-      {status === "LoadingFirstPage" && <p role="status">Loading pages…</p>}
-      {status === "Exhausted" && results.length === 0 && (
-        <p>No pages yet. Create a page to start.</p>
+      {status === "LoadingFirstPage" && <LoadingRows label="Loading pages" />}
+      {status === "Exhausted" && results.length === 0 && !draft && (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No pages yet</EmptyTitle>
+            <EmptyDescription>
+              A page shows text, tables, metrics, and charts from your data.
+            </EmptyDescription>
+          </EmptyHeader>
+          {newPageButton && <EmptyContent>{newPageButton}</EmptyContent>}
+        </Empty>
       )}
-      <ul className="divide-y">
-        {results.map((page) => (
-          <li
-            key={page._id}
-            className="flex flex-wrap items-center justify-between gap-3 py-3"
-          >
-            <span>
-              {page.title} · Revision {page.revision} ·{" "}
-              {page.publishedRevision
-                ? `Published ${page.publishedRevision}`
-                : "Unpublished"}
-            </span>
-            <Button
-              variant="outline"
-              disabled={pending}
-              onClick={() => void open(page._id, page.revision)}
-            >
-              Open<span className="sr-only"> {page.title}</span>
-            </Button>
-          </li>
-        ))}
-      </ul>
+      {results.length > 0 && (
+        <ul className="divide-y rounded-lg border">
+          {results.map((page) => (
+            <li key={page._id}>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void open(page._id, page.revision)}
+                className="flex w-full items-center gap-4 px-4 py-3 text-left outline-none first:rounded-t-lg last:rounded-b-lg hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                <span
+                  className="min-w-0 flex-1 truncate font-medium"
+                  title={page.title}
+                >
+                  {page.title}
+                </span>
+                <span className="shrink-0 text-sm text-muted-foreground">
+                  Revision {page.revision} ·{" "}
+                  {page.publishedRevision
+                    ? `Revision ${page.publishedRevision} published`
+                    : "Not published"}
+                </span>
+                <ChevronRight
+                  aria-hidden
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {(status === "CanLoadMore" || status === "LoadingMore") && (
         <Button
           disabled={status === "LoadingMore" || pending}
@@ -192,11 +219,10 @@ function WorkspacePagesEditor({
           {status === "LoadingMore" ? "Loading…" : "Load more pages"}
         </Button>
       )}
-      {pending && <p role="status">Working…</p>}
       {message && (
-        <p role="alert" className="break-words">
-          {message}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription className="break-words">{message}</AlertDescription>
+        </Alert>
       )}
       {draft && (
         <div className="flex flex-col gap-4 border-t pt-4">
@@ -207,6 +233,8 @@ function WorkspacePagesEditor({
             Page title
             <Input
               maxLength={100}
+              placeholder="Untitled page"
+              autoFocus={draft.kind === "new"}
               value={draft.definition.title}
               disabled={pending}
               onChange={(event) =>
@@ -383,7 +411,7 @@ function WorkspacePagesEditor({
                     revision: result.revision,
                   })
                   setDirty(false)
-                  setMessage(`Saved revision ${result.revision}.`)
+                  toast.success(`Saved revision ${result.revision}`)
                 })
               }
             >

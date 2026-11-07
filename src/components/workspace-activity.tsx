@@ -5,6 +5,7 @@ import { grantedScopes } from "../../convex/lib/agentScope"
 import type { AuditActor, AuditEvent } from "../../convex/lib/auditEvents"
 import { scopeSummary } from "@/components/scope-picker"
 import { Button } from "@/components/ui/button"
+import { LoadingRows } from "@/components/loading-rows"
 
 const PAGE_SIZE = 20
 
@@ -134,9 +135,7 @@ export function WorkspaceActivity({
         </p>
       </div>
       {status === "LoadingFirstPage" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading activity…
-        </p>
+        <LoadingRows label="Loading activity" />
       ) : results.length === 0 ? (
         <p className="text-sm text-muted-foreground">No activity yet.</p>
       ) : (

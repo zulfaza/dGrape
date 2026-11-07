@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react"
 import { api } from "../../../../convex/_generated/api"
 import { ExportDefinitionsButton } from "@/components/export-definitions-button"
 import { PageHeader } from "@/components/page-header"
+import { usePublishWorkspaceName } from "@/components/workspace-name"
 import { ROLE_LABELS, WorkspaceRoleProvider } from "@/components/workspace-role"
 
 export const Route = createFileRoute("/dashboard/workspaces_/$workspaceId")({
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/dashboard/workspaces_/$workspaceId")({
 function WorkspaceLayout() {
   const { workspaceId } = Route.useParams()
   const workspace = useQuery(api.workspaces.get, { workspaceId })
+  usePublishWorkspaceName(workspace?.name)
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-8 md:px-8">
       <div className="flex flex-col gap-3">
@@ -30,7 +32,17 @@ function WorkspaceLayout() {
           All workspaces
         </Link>
         <PageHeader
-          title={workspace ? workspace.name : "Loading workspace…"}
+          title={
+            workspace ? (
+              workspace.name
+            ) : (
+              <span
+                role="status"
+                aria-label="Loading workspace"
+                className="inline-block h-8 w-64 animate-pulse rounded-md bg-muted align-middle"
+              />
+            )
+          }
           description={workspace && `Your role: ${ROLE_LABELS[workspace.role]}`}
           actions={
             workspace && (

@@ -1,13 +1,12 @@
 import type { CSSProperties } from "react"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  CheckmarkCircle02Icon,
-  InformationCircleIcon,
-  Alert02Icon,
-  MultiplicationSignCircleIcon,
-  Loading03Icon,
-} from "@hugeicons/core-free-icons"
+  CircleCheck,
+  CircleX,
+  Info,
+  LoaderCircle,
+  TriangleAlert,
+} from "lucide-react"
 import { cn } from "#/lib/utils.ts"
 
 // shadcn/ui Sonner recipe, using our explicit theme and shared geometry tokens.
@@ -28,17 +27,11 @@ function Toaster({ className, style, ...props }: ToasterProps) {
       gap={8}
       closeButton
       icons={{
-        success: <HugeiconsIcon icon={CheckmarkCircle02Icon} size={18} />,
-        info: <HugeiconsIcon icon={InformationCircleIcon} size={18} />,
-        warning: <HugeiconsIcon icon={Alert02Icon} size={18} />,
-        error: <HugeiconsIcon icon={MultiplicationSignCircleIcon} size={18} />,
-        loading: (
-          <HugeiconsIcon
-            icon={Loading03Icon}
-            size={18}
-            className="animate-spin"
-          />
-        ),
+        success: <CircleCheck className="size-4" />,
+        info: <Info className="size-4" />,
+        warning: <TriangleAlert className="size-4" />,
+        error: <CircleX className="size-4" />,
+        loading: <LoaderCircle className="size-4 animate-spin" />,
       }}
       style={toastStyle}
       {...props}

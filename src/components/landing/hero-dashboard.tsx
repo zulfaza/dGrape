@@ -259,10 +259,15 @@ function useRotation(
   return [index, setIndex]
 }
 
+/** The hero's width on a wide screen (max-w-6xl less padding) over SCREEN. */
+const DEFAULT_SCALE = 1088 / SCREEN.width
+
 /** The scale that fits a SCREEN-sized layout into the element's width. */
 function useFitScale() {
   const ref = useRef<HTMLDivElement>(null)
-  const [scale, setScale] = useState<number | null>(null)
+  // The server cannot measure, so it renders at the widest layout's scale.
+  // The client corrects it before the first paint after hydration.
+  const [scale, setScale] = useState(DEFAULT_SCALE)
   useLayoutEffect(() => {
     const element = ref.current
     if (!element) return
@@ -295,22 +300,20 @@ export function HeroDashboard() {
           setFocused(false)
       }}
     >
-      {scale !== null && (
-        <div
-          className="dfe-anim dfe-rise absolute top-0 left-0 flex origin-top-left flex-col text-card-foreground"
-          style={{
-            width: SCREEN.width,
-            height: SCREEN.height,
-            transform: `scale(${scale})`,
-          }}
-        >
-          <WindowBar />
-          <div className="flex min-h-0 flex-1">
-            <Sidebar activeIndex={index} onSelect={(i) => setIndex(i)} />
-            <Screen useCase={active} />
-          </div>
+      <div
+        className="dfe-anim dfe-rise absolute top-0 left-0 flex origin-top-left flex-col text-card-foreground"
+        style={{
+          width: SCREEN.width,
+          height: SCREEN.height,
+          transform: `scale(${scale})`,
+        }}
+      >
+        <WindowBar />
+        <div className="flex min-h-0 flex-1">
+          <Sidebar activeIndex={index} onSelect={(i) => setIndex(i)} />
+          <Screen useCase={active} />
         </div>
-      )}
+      </div>
     </div>
   )
 }

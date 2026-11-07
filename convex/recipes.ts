@@ -357,6 +357,85 @@ export const versions = query({
   returns: versionsResult,
   handler: (ctx, args) => versionsForPrincipal(ctx, args),
 })
+/**
+ * The members who can run recipes, with their run access to this version.
+ * Only the version's creator manages run access, so others get an empty
+ * list. Bounded to the first 100 owners and 100 editors.
+ */
+export const runAccessMembers = query({
+  args: { versionId: v.id("recipeVersions") },
+  returns: v.array(
+    v.object({
+      userId: v.string(),
+      email: v.union(v.string(), v.null()),
+      hasAccess: v.boolean(),
+      /** False for a grant holder who can no longer run recipes. */
+      canRun: v.boolean(),
+    })
+  ),
+  handler: async (ctx, { versionId }) => {
+    const version = await ctx.db.get(versionId)
+    if (!version) throw new Error("Recipe not found")
+    const caller = await requireMembership(ctx, version.workspaceId, "read")
+    if (caller.userId !== version.createdBy) return []
+    const members = new Map<
+      string,
+      {
+        userId: string
+        email: string | null
+        hasAccess: boolean
+        canRun: boolean
+      }
+    >()
+    for (const role of ["owner", "editor"] as const) {
+      const rows = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_role", (q) =>
+          q.eq("workspaceId", version.workspaceId).eq("role", role)
+        )
+        .take(100)
+      for (const member of rows) {
+        if (member.userId === version.createdBy) continue
+        const grant = await ctx.db
+          .query("recipeRunGrants")
+          .withIndex("by_versionId_and_userId", (q) =>
+            q.eq("versionId", versionId).eq("userId", member.userId)
+          )
+          .unique()
+        members.set(member.userId, {
+          userId: member.userId,
+          email: member.email ?? null,
+          hasAccess: grant !== null,
+          canRun: true,
+        })
+      }
+    }
+    // A grant outlives a role change, so its holder stays listed to remove.
+    // Listed members are already exact; this adds holders without a role
+    // that can run, up to the scan bound.
+    const grants = await ctx.db
+      .query("recipeRunGrants")
+      .withIndex("by_versionId_and_userId", (q) => q.eq("versionId", versionId))
+      .take(400)
+    for (const grant of grants) {
+      if (members.has(grant.userId)) continue
+      const member = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", version.workspaceId).eq("userId", grant.userId)
+        )
+        .unique()
+      members.set(grant.userId, {
+        userId: grant.userId,
+        email: member?.email ?? null,
+        hasAccess: true,
+        canRun: false,
+      })
+    }
+    return [...members.values()]
+  },
+})
+
 /** Permissions use the verified caller, separate from recipe run grants. */
 export const permissions = query({
   args: { versionId: v.id("recipeVersions") },

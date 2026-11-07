@@ -29,6 +29,25 @@ const memberValidator = v.object({
   isYou: v.boolean(),
 })
 
+/**
+ * Whether the workspace has exactly one owner, read from the role index so
+ * it is right however many members the paginated list has loaded.
+ */
+export const hasSoleOwner = query({
+  args: { workspaceId: v.id("workspaces") },
+  returns: v.boolean(),
+  handler: async (ctx, { workspaceId }) => {
+    await requireMembership(ctx, workspaceId, "manage")
+    const owners = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_role", (q) =>
+        q.eq("workspaceId", workspaceId).eq("role", "owner")
+      )
+      .take(2)
+    return owners.length === 1
+  },
+})
+
 export const list = query({
   args: {
     workspaceId: v.id("workspaces"),
