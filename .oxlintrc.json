@@ -193,12 +193,6 @@
       }
     },
     {
-      "files": ["src/components/collection-records.tsx"],
-      "rules": {
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
       "files": ["convex/lib/agentRegistration.ts"],
       "rules": {
         "anti-slop/no-unknown-parameters": "off",
