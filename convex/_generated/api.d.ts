@@ -80,6 +80,7 @@ import type * as lib_schemaMigrations from "../lib/schemaMigrations.js";
 import type * as lib_secretDomain from "../lib/secretDomain.js";
 import type * as lib_secretService from "../lib/secretService.js";
 import type * as lib_sourceSync from "../lib/sourceSync.js";
+import type * as lib_valueGuards from "../lib/valueGuards.js";
 import type * as lib_workspaceExport from "../lib/workspaceExport.js";
 import type * as lib_workspaceRoles from "../lib/workspaceRoles.js";
 import type * as members from "../members.js";
@@ -181,6 +182,7 @@ declare const fullApi: ApiFromModules<{
   "lib/secretDomain": typeof lib_secretDomain;
   "lib/secretService": typeof lib_secretService;
   "lib/sourceSync": typeof lib_sourceSync;
+  "lib/valueGuards": typeof lib_valueGuards;
   "lib/workspaceExport": typeof lib_workspaceExport;
   "lib/workspaceRoles": typeof lib_workspaceRoles;
   members: typeof members;
