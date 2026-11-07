@@ -1,0 +1,36 @@
+/*
+ * Theme values that the shadcn primitives in src/components/ui need beyond the
+ * default Tailwind scale. The app and the standalone specimen both import this
+ * file, so the primitives render the same in each. Each value is the exact
+ * value that the primitive used before as an arbitrary class.
+ *
+ * When you add or rename a value here, add it to the tailwind-merge config in
+ * src/lib/utils.ts too. Otherwise cn() does not know which classes conflict.
+ */
+@theme inline {
+  /* Tooltip arrow corner. The --radius-xs role is 4px, which is too round. */
+  --radius-2xs: 2px;
+
+  /* Calendar weekday and week-number captions. Line height stays inherited. */
+  --text-caption: 0.8rem;
+
+  /* Transition property sets. Duration and easing come from the utility. */
+  --transition-property-color-shadow: color, box-shadow;
+  --transition-property-width: width;
+  --transition-property-inset-width: left, right, width;
+  --transition-property-margin-opacity: margin, opacity;
+  --transition-property-size-padding: width, height, padding;
+}
+
+/*
+ * One-pixel outline of the outline sidebar menu button, and its hover color.
+ * These are utilities, not --shadow-* theme values, because @shadcn/lint reads
+ * an unknown shadow-* theme name as an undeclared color. @apply keeps the
+ * output identical to Tailwind's own shadow utility.
+ */
+@utility shadow-sidebar-outline {
+  @apply shadow-[0_0_0_1px_var(--sidebar-border)];
+}
+@utility shadow-sidebar-outline-hover {
+  @apply shadow-[0_0_0_1px_var(--sidebar-accent)];
+}
