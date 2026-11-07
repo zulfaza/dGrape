@@ -19,6 +19,7 @@ import {
 import { toast } from "@/components/ui/toast"
 import { useWorkspaceCan } from "@/components/workspace-role"
 import { LoadingRows } from "@/components/loading-rows"
+import { PageHeader } from "@/components/page-header"
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -107,7 +108,7 @@ export function WorkspaceArtifacts({
   }
 
   return (
-    <section aria-labelledby="files-heading" className="flex flex-col gap-3">
+    <section aria-label="Files" className="flex flex-col gap-6">
       {preview && (
         <ArtifactPreview
           key={preview.id}
@@ -118,34 +119,26 @@ export function WorkspaceArtifacts({
           onReturnFocus={() => previewTrigger.current?.focus()}
         />
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 id="files-heading" className="text-base font-semibold">
-            Files
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Reports and files kept by you and your agents.
-          </p>
-        </div>
-        <input
-          ref={input}
-          type="file"
-          className="sr-only"
-          tabIndex={-1}
-          aria-hidden
-          onChange={upload}
-        />
-        {canWrite && (
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={() => input.current?.click()}
-          >
-            <Upload aria-hidden />
-            {busy ? "Uploading…" : "Upload file"}
-          </Button>
-        )}
-      </div>
+      <input
+        ref={input}
+        type="file"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        onChange={upload}
+      />
+      <PageHeader
+        title="Files"
+        description="Reports and files kept by you and your agents."
+        actions={
+          canWrite && (
+            <Button disabled={busy} onClick={() => input.current?.click()}>
+              <Upload aria-hidden />
+              {busy ? "Uploading…" : "Upload file"}
+            </Button>
+          )
+        }
+      />
       {status === "LoadingFirstPage" ? (
         <LoadingRows label="Loading files" />
       ) : results.length === 0 ? (

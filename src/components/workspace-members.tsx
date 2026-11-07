@@ -23,6 +23,7 @@ import {
 import { toast } from "@/components/ui/toast"
 import { ROLE_LABELS } from "@/components/workspace-role"
 import { LoadingRows } from "@/components/loading-rows"
+import { PageHeader } from "@/components/page-header"
 
 const ROLES = ["owner", "editor", "viewer"] as const
 const INVITE_ROLES = ["editor", "viewer"] as const
@@ -43,9 +44,15 @@ export function WorkspaceMembers({
   workspaceId: Id<"workspaces">
 }) {
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <MemberList workspaceId={workspaceId} />
-      <Invites workspaceId={workspaceId} />
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Members"
+        description="Viewers read. Editors also edit data and run jobs. Owners also manage access."
+      />
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <MemberList workspaceId={workspaceId} />
+        <Invites workspaceId={workspaceId} />
+      </div>
     </div>
   )
 }
@@ -87,16 +94,7 @@ function MemberList({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
   }
 
   return (
-    <section aria-labelledby="members-heading" className="flex flex-col gap-3">
-      <div>
-        <h2 id="members-heading" className="text-base font-semibold">
-          Members
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Viewers read. Editors also edit data and run jobs. Owners also manage
-          access.
-        </p>
-      </div>
+    <section aria-label="Members" className="flex flex-col gap-3">
       {status === "LoadingFirstPage" ? (
         <LoadingRows label="Loading members" />
       ) : (

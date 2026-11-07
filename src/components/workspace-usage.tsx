@@ -23,6 +23,7 @@ import {
 import { toast } from "@/components/ui/toast"
 import { useWorkspaceCan } from "@/components/workspace-role"
 import { LoadingRows } from "@/components/loading-rows"
+import { PageHeader } from "@/components/page-header"
 
 function formatAmount(value: number, unit: BudgetSpec["unit"]) {
   switch (unit) {
@@ -122,16 +123,11 @@ export function WorkspaceUsage({
   if (!budgets || !usage) return <LoadingRows label="Loading usage" />
   return (
     <div className="flex flex-col gap-8">
-      <section aria-labelledby="usage-heading" className="flex flex-col gap-3">
-        <div>
-          <h2 id="usage-heading" className="text-base font-semibold">
-            Usage
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Work that would go over a limit does not start. Lowering a limit
-            never deletes data.
-          </p>
-        </div>
+      <section aria-label="Usage" className="flex flex-col gap-6">
+        <PageHeader
+          title="Usage"
+          description="Work that would go over a limit does not start. Lowering a limit never deletes data."
+        />
         <Table>
           <TableHeader>
             <TableRow>

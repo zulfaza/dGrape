@@ -6,6 +6,8 @@ import { api } from "../../../../convex/_generated/api"
 import { CollectionRecords } from "@/components/collection-records"
 import { CreateCollectionDialog } from "@/components/create-collection-dialog"
 import { useWorkspaceCan } from "@/components/workspace-role"
+import { PageHeader } from "@/components/page-header"
+import { ExportDefinitionsButton } from "@/components/export-definitions-button"
 import { Mascot } from "@/components/mascot"
 import { FIELD_TYPE_LABELS } from "@/lib/field-types"
 import { Badge } from "@/components/ui/badge"
@@ -63,60 +65,54 @@ function DataSection() {
     return <LoadingRows label="Loading collection" />
 
   return (
-    <section
-      aria-labelledby="collections-heading"
-      className="rounded-lg border bg-card"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b px-5 py-4">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h2 id="collections-heading" className="text-xl font-semibold">
-            Collections
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Open a collection to view and edit its records.
-          </p>
-        </div>
-        {results.length > 0 && (
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground tabular-nums">
-              {results.length === 1
-                ? "1 collection"
-                : `${results.length} collections`}
-            </span>
-            {canWrite && workspace && (
-              <CreateCollectionDialog workspaceId={workspace._id} />
-            )}
-          </div>
-        )}
-      </div>
+    <section aria-label="Collections" className="flex flex-col gap-6">
+      <PageHeader
+        title="Data"
+        description="Collections hold your records. Open one to view and edit them."
+        actions={
+          workspace && (
+            <>
+              <ExportDefinitionsButton
+                key={workspace._id}
+                workspace={workspace}
+              />
+              {canWrite && results.length > 0 && (
+                <CreateCollectionDialog workspaceId={workspace._id} />
+              )}
+            </>
+          )
+        }
+      />
       {status === "LoadingFirstPage" ? (
         <LoadingRows label="Loading collections" />
       ) : results.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia>
-              <Mascot pose="wave" size={160} />
-            </EmptyMedia>
-            <EmptyTitle>Create your first collection</EmptyTitle>
-            <EmptyDescription>
-              Choose the fields each record has, such as company, salary, and
-              applied. Your agent can then fill it in.
-            </EmptyDescription>
-          </EmptyHeader>
-          {canWrite && workspace && (
-            <EmptyContent>
-              <CreateCollectionDialog workspaceId={workspace._id} />
-            </EmptyContent>
-          )}
-        </Empty>
+        <div className="rounded-lg border bg-card">
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia>
+                <Mascot pose="wave" size={160} />
+              </EmptyMedia>
+              <EmptyTitle>Create your first collection</EmptyTitle>
+              <EmptyDescription>
+                Choose the fields each record has, such as company, salary, and
+                applied. Your agent can then fill it in.
+              </EmptyDescription>
+            </EmptyHeader>
+            {canWrite && workspace && (
+              <EmptyContent>
+                <CreateCollectionDialog workspaceId={workspace._id} />
+              </EmptyContent>
+            )}
+          </Empty>
+        </div>
       ) : (
-        <ul className="divide-y">
+        <ul className="divide-y overflow-hidden rounded-lg border bg-card">
           {results.map((collection) => (
             <li key={collection._id}>
               <Link
                 to="."
                 search={{ collection: collection._id }}
-                className="flex items-center gap-4 px-5 py-4 outline-none last:rounded-b-lg hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex items-center gap-4 px-5 py-4 outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <h3
@@ -148,16 +144,16 @@ function DataSection() {
         </ul>
       )}
       {status === "CanLoadMore" && (
-        <div className="border-t px-5 py-3">
-          <Button variant="outline" onClick={() => loadMore(20)}>
-            Load more
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          className="self-start"
+          onClick={() => loadMore(20)}
+        >
+          Load more
+        </Button>
       )}
       {status === "LoadingMore" && (
-        <p role="status" className="border-t px-5 py-3">
-          Loading more…
-        </p>
+        <LoadingRows label="Loading more" rows={1} />
       )}
     </section>
   )

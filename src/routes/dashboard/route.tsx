@@ -150,7 +150,7 @@ const WORKSPACE_SECTION_TITLES: Record<string, string> = {
   data: "Data",
   jobs: "Jobs",
   connections: "Connections",
-  artifacts: "Artifacts",
+  artifacts: "Files",
   members: "Members",
   activity: "Activity",
   usage: "Usage",

@@ -52,7 +52,7 @@ const WORKSPACE_SECTIONS = [
     to: "/dashboard/workspaces/$workspaceId/connections",
   },
   {
-    label: "Artifacts",
+    label: "Files",
     icon: Files,
     to: "/dashboard/workspaces/$workspaceId/artifacts",
   },

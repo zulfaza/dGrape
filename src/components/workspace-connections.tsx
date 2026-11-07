@@ -171,11 +171,7 @@ export function WorkspaceConnectionsView({
       className="flex flex-col gap-4 rounded-lg border bg-card p-5"
       aria-label="Connections"
     >
-      <h2 className="text-xl font-semibold">Connections</h2>
-      <p className="text-sm text-muted-foreground">
-        Store API keys for your connections. Agents see only the reference ID,
-        never the key.
-      </p>
+      <h2 className="text-base font-semibold">API keys</h2>
       <form
         onSubmit={(event) => {
           event.preventDefault()

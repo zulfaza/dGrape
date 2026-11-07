@@ -37,6 +37,7 @@ import { ConfirmButton } from "@/components/confirm-dialog"
 import { toast } from "@/components/ui/toast"
 import { errorMessage } from "@/lib/error-message"
 import { formatDateTime } from "@/lib/format-time"
+import { PageHeader } from "@/components/page-header"
 
 /** Run states as people read them, with a badge that marks failures. */
 const RUN_STATE = {
@@ -194,30 +195,28 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
   const version = versions.results.find((item) => item._id === versionId)
   const selectedRun = runs.results.find((item) => item._id === runId)
   return (
-    <section
-      aria-label="Recipes and schedules"
-      className="flex flex-col gap-4 lg:col-span-2"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold">Recipes and schedules</h2>
-        <Button
-          hidden={!canWrite}
-          disabled={operation.busy || draft !== null}
-          onClick={() =>
-            setDraft({
-              name: "",
-              json: JSON.stringify(sample, null, 2),
-              sample: "[]",
-              preview: null,
-            })
-          }
-        >
-          New recipe
-        </Button>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        A version cannot change. To edit a recipe, publish a new version.
-      </p>
+    <section aria-label="Jobs" className="flex flex-col gap-4 lg:col-span-2">
+      <PageHeader
+        title="Jobs"
+        description="Recipes fetch and shape your data, now or on a schedule."
+        actions={
+          canWrite && (
+            <Button
+              disabled={operation.busy || draft !== null}
+              onClick={() =>
+                setDraft({
+                  name: "",
+                  json: JSON.stringify(sample, null, 2),
+                  sample: "[]",
+                  preview: null,
+                })
+              }
+            >
+              New recipe
+            </Button>
+          )
+        }
+      />
       <Feedback message={operation.message} />
       {draft && (
         <form
@@ -341,6 +340,9 @@ function RecipePanel({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
         </form>
       )}
       <h3 className="text-base font-semibold">Versions</h3>
+      <p className="-mt-2 text-sm text-muted-foreground">
+        A version cannot change. To edit a recipe, publish a new version.
+      </p>
       {versions.status === "Exhausted" && versions.results.length === 0 && (
         <NoItems label="No recipes. Create a recipe to start." />
       )}

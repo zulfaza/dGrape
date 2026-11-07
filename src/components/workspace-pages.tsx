@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/empty"
 import { toast } from "@/components/ui/toast"
 import { LoadingRows } from "@/components/loading-rows"
+import { PageHeader } from "@/components/page-header"
 
 type Draft = {
   definition: PageDefinition
@@ -160,14 +161,12 @@ function WorkspacePagesEditor({
     </Button>
   )
   return (
-    <section
-      className="flex flex-col gap-4 rounded-lg border bg-card p-5 lg:col-span-2"
-      aria-label="Workspace pages"
-    >
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-xl font-semibold">Pages</h2>
-        {newPageButton}
-      </div>
+    <section className="flex flex-col gap-6" aria-label="Pages">
+      <PageHeader
+        title="Pages"
+        description="Text, tables, metrics, and charts built from your data."
+        actions={newPageButton}
+      />
       {status === "LoadingFirstPage" && <LoadingRows label="Loading pages" />}
       {status === "Exhausted" && results.length === 0 && !draft && (
         <Empty>
