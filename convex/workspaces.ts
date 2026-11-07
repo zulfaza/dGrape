@@ -200,6 +200,22 @@ export const getCollection = query({
     collectionForRecords(ctx, collectionId, "read"),
 })
 
+/**
+ * The id of a collection in this workspace, from untrusted text such as a
+ * URL, or null when the text names no collection the caller can read here.
+ */
+export const findCollection = query({
+  args: { workspaceId: v.id("workspaces"), collectionId: v.string() },
+  returns: v.union(v.id("collections"), v.null()),
+  handler: async (ctx, { workspaceId, collectionId: raw }) => {
+    await requireMembership(ctx, workspaceId, "read")
+    const collectionId = ctx.db.normalizeId("collections", raw)
+    if (!collectionId) return null
+    const collection = await ctx.db.get(collectionId)
+    return collection?.workspaceId === workspaceId ? collection._id : null
+  },
+})
+
 export const listRecords = query({
   returns: paginationResultValidator(collectionRecordValidator),
   args: {
