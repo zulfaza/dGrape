@@ -7,8 +7,12 @@ function Separator({
   className,
   orientation = "horizontal",
   decorative = true,
+  variant = "default",
   ...props
-}: React.ComponentProps<typeof SeparatorPrimitive.Root>) {
+}: React.ComponentProps<typeof SeparatorPrimitive.Root> & {
+  /** `sidebar`: a rule in the sidebar border color. */
+  variant?: "default" | "sidebar"
+}) {
   return (
     <SeparatorPrimitive.Root
       data-slot="separator"
@@ -16,6 +20,7 @@ function Separator({
       orientation={orientation}
       className={cn(
         "shrink-0 bg-border data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
+        variant === "sidebar" && "bg-sidebar-border",
         className
       )}
       {...props}
