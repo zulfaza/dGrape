@@ -165,34 +165,6 @@
   ],
   "overrides": [
     {
-      "files": ["src/components/ui/**"],
-      "rules": {
-        "shadcn/no-restyle": "off",
-        "shadcn/no-arbitrary-values": [
-          "error",
-          {
-            "allow": [
-              "layout",
-              "focus-visible:ring-[3px]",
-              "group-data-[focused=true]/day:ring-[3px]",
-              "has-focus:ring-[3px]",
-              "hover:shadow-[0_0_0_1px_var(--sidebar-accent)]",
-              "px-[--cell-size]",
-              "rounded-[2px]",
-              "rounded-[4px]",
-              "shadow-[0_0_0_1px_var(--sidebar-border)]",
-              "text-[0.8rem]",
-              "transition-[color,box-shadow]",
-              "transition-[left,right,width]",
-              "transition-[margin,opacity]",
-              "transition-[width,height,padding]",
-              "transition-[width]"
-            ]
-          }
-        ]
-      }
-    },
-    {
       "files": ["convex/lib/agentRegistration.ts"],
       "rules": {
         "anti-slop/no-unknown-parameters": "off",
@@ -213,12 +185,6 @@
     },
     {
       "files": ["convex/lib/recordQuery.ts", "convex/lib/queryAggregate.ts"],
-      "rules": {
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
-      "files": ["src/components/ui/sidebar.tsx"],
       "rules": {
         "anti-slop/no-runtime-typeof": "off"
       }
@@ -335,12 +301,6 @@
       "files": ["convex/lib/agentRequests.ts"],
       "rules": {
         "anti-slop/no-conditional-empty-object-spread": "off"
-      }
-    },
-    {
-      "files": ["src/components/ui/calendar.tsx"],
-      "rules": {
-        "shadcn/require-static-classes": "off"
       }
     },
     {
