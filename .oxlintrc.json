@@ -162,37 +162,5 @@
       "specifier": "./tools/oxlint/anti-slop/effect/index.ts"
     },
     "@shadcn/lint"
-  ],
-  "overrides": [
-    {
-      "files": ["src/components/landing/hero-dashboard.tsx"],
-      "rules": {
-        "shadcn/no-arbitrary-values": [
-          "error",
-          {
-            "allow": [
-              "layout",
-              "rounded-[1.2%/1.9%]",
-              "shadow-[0_40px_80px_-40px_rgb(36_51_43/0.55)]",
-              "bg-[#e5867a]",
-              "bg-[#e6bd5b]",
-              "bg-[#8cc9a7]"
-            ]
-          }
-        ],
-        "shadcn/no-inline-styles": [
-          "error",
-          {
-            "allow": [
-              "aspectRatio",
-              "width",
-              "height",
-              "transform",
-              "animationDelay"
-            ]
-          }
-        ]
-      }
-    }
   ]
 }
