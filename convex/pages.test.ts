@@ -6,6 +6,7 @@ import { api } from "./_generated/api"
 import { Schema } from "effect"
 import * as Exports from "./lib/agentExportTransport"
 import * as Pages from "./lib/agentPageTransport"
+import type { PageBlock } from "./lib/pageDomain"
 const modules = import.meta.glob("./**/*.ts")
 
 async function fixture() {
@@ -121,6 +122,33 @@ test("page drafts, publish, rollback and history preserve immutable definitions 
     "Second",
     "First",
   ])
+})
+
+test("page layouts stay inside the 12-column grid and never overlap", async () => {
+  const { owner, workspaceId } = await fixture()
+  const save = (
+    ...layouts: ({ x: number; y: number; w: number; h: number } | undefined)[]
+  ) =>
+    owner.mutation(api.pages.save, {
+      workspaceId,
+      definition: {
+        title: "Grid",
+        blocks: layouts.map((layout): PageBlock => ({
+          kind: "markdown",
+          text: "",
+          layout,
+        })),
+      },
+    })
+  await save({ x: 0, y: 0, w: 6, h: 4 }, { x: 6, y: 0, w: 6, h: 4 }, undefined)
+  await expect(save({ x: 7, y: 0, w: 6, h: 4 })).rejects.toThrow("x + w <= 12")
+  await expect(save({ x: 0, y: 0, w: 1.5, h: 4 })).rejects.toThrow("integers")
+  await expect(save({ x: 0, y: 0, w: 4, h: 41 })).rejects.toThrow(
+    "1 <= h <= 40"
+  )
+  await expect(
+    save({ x: 0, y: 0, w: 6, h: 4 }, { x: 5, y: 3, w: 2, h: 2 })
+  ).rejects.toThrow("Block 2 (markdown): layout overlaps Block 1")
 })
 
 test("page boundaries refuse other workspaces, including artifact and query references", async () => {
