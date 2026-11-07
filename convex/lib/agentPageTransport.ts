@@ -12,7 +12,15 @@ export const MAX_PAGE_SIZE = 20
 
 const Revision = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))
 const Binding = Schema.Struct({ queryId: Schema.String, revision: Schema.Int })
-const DataBlock = { title: Schema.String, binding: Binding }
+/** Grid cell position and size; see panelLayoutValidator in pageDomain.ts. */
+const Layout = Schema.Struct({
+  x: Schema.Int,
+  y: Schema.Int,
+  w: Schema.Int,
+  h: Schema.Int,
+})
+const Panel = { layout: Schema.optionalKey(Layout) }
+const DataBlock = { ...Panel, title: Schema.String, binding: Binding }
 
 export const Definition = Schema.Struct({
   title: Schema.String,
@@ -21,6 +29,7 @@ export const Definition = Schema.Struct({
       Schema.Union([
         Schema.Struct({
           kind: Schema.Literal("markdown"),
+          ...Panel,
           text: Schema.String,
         }),
         Schema.Struct({
@@ -57,11 +66,13 @@ export const Definition = Schema.Struct({
         }),
         Schema.Struct({
           kind: Schema.Literal("artifact"),
+          ...Panel,
           title: Schema.String,
           artifactId: Schema.String,
         }),
         Schema.Struct({
           kind: Schema.Literal("htmlReport"),
+          ...Panel,
           title: Schema.String,
           artifactId: Schema.String,
         }),

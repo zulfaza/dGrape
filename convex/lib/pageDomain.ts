@@ -46,6 +46,24 @@ export const chartTypes = [
   "scatter",
 ] as const satisfies readonly ChartType[]
 
+/** Columns in the dashboard grid. */
+export const GRID_COLUMNS = 12
+/** The tallest panel, in grid rows. */
+export const MAX_PANEL_HEIGHT = 40
+
+/**
+ * Where a panel sits in the 12-column dashboard grid, in whole grid cells.
+ * `x` and `y` are the top-left cell; `w` and `h` are the width and height.
+ * validatePage checks the bounds and that no two panels overlap.
+ */
+export const panelLayoutValidator = v.object({
+  x: v.number(),
+  y: v.number(),
+  w: v.number(),
+  h: v.number(),
+})
+export type PanelLayout = Infer<typeof panelLayoutValidator>
+
 /**
  * Builds the page protocol with typed IDs (stored pages) or plain strings
  * (agent input, before resolvePageIds in convex/agentPages.ts checks them).
@@ -54,7 +72,10 @@ function pageDefinition<
   Q extends QueryIdValidator,
   A extends ArtifactIdValidator,
 >(queryId: Q, artifactId: A) {
+  /** Blocks without a layout flow into the grid in order (old pages). */
+  const panel = { layout: v.optional(panelLayoutValidator) }
   const dataFields = {
+    ...panel,
     title: v.string(),
     binding: v.object({ queryId, revision: v.number() }),
   }
@@ -62,7 +83,7 @@ function pageDefinition<
     title: v.string(),
     blocks: v.array(
       v.union(
-        v.object({ kind: v.literal("markdown"), text: v.string() }),
+        v.object({ kind: v.literal("markdown"), ...panel, text: v.string() }),
         v.object({
           kind: v.literal("table"),
           ...dataFields,
@@ -82,12 +103,14 @@ function pageDefinition<
         }),
         v.object({
           kind: v.literal("artifact"),
+          ...panel,
           title: v.string(),
           artifactId,
         }),
         /** Static HTML snapshot artifact, shown in a sandboxed opaque-origin frame. */
         v.object({
           kind: v.literal("htmlReport"),
+          ...panel,
           title: v.string(),
           artifactId,
         })
@@ -117,8 +140,16 @@ export function validatePage(definition: PageDefinition) {
     throw new Error("A page can contain at most 20 blocks")
   if (new TextEncoder().encode(JSON.stringify(definition)).length > 100_000)
     throw new Error("Page definition exceeds 100 KB")
+  const placed: { at: string; layout: PanelLayout }[] = []
   for (const [index, block] of definition.blocks.entries()) {
     const at = `Block ${index + 1} (${block.kind})`
+    if (block.layout) {
+      validateLayout(block.layout, at)
+      const layout = block.layout
+      const other = placed.find((item) => overlaps(item.layout, layout))
+      if (other) throw new Error(`${at}: layout overlaps ${other.at}`)
+      placed.push({ at, layout })
+    }
     if (block.kind === "markdown") continue
     if (!block.title.trim() || block.title.length > 100)
       throw new Error(`${at}: block title must be 1 to 100 characters`)
@@ -137,6 +168,26 @@ export function validatePage(definition: PageDefinition) {
     )
       throw new Error(`${at}: tables require 1 to 20 unique fields`)
   }
+}
+
+function validateLayout({ x, y, w, h }: PanelLayout, at: string) {
+  if (![x, y, w, h].every(Number.isSafeInteger))
+    throw new Error(`${at}: layout values must be integers`)
+  if (x < 0 || w < 1 || w > GRID_COLUMNS || x + w > GRID_COLUMNS)
+    throw new Error(
+      `${at}: layout needs 0 <= x, 1 <= w <= ${GRID_COLUMNS} and x + w <= ${GRID_COLUMNS}`
+    )
+  if (y < 0 || h < 1 || h > MAX_PANEL_HEIGHT)
+    throw new Error(
+      `${at}: layout needs 0 <= y and 1 <= h <= ${MAX_PANEL_HEIGHT}`
+    )
+}
+
+/** True when two grid rectangles share at least one cell. */
+export function overlaps(a: PanelLayout, b: PanelLayout) {
+  return (
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+  )
 }
 
 function validateChart(chart: ChartSpec, at: string) {
