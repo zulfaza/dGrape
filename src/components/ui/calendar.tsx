@@ -63,7 +63,7 @@ function Calendar({
           defaultClassNames.button_next
         ),
         month_caption: cn(
-          "flex h-[--cell-size] w-full items-center justify-center px-[--cell-size]",
+          "flex h-[--cell-size] w-full items-center justify-center",
           defaultClassNames.month_caption
         ),
         dropdowns: cn(
@@ -88,7 +88,7 @@ function Calendar({
         month_grid: cn("w-full border-collapse", defaultClassNames.month_grid),
         weekdays: cn(defaultClassNames.weekdays),
         weekday: cn(
-          "w-[--cell-size] text-[0.8rem] font-normal text-muted-foreground select-none",
+          "w-[--cell-size] text-caption font-normal text-muted-foreground select-none",
           defaultClassNames.weekday
         ),
         week: cn(defaultClassNames.week),
@@ -98,7 +98,7 @@ function Calendar({
           defaultClassNames.week_number_header
         ),
         week_number: cn(
-          "text-[0.8rem] text-muted-foreground select-none",
+          "text-caption text-muted-foreground select-none",
           defaultClassNames.week_number
         ),
         day: cn(
@@ -116,6 +116,8 @@ function Calendar({
         ),
         hidden: cn("invisible", defaultClassNames.hidden),
         ...classNames,
+        // CalendarDayButton forwards this; keep the rdp class with a custom one.
+        day_button: cn(defaultClassNames.day_button, classNames?.day_button),
       }}
       components={{
         Root: ({ className: rootClassName, rootRef, ...rootProps }) => (
@@ -177,8 +179,6 @@ function CalendarDayButton({
   modifiers,
   ...props
 }: React.ComponentProps<typeof DayButton>) {
-  const defaultClassNames = getDefaultClassNames()
-
   const ref = React.useRef<HTMLButtonElement>(null)
   React.useEffect(() => {
     if (modifiers.focused) ref.current?.focus()
@@ -187,7 +187,7 @@ function CalendarDayButton({
   return (
     <Button
       ref={ref}
-      variant="ghost"
+      variant="calendar-day"
       size="icon"
       data-day={day.date.toLocaleDateString()}
       data-selected-single={
@@ -200,8 +200,7 @@ function CalendarDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        "flex aspect-square h-auto w-full min-w-[--cell-size] flex-col gap-1 rounded-md leading-none font-normal group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-3 group-data-[focused=true]/day:ring-ring/50 data-[range-end=true]:rounded-md data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-transparent data-[range-start=true]:rounded-md data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground [&>span]:text-xs [&>span]:opacity-70",
-        defaultClassNames.day_button,
+        "flex aspect-square h-auto w-full min-w-[--cell-size] flex-col group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10",
         className
       )}
       {...props}

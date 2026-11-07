@@ -19,6 +19,9 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // A day in Calendar: ghost, plus the selected, range and focus states.
+        "calendar-day":
+          "gap-1 rounded-md leading-none font-normal group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-3 group-data-[focused=true]/day:ring-ring/50 hover:bg-accent hover:text-accent-foreground data-[range-end=true]:rounded-md data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-transparent data-[range-start=true]:rounded-md data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground dark:hover:bg-accent/50 [&>span]:text-xs [&>span]:opacity-70",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
