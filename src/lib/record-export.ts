@@ -1,4 +1,9 @@
+import { Match } from "effect"
 import type { Doc } from "../../convex/_generated/dataModel"
+import type {
+  CollectionField,
+  RecordValue,
+} from "../../convex/lib/collectionDomain"
 
 /**
  * Builds export files for one collection. Both formats keep each record's
@@ -24,6 +29,32 @@ function exportedValues(collection: Collection, record: CollectionRecord) {
 }
 
 /**
+ * The fields before `values` in one exported JSON record.
+ * `idempotencyKey` is present only when the record has one.
+ */
+type ExportedRecordMetadata = {
+  id: CollectionRecord["_id"]
+  createdAt: string
+  revision: number
+  schemaVersion: number
+  idempotencyKey?: string
+}
+
+/** One record in the JSON export, with keys in the order the file shows. */
+function exportedRecord(collection: Collection, record: CollectionRecord) {
+  const metadata: ExportedRecordMetadata = {
+    id: record._id,
+    createdAt: new Date(record._creationTime).toISOString(),
+    revision: record.revision,
+    schemaVersion: record.schemaVersion,
+  }
+  if (record.idempotencyKey !== undefined) {
+    metadata.idempotencyKey = record.idempotencyKey
+  }
+  return { ...metadata, values: exportedValues(collection, record) }
+}
+
+/**
  * JSON: the collection definition and every record, as stored, except that
  * secret references are left out.
  */
@@ -40,16 +71,7 @@ export function toJson(
         schemaVersion: collection.definition.version,
         fields: collection.definition.fields,
       },
-      records: records.map((record) => ({
-        id: record._id,
-        createdAt: new Date(record._creationTime).toISOString(),
-        revision: record.revision,
-        schemaVersion: record.schemaVersion,
-        ...(record.idempotencyKey === undefined
-          ? {}
-          : { idempotencyKey: record.idempotencyKey }),
-        values: exportedValues(collection, record),
-      })),
+      records: records.map((record) => exportedRecord(collection, record)),
     },
     null,
     2
@@ -67,6 +89,22 @@ function csvCell(value: string): string {
  */
 function safeText(value: string): string {
   return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
+}
+
+/** The CSV text of one field value; see {@link toCsv}. */
+function csvValue(field: CollectionField, value: RecordValue | undefined) {
+  if (value === undefined || field.type === "secretRef") return ""
+  if (Array.isArray(value) || field.type === "object")
+    return JSON.stringify(value)
+  return Match.value(value).pipe(
+    Match.when(Match.string, safeText),
+    Match.when(Match.number, (number) =>
+      field.type === "timestamp"
+        ? new Date(number).toISOString()
+        : String(number)
+    ),
+    Match.orElse(String)
+  )
 }
 
 /**
@@ -92,15 +130,7 @@ export function toCsv(
     new Date(record._creationTime).toISOString(),
     String(record.revision),
     String(record.schemaVersion),
-    ...fields.map((field) => {
-      const value = record.values[field.id]
-      if (value === undefined || field.type === "secretRef") return ""
-      if (Array.isArray(value) || field.type === "object")
-        return JSON.stringify(value)
-      if (field.type === "timestamp" && typeof value === "number")
-        return new Date(value).toISOString()
-      return typeof value === "string" ? safeText(value) : String(value)
-    }),
+    ...fields.map((field) => csvValue(field, record.values[field.id])),
   ])
   return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")
 }

@@ -224,12 +224,6 @@
       }
     },
     {
-      "files": ["src/lib/record-export.ts"],
-      "rules": {
-        "anti-slop/no-runtime-typeof": "off"
-      }
-    },
-    {
       "files": ["src/components/ui/sidebar.tsx"],
       "rules": {
         "anti-slop/no-runtime-typeof": "off"
@@ -362,11 +356,7 @@
       }
     },
     {
-      "files": [
-        "convex/lib/agentRequests.ts",
-        "src/lib/record-export.ts",
-        "src/mcp/agent-api.ts"
-      ],
+      "files": ["convex/lib/agentRequests.ts", "src/mcp/agent-api.ts"],
       "rules": {
         "anti-slop/no-conditional-empty-object-spread": "off"
       }
