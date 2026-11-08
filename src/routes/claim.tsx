@@ -136,9 +136,22 @@ function ClaimPage() {
       <>
         <h1 className="text-2xl font-semibold">Connect your agent</h1>
         <p className="text-muted-foreground">
-          An agent asked for access to DFE for{" "}
+          {details.providerName ? (
+            <>
+              An agent from{" "}
+              <span className="font-medium text-foreground">
+                {details.providerName}
+              </span>{" "}
+              asked
+            </>
+          ) : (
+            "An agent asked"
+          )}{" "}
+          for access to DFE for{" "}
           <span className="font-medium text-foreground">{details.email}</span>.
           Continue only if you started this from your own agent.
+          {details.providerName &&
+            " After you connect it once, this provider can connect your agent again without a code."}
         </p>
         {!sameAccount && (
           <Alert variant="destructive">

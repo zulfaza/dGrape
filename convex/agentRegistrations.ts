@@ -29,6 +29,7 @@ import {
   providerBindingValidator,
 } from "./lib/agentRegistration"
 import { recordJti } from "./lib/assertionReplay"
+import { findTrustedIssuer } from "./lib/trustedIssuers"
 
 /**
  * auth.md registration state changes. convex/http.ts calls these after it
@@ -188,6 +189,10 @@ async function openClaim(
     registration.claimExpiresAt <= now
   )
     return null
+  // An operator can stop trusting a provider. Its pending registrations
+  // then cannot be claimed.
+  if (registration.provider && !findTrustedIssuer(registration.provider.issuer))
+    return null
   return { attempt, registration }
 }
 
@@ -202,6 +207,11 @@ const claimDetailsResult = v.union(
     status: v.literal("open"),
     email: v.string(),
     expiresAt: v.number(),
+    /**
+     * The display name of the trusted agent provider, from the pinned
+     * registry, for an agent-verified registration. A provider cannot set it.
+     */
+    providerName: v.union(v.string(), v.null()),
   })
 )
 
@@ -215,10 +225,14 @@ export const claimDetails = query({
     await requireUserId(ctx)
     const claim = await openClaim(ctx, await sha256(attemptToken), Date.now())
     if (!claim) return { status: "unavailable" }
+    const provider = claim.registration.provider
     return {
       status: "open",
       email: claim.registration.loginHint,
       expiresAt: claim.attempt.expiresAt,
+      providerName: provider
+        ? (findTrustedIssuer(provider.issuer)?.displayName ?? null)
+        : null,
     }
   },
 })
