@@ -1,25 +1,22 @@
 # Secret references and connectors
 
 ADR 0007 selects Cloudflare Worker secret bindings for production. An
-operator adds each credential as a `SECRET_REF_*` Worker secret. The optional
-WorkOS adapter remains until a separate change removes it.
+operator adds each credential as a `SECRET_REF_*` Worker secret.
 
 ## Configuration
 
 Set these Convex variables only on an approved deployment:
 
 - `SECRET_VAULT_PROVIDER=cloudflare` selects the Worker binding adapter.
-  `workos` selects the optional WorkOS adapter.
 - `APP_ORIGIN` is the Worker origin. `SECRET_BINDING_TOKEN` authenticates
   Convex to the Worker. The Worker has the same secret.
-- `SECRET_VAULT_WORKOS_API_KEY` holds the operator's Vault key (`workos` only).
 - `CONNECTOR_ALLOWED_ORIGINS` holds comma-separated HTTPS origins, without paths
   or trailing slashes. An empty value denies all destinations.
 
 docs/deployment.md lists the bindings and the operator steps.
 
 The browser needs `VITE_CONVEX_SITE_URL` for the authenticated HTTP settings
-endpoint. Never put the binding token or Vault key in a browser variable.
+endpoint. Never put the binding token in a browser variable.
 
 An operator must approve each API host and its DNS/network policy. Do not approve
 hosts with private network targets, user-controlled DNS, or request proxy routes.
@@ -80,7 +77,4 @@ Run `pnpm test`, `pnpm typecheck`, `pnpm typecheck:backend`, `pnpm lint`, and
 `pnpm build`. Focused tests use an in-memory SecretService and Convex test runtime.
 They require no deployment or vendor account. CI has no deployment command.
 
-The adapter follows the [WorkOS Vault guide](https://workos.com/docs/vault/quick-start)
-and installed SDK types. The [Vault reference](https://workos.com/docs/reference/vault/object)
-documents unique object names and context. The [pricing page](https://workos.com/pricing)
-does not establish a free Vault production entitlement. Checked 2026-11-03.
+The removed WorkOS Vault adapter is in git history (ADR 0007 alternatives).
