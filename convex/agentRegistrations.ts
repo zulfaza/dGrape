@@ -117,9 +117,6 @@ const registerVerifiedResult = v.union(
   })
 )
 
-/** How many claimed registrations of one provider user to look through. */
-const MAX_LINKED_REGISTRATIONS = 20
-
 /**
  * Agent-verified registration, after convex/agentIdentityHttp.ts has
  * verified the provider's assertion. It records the assertion's `jti`, so
@@ -144,16 +141,19 @@ export const registerVerified = internalMutation({
   ): Promise<Infer<typeof registerVerifiedResult>> => {
     if (!(await recordJti(ctx, issuer, jti, replayExpiresAt)))
       return { status: "replay_detected" }
-    const linked = await ctx.db
+    const registration = await ctx.db
       .query("agentRegistrations")
-      .withIndex("by_providerIssuer_and_providerSubject", (q) =>
-        q.eq("provider.issuer", issuer).eq("provider.subject", subject)
+      .withIndex(
+        "by_providerIssuer_and_providerSubject_and_status_and_loginHint",
+        (q) =>
+          q
+            .eq("provider.issuer", issuer)
+            .eq("provider.subject", subject)
+            .eq("status", "claimed")
+            .eq("loginHint", email)
       )
       .order("desc")
-      .take(MAX_LINKED_REGISTRATIONS)
-    const registration = linked.find(
-      (r) => r.status === "claimed" && r.loginHint === email
-    )
+      .first()
     if (registration?.status === "claimed")
       return {
         status: "linked",
