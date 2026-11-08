@@ -12,7 +12,7 @@ Accepted means the user has selected the stated direction, not that it is implem
 | [0004](0004-indexed-queries-and-materialized-reports.md) | Proposed | Serve bounded indexed queries and prepared report summaries |
 | [0005](0005-deterministic-recipes-and-durable-scheduling.md) | Proposed | Execute versioned recipes with durable, retry-safe scheduling |
 | [0006](0006-versioned-pages-and-isolated-html.md) | Proposed | Support live dashboard blocks and isolated custom HTML |
-| [0007](0007-secret-references-and-vault-boundary.md) | Proposed | Keep credentials behind a server-side secret service |
+| [0007](0007-secret-references-and-vault-boundary.md) | Accepted | Keep credentials behind a server-side secret service, backed by Cloudflare Worker secret bindings |
 | [0008](0008-auth-md-agent-registration.md) | Accepted | Include auth.md agent registration in the implementation scope |
 | [0009](0009-user-claimed-agent-authorization.md) | Accepted | Start registration with explicit user confirmation |
 | [0010](0010-shadcn-ui-components.md) | Accepted | Use shadcn/ui as the component foundation |
