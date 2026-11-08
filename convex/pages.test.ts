@@ -519,16 +519,18 @@ test("agent credentials draft, publish, get and list pages with clear binding er
   const { digestToken } = await import("./agentAccess")
   const writer = "a".repeat(64)
   const reader = "b".repeat(64)
-  const { queryId, foreignPageId } = await t.run(async (ctx) => {
+  const pagesOnly = "e".repeat(64)
+  const { queryId, foreignPageId, liveReportId } = await t.run(async (ctx) => {
     for (const [token, scope] of [
       [writer, "readwrite"],
       [reader, "readonly"],
+      [pagesOnly, "pagesOnly"],
     ] as const)
       await ctx.db.insert("agentGrants", {
         workspaceId,
         owner: "owner",
         digest: await digestToken(token),
-        scope,
+        scope: scope === "pagesOnly" ? ["pages.write"] : scope,
         state: "active",
         expiresAt: Date.now() + 60000,
       })
@@ -566,7 +568,15 @@ test("agent credentials draft, publish, get and list pages with clear binding er
       title: "Theirs",
       revision: 1,
     })
-    return { queryId, foreignPageId }
+    const liveReportId = await ctx.db.insert("artifacts", {
+      workspaceId,
+      key: "live",
+      name: "live.html",
+      size: 5,
+      contentType: "text/html",
+      createdBy: { kind: "user", userId: "owner" },
+    })
+    return { queryId, foreignPageId, liveReportId }
   })
   type Body =
     | typeof Pages.SaveDraftInput.Type
@@ -765,6 +775,41 @@ test("agent credentials draft, publish, get and list pages with clear binding er
   expect(await call("list", { limit: 20 }, reader)).toMatchObject({
     body: { page: { length: 4 } },
   })
+
+  const liveReport = (bindingQueryId: string) => ({
+    title: "Live",
+    blocks: [
+      {
+        kind: "htmlReport" as const,
+        title: "Live",
+        artifactId: liveReportId,
+        live: {
+          bindings: [{ name: "amounts", queryId: bindingQueryId, revision: 1 }],
+        },
+      },
+    ],
+  })
+  // A live report can send what it reads out of its frame, so saving one
+  // needs data.read as well as pages.write.
+  expect(
+    await call("saveDraft", { definition: liveReport(queryId) }, pagesOnly)
+  ).toMatchObject({
+    status: 403,
+    body: { error: expect.stringContaining("data.read") },
+  })
+  expect(await call("saveDraft", { definition: liveReport("nope") })).toEqual({
+    status: 400,
+    body: {
+      error:
+        'Block 1 (htmlReport): "nope" is not a saved query ID. Use queries_list to find one.',
+    },
+  })
+  const live = await call("saveDraft", { definition: liveReport(queryId) })
+  expect(live.status).toBe(200)
+  expect(
+    (await call("get", { pageId: live.body.pageId, revision: 1 })).body.version
+      .definition
+  ).toEqual(liveReport(queryId))
 }, 30_000)
 
 test("workspace exports keep every definition version and stable IDs, without user IDs, and need each read scope", async () => {

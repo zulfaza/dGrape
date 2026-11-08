@@ -6,6 +6,7 @@ import {
   type QueryCtx,
 } from "./_generated/server"
 import { withGrant } from "./lib/agentGrant"
+import type { AgentScope } from "./lib/agentScope"
 import {
   agentPageDefinitionValidator,
   pageDefinitionValidator,
@@ -92,6 +93,18 @@ function summary(page: Doc<"pages">) {
 
 const savedDraft = v.object({ pageId: v.id("pages"), revision: v.number() })
 
+/**
+ * A live HTML report runs authored scripts that can send the data they read
+ * out of the frame (for example, by navigating it). So a credential that
+ * saves live bindings must also be able to read data itself.
+ */
+function saveDraftScopes(definition: AgentPageDefinition): AgentScope[] {
+  const live = definition.blocks.some(
+    (block) => block.kind === "htmlReport" && block.live !== undefined
+  )
+  return live ? ["pages.write", "data.read"] : ["pages.write"]
+}
+
 export const saveDraft = internalMutation({
   args: {
     digest: v.string(),
@@ -102,30 +115,35 @@ export const saveDraft = internalMutation({
   },
   returns: savedDraft,
   handler: (ctx, { digest, idempotencyKey, ...args }) =>
-    withGrant(ctx, digest, Date.now(), ["pages.write"], (grant) =>
-      runOnce(
-        ctx,
-        agentOperation(grant, "pages.saveDraft", idempotencyKey, args),
-        savedDraft,
-        async () => {
-          const pageId =
-            args.pageId === undefined
-              ? undefined
-              : ctx.db.normalizeId("pages", args.pageId)
-          if (args.pageId !== undefined && !pageId)
-            throw new Error("Page access denied")
-          return savePageDraft(
-            ctx,
-            grant.workspaceId,
-            auditActor(grant.owner, grant),
-            {
-              pageId: pageId ?? undefined,
-              expectedRevision: args.expectedRevision,
-              definition: resolvePageIds(ctx, args.definition),
-            }
-          )
-        }
-      )
+    withGrant(
+      ctx,
+      digest,
+      Date.now(),
+      saveDraftScopes(args.definition),
+      (grant) =>
+        runOnce(
+          ctx,
+          agentOperation(grant, "pages.saveDraft", idempotencyKey, args),
+          savedDraft,
+          async () => {
+            const pageId =
+              args.pageId === undefined
+                ? undefined
+                : ctx.db.normalizeId("pages", args.pageId)
+            if (args.pageId !== undefined && !pageId)
+              throw new Error("Page access denied")
+            return savePageDraft(
+              ctx,
+              grant.workspaceId,
+              auditActor(grant.owner, grant),
+              {
+                pageId: pageId ?? undefined,
+                expectedRevision: args.expectedRevision,
+                definition: resolvePageIds(ctx, args.definition),
+              }
+            )
+          }
+        )
     ),
 })
 
