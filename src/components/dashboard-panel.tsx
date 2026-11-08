@@ -1,7 +1,7 @@
-import { useQuery } from "convex/react"
+import { useConvex, useQuery } from "convex/react"
 import { Match } from "effect"
 import { Clock, TriangleAlert } from "lucide-react"
-import { useState, type ReactNode } from "react"
+import { useCallback, useState, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -9,6 +9,7 @@ import type { PageBlock } from "../../convex/lib/pageDomain"
 import type { SourceStatus } from "../../convex/lib/sourceSync"
 import { ArtifactLink } from "./artifact-link"
 import { HtmlSnapshotFrame, useArtifactPreview } from "./html-snapshot"
+import { LiveHtmlFrame } from "./live-html-frame"
 import { finite, PageChart } from "./page-chart"
 import { Button } from "./ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip"
@@ -71,10 +72,7 @@ export function DashboardPanel({
     case "htmlReport":
       return (
         <PanelFrame label={block.title} title={block.title} controls={controls}>
-          <HtmlReportContent
-            artifactId={block.artifactId}
-            title={block.title}
-          />
+          <HtmlReportContent block={block} live={live} />
         </PanelFrame>
       )
     case "table":
@@ -377,21 +375,39 @@ function LiveStatus({
   )
 }
 
-/** An HTML report artifact as a static snapshot that fills the panel. */
+/**
+ * An HTML report artifact that fills the panel: a static snapshot, or a live
+ * report that reads its bindings through the bridge.
+ */
 function HtmlReportContent({
-  artifactId,
-  title,
+  block,
+  live,
 }: {
-  artifactId: Id<"artifacts">
-  title: string
+  block: Extract<PageBlock, { kind: "htmlReport" }>
+  live: LiveAddress | null
 }) {
-  const preview = useArtifactPreview(artifactId)
+  const preview = useArtifactPreview(
+    block.artifactId,
+    0,
+    block.live !== undefined
+  )
   if (preview.status === "loading")
     return <PanelNote>Loading report…</PanelNote>
   if (preview.status === "unavailable")
     return <PanelNote>{preview.message}</PanelNote>
   if (preview.kind !== "html")
     return <PanelNote>This file is not an HTML report.</PanelNote>
+  if (block.live) {
+    if (!live) return <PanelNote>Save to load live data.</PanelNote>
+    return (
+      <LiveHtmlReport
+        html={preview.text}
+        title={block.title}
+        bindings={block.live.bindings.map((binding) => binding.name)}
+        live={live}
+      />
+    )
+  }
   return (
     <div className="flex h-full flex-col gap-1">
       <p className="text-xs text-muted-foreground">
@@ -402,7 +418,47 @@ function HtmlReportContent({
       </p>
       <HtmlSnapshotFrame
         html={preview.text}
-        title={`${title} static snapshot`}
+        title={`${block.title} static snapshot`}
+        className="min-h-0 w-full flex-1 rounded-md border"
+      />
+    </div>
+  )
+}
+
+/** Each bridge read runs pages.bridgeQuery, which authorizes the viewer. */
+function LiveHtmlReport({
+  html,
+  title,
+  bindings,
+  live,
+}: {
+  html: string
+  title: string
+  bindings: string[]
+  live: LiveAddress
+}) {
+  const convex = useConvex()
+  const { pageId, revision, blockIndex } = live
+  const read = useCallback(
+    (name: string) =>
+      convex.query(api.pages.bridgeQuery, {
+        pageId,
+        revision,
+        blockIndex,
+        name,
+      }),
+    [convex, pageId, revision, blockIndex]
+  )
+  return (
+    <div className="flex h-full flex-col gap-1">
+      <p className="text-xs text-muted-foreground">
+        Live report. It reads data when it opens.
+      </p>
+      <LiveHtmlFrame
+        html={html}
+        title={`${title} live report`}
+        bindings={bindings}
+        read={read}
         className="min-h-0 w-full flex-1 rounded-md border"
       />
     </div>

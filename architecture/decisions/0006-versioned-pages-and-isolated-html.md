@@ -56,3 +56,36 @@ stream at most 1 MB; SVG files remain unsupported. Raster bytes return as a
 generated data URL. This is a signature gate, not a full image decoder or
 decompression-bomb defense. HTML snapshots intentionally omit embedded images
 and authored interactivity. No ADR status is changed by this evidence.
+
+### Implementation evidence: live HTML bridge (2026-11-08)
+
+An `htmlReport` block with `live.bindings` is a live report. It names 1 to 5
+saved query revisions. Each name is a lowercase identifier. Save and publish
+check each binding like other query bindings. Agent credentials need
+`data.read` as well as `pages.write` to save live bindings.
+
+The frame has only the `allow-scripts` sandbox token, so the report runs in an
+opaque origin with no cookies, storage, popups, forms or top navigation. The
+first document policy allows inline scripts and styles and `data:` images, and
+denies all connections, fonts, media, frames, workers, forms and base URLs.
+Authored HTML is not sanitized: the sandbox and the policy contain it.
+
+The parent writes a random nonce into the frame bootstrap. It transfers one
+MessageChannel port only to the first hello from its own frame window with that
+nonce, and it ignores all other window messages. Each port request names a
+binding. The parent parses it, allows only declared names, and permits a burst
+of 10 requests, then 1 each second, with at most 4 pending. It then calls
+`pages.bridgeQuery`, which checks membership on each call. Viewers can read
+only the revision that viewers see. Writers can also read other revisions.
+A result has at most 200 rows and 256 KB, and holds only result field values:
+no record, collection or query IDs, and no secret reference fields. The frame
+receives no credentials.
+
+Known limit: the sandbox cannot stop a report from navigating its own frame,
+and a navigation URL can carry data that the report read. The parent stops the
+bridge when the frame loads a second document, but that cannot recall data
+that already left. So only a person or credential that can already read the
+workspace data can save live bindings. Browser checks on 2026-11-08 confirmed
+blocked cookie, storage, parent document and fetch access, an unknown binding
+refusal, the rate and pending limits, and the bridge stop after navigation.
+This evidence does not change the ADR status.

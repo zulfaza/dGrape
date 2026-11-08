@@ -14,10 +14,15 @@ export type ArtifactPreviewState =
       kind: "text" | "json" | "html" | "raster"
     }
 
-/** Loads a bounded, membership-checked preview. Change `reload` to fetch again. */
+/**
+ * Loads a bounded, membership-checked preview. Change `reload` to fetch
+ * again. `live` loads an HTML file for a live report, which needs no report
+ * data timestamp.
+ */
 export function useArtifactPreview(
   artifactId: Id<"artifacts">,
-  reload = 0
+  reload = 0,
+  live = false
 ): ArtifactPreviewState {
   const getPreview = useAction(api.artifacts.getPreview)
   const [preview, setPreview] = useState<ArtifactPreviewState>({
@@ -26,7 +31,7 @@ export function useArtifactPreview(
   useEffect(() => {
     let active = true
     setPreview({ status: "loading" })
-    void getPreview({ artifactId }).then(
+    void getPreview({ artifactId, live }).then(
       (result) => {
         if (active) setPreview(result)
       },
@@ -42,7 +47,7 @@ export function useArtifactPreview(
     return () => {
       active = false
     }
-  }, [artifactId, getPreview, reload])
+  }, [artifactId, getPreview, reload, live])
   return preview
 }
 
