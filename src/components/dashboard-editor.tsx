@@ -1,7 +1,13 @@
 import { useMutation, useQuery } from "convex/react"
 import { EllipsisVertical, GripVertical, Plus } from "lucide-react"
 import { useBlocker, useNavigate } from "@tanstack/react-router"
-import { useEffect, useId, useRef, useState, type ReactNode } from "react"
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import ReactGridLayout, {
   noCompactor,
   useContainerWidth,
@@ -30,7 +36,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu"
-import { Field, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { toast } from "./ui/toast"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -106,10 +111,42 @@ function definitionOf(draft: Draft) {
 const serialize = (draft: Draft) =>
   JSON.stringify(definitionOf(draft).definition)
 
+/** How long the editor waits after the last change before it saves. */
+const AUTOSAVE_DELAY_MS = 1000
+
 /**
- * Edit mode of a dashboard: drag, resize, add, edit, and remove panels,
- * then save a draft revision or publish it. It edits the latest revision,
- * which can be newer than the published one.
+ * A saved revision: its definition as `serialize` writes it, and for each
+ * saved panel, its block and its index in that revision.
+ */
+type Saved = {
+  revision: number
+  serialized: string
+  blocks: ReadonlyMap<string, { block: PageBlock; index: number }>
+}
+
+/**
+ * `draft` after a save. A panel shows live data again when the save has
+ * its current block; a panel added or changed during the save waits for
+ * the next one.
+ */
+function withSaved(draft: Draft, saved: Saved): Draft {
+  return {
+    ...draft,
+    panels: draft.panels.map((panel) => {
+      const item = saved.blocks.get(panel.id)
+      return {
+        ...panel,
+        live: item && item.block === panel.block ? item.index : null,
+      }
+    }),
+  }
+}
+
+/**
+ * Edit mode of a dashboard: rename it, and drag, resize, add, edit, and
+ * remove panels. Each change saves and publishes a new revision after a
+ * short pause. It edits the latest revision, which can be newer than the
+ * published one.
  */
 export function DashboardEditor({
   workspaceId,
@@ -139,10 +176,11 @@ export function DashboardEditor({
       draft={draft}
       setDraft={setDraft}
       dirty={serialize(draft) !== baseline}
-      saved={(next, savedRevision) => {
-        setRevision(savedRevision)
-        setDraft(next)
-        setBaseline(serialize(next))
+      saved={(result) => {
+        setRevision(result.revision)
+        setBaseline(result.serialized)
+        // Changes made during the save stay in the draft.
+        setDraft((current) => current && withSaved(current, result))
       }}
       reload={() => {
         setRevision(page.revision)
@@ -170,7 +208,7 @@ function EditorBody({
   draft: Draft
   setDraft: (draft: Draft) => void
   dirty: boolean
-  saved: (draft: Draft, revision: number) => void
+  saved: (result: Saved) => void
   /** Drops the draft and edits the latest revision. */
   reload: () => void
   onExit: () => void
@@ -182,17 +220,22 @@ function EditorBody({
   const [removing, setRemoving] = useState<EditorPanel | null>(null)
   const [discarding, setDiscarding] = useState(false)
   const [reloading, setReloading] = useState(false)
+  // A revision this editor saved that is not published yet.
+  const [unpublished, setUnpublished] = useState<number | null>(null)
+  // The draft and revision that failed to save or publish. Autosave tries
+  // again after the next change.
+  const [failed, setFailed] = useState<string | null>(null)
   const navigate = useNavigate()
-  const titleId = useId()
   const mobile = useIsMobile()
   const full = draft.panels.length >= 20
-  const published = page.publishedRevision ?? null
+  const serialized = serialize(draft)
   // Someone else saved after this draft started, so a save would fail. The
   // check waits while a save runs, as `page` can show it before `revision`.
   const conflict = !pending && page.revision > revision
+  const attempt = `${revision}:${serialized}`
 
-  // Ask before any navigation, in the app or out of it, that loses unsaved
-  // changes. `exit` leaves on purpose, after a publish or a discard.
+  // Ask before any navigation, in the app or out of it, that loses changes
+  // that are not saved yet. `exit` leaves on purpose.
   const leaving = useRef(false)
   const guarded = () => dirty && !leaving.current
   const blocker = useBlocker({
@@ -204,32 +247,70 @@ function EditorBody({
     leaving.current = true
     onExit()
   }
+  // Autosave waits while the user decides to discard changes.
+  const canAutosave =
+    (dirty || unpublished !== null) &&
+    !pending &&
+    !conflict &&
+    failed !== attempt &&
+    !discarding &&
+    blocker.status !== "blocked"
 
-  /** Saves the draft as a new revision; returns it, or null on failure. */
-  async function saveDraft(): Promise<number | null> {
-    const { definition, panels } = definitionOf(draft)
+  /**
+   * Saves the draft as a new revision when it has changes, then publishes
+   * the revision this editor saved. `always` also publishes a revision that
+   * was not published when editing started. False on failure.
+   */
+  async function sync(always: boolean): Promise<boolean> {
+    let target = revision
+    if (dirty) {
+      const { definition, panels } = definitionOf(draft)
+      try {
+        const result = await save({
+          workspaceId,
+          pageId: page._id,
+          expectedRevision: revision,
+          definition,
+        })
+        target = result.revision
+        setUnpublished(target)
+        saved({
+          revision: target,
+          serialized: JSON.stringify(definition),
+          blocks: new Map(
+            panels.map((panel, index) => [
+              panel.id,
+              { block: panel.block, index },
+            ])
+          ),
+        })
+      } catch (error) {
+        setFailed(attempt)
+        toast.error(
+          errorMessage(error, "Check the panels and try again."),
+          "Could not save"
+        )
+        return false
+      }
+    }
+    if (page.publishedRevision === target) return true
+    if (!always && unpublished !== target && !dirty) return true
     try {
-      const result = await save({
-        workspaceId,
+      await publish({
         pageId: page._id,
-        expectedRevision: revision,
-        definition,
+        revision: target,
+        expectedRevision: target,
+        expectedPublishedRevision: page.publishedRevision ?? null,
       })
-      // Panels now match the saved blocks one to one, in saved order.
-      saved(
-        {
-          ...draft,
-          panels: panels.map((panel, index) => ({ ...panel, live: index })),
-        },
-        result.revision
-      )
-      return result.revision
+      setUnpublished(null)
+      return true
     } catch (error) {
+      setFailed(`${target}:${serialized}`)
       toast.error(
-        errorMessage(error, "Check the panels and try again."),
-        "Could not save"
+        errorMessage(error, "Reload the page and try again."),
+        "Could not publish"
       )
-      return null
+      return false
     }
   }
 
@@ -243,34 +324,30 @@ function EditorBody({
     }
   }
 
-  const onSave = () =>
-    run(async () => {
-      const next = await saveDraft()
-      if (next !== null) toast.success(`Saved revision ${next}`)
+  const autosave = useEffectEvent(() => {
+    void run(async () => {
+      await sync(false)
     })
+  })
+  useEffect(() => {
+    if (!canAutosave) return
+    const timer = setTimeout(autosave, AUTOSAVE_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [canAutosave, attempt])
 
-  const onPublish = () =>
-    run(async () => {
-      const next = dirty ? await saveDraft() : revision
-      if (next === null) return
-      try {
-        await publish({
-          pageId: page._id,
-          revision: next,
-          expectedRevision: next,
-          expectedPublishedRevision: published,
-        })
-        toast.success(`Published revision ${next}`)
-        exit()
-      } catch (error) {
-        toast.error(
-          errorMessage(error, "Reload the page and try again."),
-          "Could not publish"
-        )
-      }
+  /** Saves and publishes what is left, then leaves edit mode. */
+  const onDone = () => {
+    // A newer revision exists, so there is nothing this editor can publish.
+    if (conflict) {
+      if (dirty) setDiscarding(true)
+      else exit()
+      return
+    }
+    void run(async () => {
+      if (await sync(true)) exit()
     })
+  }
 
-  /** Places a new `size` panel in the first free place at or after `after`. */
   /** Saves the draft as a new dashboard and edits that one. */
   const onSaveCopy = () =>
     run(async () => {
@@ -296,6 +373,7 @@ function EditorBody({
       }
     })
 
+  /** Places a new `size` panel in the first free place at or after `after`. */
   function place(size: PanelSize, after: { x: number; y: number }) {
     const id = newId()
     const layout = compactLayout([
@@ -435,40 +513,35 @@ function EditorBody({
   return (
     <article className="flex flex-col gap-6">
       <PageHeader
-        title={draft.title.trim() || "Untitled dashboard"}
-        description={
-          dirty
-            ? "Editing. Unsaved changes."
-            : published === revision
-              ? `Editing revision ${revision}. Published.`
-              : `Editing revision ${revision}. Not published.`
+        title={
+          <EditableTitle
+            value={draft.title}
+            disabled={pending}
+            onChange={(title) => setDraft({ ...draft, title })}
+          />
         }
         actions={
           <>
-            <Button
-              variant="ghost"
-              disabled={pending}
-              onClick={() => (dirty ? setDiscarding(true) : onExit())}
+            <span
+              aria-live="polite"
+              className="self-center text-sm text-muted-foreground"
             >
-              Discard
-            </Button>
+              {pending || canAutosave
+                ? "Saving…"
+                : dirty || unpublished !== null
+                  ? "Not saved"
+                  : "Saved"}
+            </span>
             <Button
               variant="outline"
-              disabled={pending || conflict || !dirty || !draft.title.trim()}
-              onClick={() => void onSave()}
+              disabled={pending || full}
+              onClick={() => setDialog({ mode: "add" })}
             >
-              Save
+              <Plus aria-hidden />
+              Add panel
             </Button>
-            <Button
-              disabled={
-                pending ||
-                conflict ||
-                !draft.title.trim() ||
-                (!dirty && published === revision)
-              }
-              onClick={() => void onPublish()}
-            >
-              Publish
+            <Button disabled={pending} onClick={onDone}>
+              Done
             </Button>
           </>
         }
@@ -501,32 +574,10 @@ function EditorBody({
           </div>
         </Alert>
       )}
-      <div className="flex flex-wrap items-end gap-3">
-        <Field className="max-w-md flex-1">
-          <FieldLabel htmlFor={titleId}>Title</FieldLabel>
-          <Input
-            id={titleId}
-            maxLength={100}
-            value={draft.title}
-            disabled={pending}
-            onChange={(event) =>
-              setDraft({ ...draft, title: event.target.value })
-            }
-          />
-        </Field>
-        <Button
-          variant="outline"
-          disabled={pending || full}
-          onClick={() => setDialog({ mode: "add" })}
-        >
-          <Plus aria-hidden />
-          Add panel
-        </Button>
-      </div>
       {draft.panels.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-card p-12 text-center">
           <p className="text-muted-foreground">No panels yet.</p>
-          <Button onClick={() => setDialog({ mode: "add" })}>
+          <Button disabled={pending} onClick={() => setDialog({ mode: "add" })}>
             <Plus aria-hidden />
             Add panel
           </Button>
@@ -597,11 +648,67 @@ function EditorBody({
         }}
         onConfirm={() => (blocker.proceed ? blocker.proceed() : exit())}
         title="Discard changes?"
-        description="Your unsaved changes to this dashboard are lost."
+        description="Your latest changes to this dashboard are not saved yet."
         confirmLabel="Discard"
         destructive
       />
     </article>
+  )
+}
+
+/**
+ * The dashboard title. Double-click it, or press Enter on it, to rename.
+ * Enter or leaving the field keeps the new name; Escape or an empty name
+ * keeps the old one.
+ */
+function EditableTitle({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string
+  disabled: boolean
+  onChange: (title: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (editing) input.current?.select()
+  }, [editing])
+  if (editing)
+    return (
+      <Input
+        ref={input}
+        aria-label="Dashboard title"
+        maxLength={100}
+        defaultValue={value}
+        onBlur={(event) => {
+          const title = event.currentTarget.value.trim()
+          if (title && title !== value) onChange(title)
+          setEditing(false)
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") event.currentTarget.value = value
+          if (event.key === "Enter" || event.key === "Escape")
+            event.currentTarget.blur()
+        }}
+      />
+    )
+  return (
+    <button
+      type="button"
+      title="Double-click to rename"
+      disabled={disabled}
+      className="cursor-text rounded-md text-left hover:bg-muted"
+      onDoubleClick={() => setEditing(true)}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter") return
+        event.preventDefault()
+        setEditing(true)
+      }}
+    >
+      {value.trim() || "Untitled dashboard"}
+    </button>
   )
 }
 
