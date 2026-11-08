@@ -1,6 +1,6 @@
 # ADR 0009: Start agent registration with explicit user confirmation
 
-- Status: Proposed
+- Status: Accepted (2026-11-08, after the implementation was verified; see "Implementation evidence")
 - Date: 2026-11-02
 - Related: [0008](0008-auth-md-agent-registration.md), [0007](0007-secret-references-and-vault-boundary.md)
 
@@ -31,3 +31,14 @@ Initial access needs one human confirmation. The application or a verified compa
 ## Validation and revisit
 
 Test wrong-account claims, code expiry, brute force, fast polling, concurrent confirmation, scope downgrade, audience/signature failures, revoked membership, and cross-workspace requests. Proposed lifetimes remain tunable, not accepted guarantees. Validate managed-service compatibility and production terms before adoption. Add provider-attested registration only with the full trust/revocation model. Sources: [user-claimed flow](https://workos.com/auth-md/docs/flows/claimed), [file format](https://workos.com/auth-md/docs/auth-md).
+
+## Implementation evidence (2026-11-08)
+
+The user agreed to accept this decision after the flow was implemented and tested. The implementation differs from the proposal as follows:
+
+- Tables: `agentRegistrations`, `agentClaimAttempts`, and `agentGrants`. The `agentGrants` table holds the access tokens; there is no separate `agentCredentials` table.
+- States: `pending`, `claimed`, and `revoked`. A pending registration expires by time; there is no stored `denied` or `expired` state.
+- Lifetimes: one code and claim link stay valid for 10 minutes. The claim window is 24 hours, and the agent can get a new code in that window. The minimum poll interval is 5 seconds. Access tokens stay valid for 1 hour. Identity assertions stay valid for 30 days.
+- Only a workspace owner can confirm a claim. A role change replaces the membership row, and this stops all tokens from a registration that was claimed before the change.
+
+Code: `convex/agentIdentityHttp.ts`, `convex/agentRegistrations.ts`, `convex/lib/agentAuthDiscovery.ts`, `convex/lib/identityAssertion.ts`, `convex/lib/agentGrant.ts`, and `src/routes/claim.tsx`. Tests: `convex/agentAuth.test.ts` covers the validation list above over HTTP, with a controlled clock.
