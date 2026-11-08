@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CallbackRouteImport } from './routes/callback'
 import { Route as ClaimRouteImport } from './routes/claim'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
+import { Route as GuideRouteImport } from './routes/guide'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as SignInRouteImport } from './routes/sign-in'
@@ -52,6 +53,11 @@ const ClaimRoute = ClaimRouteImport.update({
 const DashboardRouteRoute = DashboardRouteRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuideRoute = GuideRouteImport.update({
+  id: '/guide',
+  path: '/guide',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteRoute = InviteRouteImport.update({
@@ -173,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/callback': typeof CallbackRoute
   '/claim': typeof ClaimRoute
+  '/guide': typeof GuideRoute
   '/invite': typeof InviteRoute
   '/mcp': typeof McpRoute
   '/sign-in': typeof SignInRoute
@@ -198,6 +205,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
   '/claim': typeof ClaimRoute
+  '/guide': typeof GuideRoute
   '/invite': typeof InviteRoute
   '/mcp': typeof McpRoute
   '/sign-in': typeof SignInRoute
@@ -224,6 +232,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/callback': typeof CallbackRoute
   '/claim': typeof ClaimRoute
+  '/guide': typeof GuideRoute
   '/invite': typeof InviteRoute
   '/mcp': typeof McpRoute
   '/sign-in': typeof SignInRoute
@@ -252,6 +261,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/callback'
     | '/claim'
+    | '/guide'
     | '/invite'
     | '/mcp'
     | '/sign-in'
@@ -277,6 +287,7 @@ export interface FileRouteTypes {
     | '/'
     | '/callback'
     | '/claim'
+    | '/guide'
     | '/invite'
     | '/mcp'
     | '/sign-in'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/callback'
     | '/claim'
+    | '/guide'
     | '/invite'
     | '/mcp'
     | '/sign-in'
@@ -329,6 +341,7 @@ export interface RootRouteChildren {
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
   CallbackRoute: typeof CallbackRoute
   ClaimRoute: typeof ClaimRoute
+  GuideRoute: typeof GuideRoute
   InviteRoute: typeof InviteRoute
   McpRoute: typeof McpRoute
   SignInRoute: typeof SignInRoute
@@ -365,6 +378,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guide': {
+      id: '/guide'
+      path: '/guide'
+      fullPath: '/guide'
+      preLoaderRoute: typeof GuideRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite': {
@@ -589,6 +609,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRouteRoute: DashboardRouteRouteWithChildren,
   CallbackRoute: CallbackRoute,
   ClaimRoute: ClaimRoute,
+  GuideRoute: GuideRoute,
   InviteRoute: InviteRoute,
   McpRoute: McpRoute,
   SignInRoute: SignInRoute,

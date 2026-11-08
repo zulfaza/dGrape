@@ -148,6 +148,7 @@ const SECTION_LINKS = [
   { href: "#how-it-works", label: "How it works" },
   { href: "#features", label: "Features" },
   { href: "#planned", label: "Planned" },
+  { href: "/guide", label: "Guide" },
 ] as const
 
 function Home() {
