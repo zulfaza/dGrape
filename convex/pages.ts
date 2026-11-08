@@ -1,6 +1,9 @@
 import {
   collectionFieldValidator,
   isNumericField,
+  recordValueValidator,
+  type CollectionField,
+  type RecordValues,
 } from "./lib/collectionDomain"
 import { paginationOptsValidator, type PaginationOptions } from "convex/server"
 import { ConvexError, v, type Infer } from "convex/values"
@@ -12,13 +15,16 @@ import {
   type QueryCtx,
 } from "./_generated/server"
 import { requireMembership } from "./lib/auth"
+import { roleAllows } from "./lib/workspaceRoles"
 import { workspaceBudgets } from "./lib/budgets"
-import { asQueryTooExpensive } from "./lib/queryErrors"
+import { asQueryTooExpensive, type QueryTooExpensive } from "./lib/queryErrors"
 import { pinnedSchemaProblem } from "./lib/collectionSchemas"
 import {
   firstPageWithinBudget,
   readSavedResult,
   savedAggregateValidator,
+  type SavedAggregate,
+  type SavedQueryPage,
   savedQueryPageValidator,
 } from "./lib/savedQueries"
 import { recordAuditEvent, type PrincipalActor } from "./lib/auditEvents"
@@ -46,6 +52,42 @@ async function getVersion(
     .unique()
 }
 
+type QueryBinding = { queryId: Id<"queryDefinitions">; revision: number }
+
+/**
+ * The result fields of a query binding, or the reason it cannot run. Page
+ * blocks never show or group by a secret reference, so those are left out.
+ */
+async function queryBindingFields(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  binding: QueryBinding
+): Promise<{ problem: string } | { fields: CollectionField[] }> {
+  const saved = await ctx.db.get(binding.queryId)
+  if (!saved || saved.workspaceId !== workspaceId)
+    return { problem: "Query is unavailable in this workspace" }
+  const version = await ctx.db
+    .query("queryDefinitionVersions")
+    .withIndex("by_queryId_and_revision", (q) =>
+      q.eq("queryId", saved._id).eq("revision", binding.revision)
+    )
+    .unique()
+  if (!version)
+    return {
+      problem: `Query revision ${binding.revision} is unavailable; the latest is ${saved.revision}`,
+    }
+  const collection = await ctx.db.get(saved.collectionId)
+  if (!collection || collection.workspaceId !== workspaceId)
+    return { problem: "Source collection is unavailable" }
+  const schemaProblem = pinnedSchemaProblem(collection, version.schemaVersion)
+  if (schemaProblem) return { problem: schemaProblem }
+  return {
+    fields: version.resultSchema.fields.filter(
+      (field) => field.type !== "secretRef"
+    ),
+  }
+}
+
 /** Check every reference on save and publish. Old versions remain readable. */
 async function bindingProblem(
   ctx: QueryCtx,
@@ -65,30 +107,21 @@ async function bindingProblem(
       return "Artifact is unavailable in this workspace"
     if (previewKind(artifact.contentType) !== "html")
       return "HTML report blocks require an HTML file"
-    return artifact.dataTimestamp === undefined
-      ? "Set the report data timestamp first"
-      : null
+    // A live report reads its data at view time; each result has its time.
+    if (!block.live)
+      return artifact.dataTimestamp === undefined
+        ? "Set the report data timestamp first"
+        : null
+    for (const binding of block.live.bindings) {
+      const checked = await queryBindingFields(ctx, workspaceId, binding)
+      if ("problem" in checked)
+        return `Binding "${binding.name}": ${checked.problem}`
+    }
+    return null
   }
-  const saved = await ctx.db.get(block.binding.queryId)
-  if (!saved || saved.workspaceId !== workspaceId)
-    return "Query is unavailable in this workspace"
-  const version = await ctx.db
-    .query("queryDefinitionVersions")
-    .withIndex("by_queryId_and_revision", (q) =>
-      q.eq("queryId", saved._id).eq("revision", block.binding.revision)
-    )
-    .unique()
-  if (!version)
-    return `Query revision ${block.binding.revision} is unavailable; the latest is ${saved.revision}`
-  const collection = await ctx.db.get(saved.collectionId)
-  if (!collection || collection.workspaceId !== workspaceId)
-    return "Source collection is unavailable"
-  const schemaProblem = pinnedSchemaProblem(collection, version.schemaVersion)
-  if (schemaProblem) return schemaProblem
-  // Page blocks never show or group by a secret reference.
-  const fields = version.resultSchema.fields.filter(
-    (field) => field.type !== "secretRef"
-  )
+  const checked = await queryBindingFields(ctx, workspaceId, block.binding)
+  if ("problem" in checked) return checked.problem
+  const { fields } = checked
   const has = (id: string) => fields.some((f) => f.id === id)
   const numeric = (id: string) =>
     fields.some((f) => f.id === id && isNumericField(f.type))
@@ -466,15 +499,153 @@ export const liveBlock = query({
       })
       return { problem: null, result }
     } catch (error) {
-      const expensive =
-        error instanceof ConvexError ? asQueryTooExpensive(error) : null
       return {
-        problem: expensive
-          ? `${expensive.message}. ${expensive.hint}`
-          : "Live query could not be read within its budget. Check the source and binding.",
+        problem: readProblem(
+          error instanceof ConvexError ? asQueryTooExpensive(error) : null
+        ),
         result: null,
       }
     }
+  },
+})
+
+/**
+ * Why a bound saved query could not be read, for the page viewer. Pass the
+ * decoded QueryTooExpensive error, or null for any other error.
+ */
+function readProblem(expensive: QueryTooExpensive | null) {
+  return expensive
+    ? `${expensive.message}. ${expensive.hint}`
+    : "Live query could not be read within its budget. Check the source and binding."
+}
+
+/** The most rows that one bridge result sends to a live HTML report. */
+export const BRIDGE_MAX_ROWS = 200
+/** The largest bridge result, in bytes of JSON. */
+export const BRIDGE_MAX_BYTES = 256 * 1024
+
+/**
+ * What a live HTML report receives: result fields and their values only. No
+ * record IDs, collection IDs, provenance or secret reference fields.
+ */
+const bridgeResultValidator = v.object({
+  kind: v.union(v.literal("records"), v.literal("aggregate")),
+  fields: v.array(
+    v.object({ id: v.string(), label: v.string(), type: v.string() })
+  ),
+  rows: v.array(v.record(v.string(), recordValueValidator)),
+  completeness: v.union(v.literal("complete"), v.literal("partial")),
+  evaluatedAt: v.number(),
+  dataAsOf: v.union(v.number(), v.null()),
+})
+
+/** Keeps only the values of `fields`, in a new object. */
+function pickValues(values: RecordValues, fields: CollectionField[]) {
+  const picked: RecordValues = {}
+  for (const field of fields) {
+    const value = values[field.id]
+    if (value !== undefined) picked[field.id] = value
+  }
+  return picked
+}
+
+/**
+ * Reads one named binding of a live HTML report for the parent page bridge.
+ * The iframe never names a query: it names a binding that the stored page
+ * version declares, and this query checks membership on every call. Readers
+ * can read only the revision that viewers see (published, or the latest
+ * draft when none is published); writers can also read other revisions, to
+ * preview drafts. Results have at most BRIDGE_MAX_ROWS rows and
+ * BRIDGE_MAX_BYTES bytes.
+ */
+export const bridgeQuery = query({
+  args: {
+    pageId: v.id("pages"),
+    revision: v.number(),
+    blockIndex: v.number(),
+    name: v.string(),
+  },
+  returns: v.union(
+    v.object({ problem: v.string(), result: v.null() }),
+    v.object({ problem: v.null(), result: bridgeResultValidator })
+  ),
+  handler: async (ctx, args) => {
+    const page = await ctx.db.get(args.pageId)
+    if (!page) throw new Error("Page access denied")
+    const member = await requireMembership(ctx, page.workspaceId, "read")
+    if (
+      !Number.isSafeInteger(args.revision) ||
+      args.revision < 1 ||
+      !Number.isSafeInteger(args.blockIndex) ||
+      args.blockIndex < 0 ||
+      args.blockIndex >= 20
+    )
+      throw new Error("Invalid block address")
+    const viewed = page.publishedRevision ?? page.revision
+    if (args.revision !== viewed && !roleAllows(member.role, "write"))
+      throw new Error("Page revision is not visible to your role")
+    const version = await getVersion(ctx, page._id, args.revision)
+    const block = version?.definition.blocks[args.blockIndex]
+    if (block?.kind !== "htmlReport" || !block.live)
+      return { problem: "Live report is unavailable", result: null }
+    const binding = block.live.bindings.find((b) => b.name === args.name)
+    if (!binding)
+      return {
+        problem: `This report has no binding "${args.name.slice(0, 32)}"`,
+        result: null,
+      }
+    const problem = await bindingProblem(ctx, page.workspaceId, block)
+    if (problem) return { problem, result: null }
+    const checked = await queryBindingFields(ctx, page.workspaceId, binding)
+    if ("problem" in checked) return { problem: checked.problem, result: null }
+    let data: SavedQueryPage | SavedAggregate
+    try {
+      data = await readSavedResult(ctx, {
+        queryId: binding.queryId,
+        expectedRevision: binding.revision,
+        paginationOpts: firstPageWithinBudget(
+          await workspaceBudgets(ctx, page.workspaceId)
+        ),
+      })
+    } catch (error) {
+      return {
+        problem: readProblem(
+          error instanceof ConvexError ? asQueryTooExpensive(error) : null
+        ),
+        result: null,
+      }
+    }
+    const values =
+      data.kind === "records"
+        ? data.page.map((record) => record.values)
+        : data.rows.map((row) => row.values)
+    const rows = values
+      .slice(0, BRIDGE_MAX_ROWS)
+      .map((row) => pickValues(row, checked.fields))
+    const completeness: "complete" | "partial" =
+      data.completeness === "complete" && values.length <= BRIDGE_MAX_ROWS
+        ? "complete"
+        : "partial"
+    const result = {
+      kind: data.kind,
+      fields: checked.fields.map(({ id, label, type }) => ({
+        id,
+        label,
+        type,
+      })),
+      rows,
+      completeness,
+      evaluatedAt: data.evaluatedAt,
+      dataAsOf: data.dataAsOf,
+    }
+    if (
+      new TextEncoder().encode(JSON.stringify(result)).length > BRIDGE_MAX_BYTES
+    )
+      return {
+        problem: `The result is larger than ${BRIDGE_MAX_BYTES / 1024} KB. Narrow the saved query.`,
+        result: null,
+      }
+    return { problem: null, result }
   },
 })
 

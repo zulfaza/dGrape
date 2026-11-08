@@ -436,7 +436,12 @@ export const remove = mutation({
 
 /** Text previews never send signed object URLs or executable content to the UI. */
 export const getPreview = action({
-  args: { artifactId: v.id("artifacts") },
+  /**
+   * `live`: the caller shows an HTML file as a live report, which gets its
+   * data time from each bridge result, so no report data timestamp is needed.
+   * It changes only that check; membership applies the same way.
+   */
+  args: { artifactId: v.id("artifacts"), live: v.optional(v.boolean()) },
   returns: v.union(
     v.object({ status: v.literal("unavailable"), message: v.string() }),
     v.object({
@@ -453,7 +458,7 @@ export const getPreview = action({
   ),
   handler: async (
     ctx,
-    { artifactId }
+    { artifactId, live = false }
   ): Promise<
     | { status: "unavailable"; message: string }
     | {
@@ -472,7 +477,7 @@ export const getPreview = action({
       access: "read",
     })
     const kind = previewKind(artifact.contentType)
-    if (kind === "html" && artifact.dataTimestamp === undefined)
+    if (kind === "html" && !live && artifact.dataTimestamp === undefined)
       return {
         status: "unavailable",
         message:

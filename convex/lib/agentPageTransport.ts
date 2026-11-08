@@ -75,6 +75,19 @@ export const Definition = Schema.Struct({
           ...Panel,
           title: Schema.String,
           artifactId: Schema.String,
+          live: Schema.optionalKey(
+            Schema.Struct({
+              bindings: Schema.mutable(
+                Schema.Array(
+                  Schema.Struct({
+                    name: Schema.String,
+                    queryId: Schema.String,
+                    revision: Schema.Int,
+                  })
+                )
+              ),
+            })
+          ),
         }),
       ])
     )
