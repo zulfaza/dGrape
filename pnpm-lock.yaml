@@ -62,9 +62,6 @@ importers:
       '@workos-inc/node':
         specifier: ^10.14.0
         version: 10.14.0
-      '@workos-vault/node':
-        specifier: npm:@workos-inc/node@^12.1.0
-        version: '@workos-inc/node@12.1.0'
       '@workos/authkit-tanstack-react-start':
         specifier: ^0.12.0
         version: 0.12.0(@tanstack/react-router@1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@tanstack/react-start@1.169.4(esbuild@0.27.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.16)(supports-color@10.2.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.27.0)(jiti@2.7.0)))(@workos-inc/node@10.14.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
@@ -3155,10 +3152,6 @@ packages:
 
   '@workos-inc/node@10.14.0':
     resolution: {integrity: sha512-SnY9OHTzTyOmgJQj9+/6x116m+d+zJoQw5e8teNWKUuGe8FOKngVdBXRvZgdFxaL+3UfQbMlp95V67t43VYOWQ==}
-    engines: {node: '>=22.11.0'}
-
-  '@workos-inc/node@12.1.0':
-    resolution: {integrity: sha512-qT/RpDHti/MDR1r5Jkngg6gS7cpwzrRTB0DA4H/5UMD27t8qOcLqOkIrxVX4AOIzUQ0oJXn7l+c0kZZC/mrGiQ==}
     engines: {node: '>=22.11.0'}
 
   '@workos/authkit-session@0.8.0':
@@ -7955,8 +7948,6 @@ snapshots:
   '@vitest/spy@5.0.5': {}
 
   '@workos-inc/node@10.14.0': {}
-
-  '@workos-inc/node@12.1.0': {}
 
   '@workos/authkit-session@0.8.0(@workos-inc/node@10.14.0)(typescript@7.0.2)':
     dependencies:

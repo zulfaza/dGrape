@@ -1,5 +1,4 @@
 import { Context, Effect, Layer, Schema, Redacted } from "effect"
-import { WorkOS, NotFoundException } from "@workos-vault/node"
 import {
   SECRET_BINDING_PATH,
   SecretBindingResponse,
@@ -35,60 +34,6 @@ export class SecretService extends Context.Service<
 const failure = () =>
   new SecretFailure({ message: "Secret storage is unavailable" })
 
-/** Opt-in adapter. No API calls occur until an operator enables this provider. */
-export function workosSecretLayer(apiKey: string) {
-  const vault = new WorkOS(apiKey, { timeout: 10000, maxRetries: 0 }).vault
-  const context = (scope: SecretScope) => {
-    if (scope.userId === null) return { workspace_id: scope.workspaceId }
-    return { workspace_id: scope.workspaceId, user_id: scope.userId }
-  }
-  const find: SecretStore["find"] = (scope, name) =>
-    Effect.tryPromise({
-      try: async () => {
-        try {
-          const object = await vault.readObjectByName(name)
-          const expected = context(scope)
-          for (const [key, value] of Object.entries(expected)) {
-            if (object.metadata.context[key] !== value) throw failure()
-          }
-          const value = Schema.decodeUnknownSync(Schema.String)(object.value)
-          return { id: object.id, value: Redacted.make(value) }
-        } catch (error) {
-          if (error instanceof NotFoundException) return null
-          throw failure()
-        }
-      },
-      catch: failure,
-    })
-  return Layer.succeed(SecretService, {
-    find,
-    put: (scope, name, value) =>
-      Effect.gen(function* () {
-        const existing = yield* find(scope, name)
-        if (existing) return existing.id
-        return yield* Effect.tryPromise({
-          try: async () =>
-            (
-              await vault.createObject({
-                name,
-                value: Redacted.value(value),
-                context: context(scope),
-              })
-            ).id,
-          catch: failure,
-        })
-      }),
-    remove: (scope, name) =>
-      Effect.gen(function* () {
-        const object = yield* find(scope, name)
-        if (object)
-          yield* Effect.tryPromise({
-            try: () => vault.deleteObject({ id: object.id }),
-            catch: failure,
-          })
-      }),
-  })
-}
 /**
  * Reads secretRef values from Cloudflare Worker secret bindings through the
  * Worker at `origin` (ADR 0007). An operator adds and deletes each
@@ -158,17 +103,14 @@ function workerOrigin(value: string | undefined) {
  * incomplete setting gives a service where every call fails.
  */
 export function configuredSecretLayer() {
-  const key = process.env.SECRET_VAULT_WORKOS_API_KEY
   const bindingToken = process.env.SECRET_BINDING_TOKEN
   const origin = workerOrigin(process.env.APP_ORIGIN)
-  switch (process.env.SECRET_VAULT_PROVIDER) {
-    case "cloudflare":
-      if (origin && bindingToken)
-        return cloudflareSecretLayer(origin, bindingToken)
-      break
-    case "workos":
-      if (key) return workosSecretLayer(key)
-  }
+  if (
+    process.env.SECRET_VAULT_PROVIDER === "cloudflare" &&
+    origin &&
+    bindingToken
+  )
+    return cloudflareSecretLayer(origin, bindingToken)
   const unavailable = () => Effect.fail(failure())
   return Layer.succeed(SecretService, {
     find: unavailable,

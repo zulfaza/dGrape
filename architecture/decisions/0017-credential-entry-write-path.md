@@ -13,6 +13,8 @@ Issue #251 asks for UI where a user enters a credential or connects an OAuth acc
 
 Current code: connector requests run in a Convex action (`convex/lib/connectorFetch.ts`). They read the value through `SecretService`, and the only adapter is the optional WorkOS Vault adapter. The Worker has no connection-secret bindings. In #142 the user selected Cloudflare secret bindings as the production backend. Another change moves resolution to the Worker. Convex cannot read Cloudflare bindings.
 
+Clarification (2026-11-08): #142 is complete. The only adapter is now the Cloudflare binding adapter, which reads manually set `SECRET_REF_*` Worker secrets through the Worker (ADR 0007, docs/deployment.md). The WorkOS Vault adapter is removed. In this record, "replaces the WorkOS Vault adapter" now means "replaces the manual binding adapter".
+
 Two Cloudflare write paths exist. Facts were checked on 2026-11-08 and must be checked again before acceptance:
 
 | | Secrets Store | Per-Worker secrets |
