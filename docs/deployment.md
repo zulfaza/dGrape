@@ -66,6 +66,13 @@ Do not remove the guard until an owner completes and verifies this setup:
    authorization. A missing environment can be auto-created without protection;
    its name alone is not an approval gate.
 
+## MCP analytics (optional)
+
+Set the `POSTHOG_PROJECT_KEY` Worker secret to send MCP usage events to
+PostHog (see `src/mcp-analytics.ts`). For an EU project, also set
+`POSTHOG_HOST=https://eu.i.posthog.com`. Without the key, the Worker sends
+nothing.
+
 ## Release procedure after setup
 
 Select Actions → Deploy production → Run workflow, choose main and production.

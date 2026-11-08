@@ -3,7 +3,8 @@
   "include": [
     "src/worker.ts",
     "src/recipe-workflow.ts",
-    "src/secret-bindings.ts"
+    "src/secret-bindings.ts",
+    "src/mcp-analytics.ts"
   ],
   "exclude": [],
   "compilerOptions": {

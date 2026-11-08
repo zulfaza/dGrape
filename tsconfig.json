@@ -3,7 +3,8 @@
     "tools/oxlint/anti-slop",
     "src/worker.ts",
     "src/recipe-workflow.ts",
-    "src/secret-bindings.ts"
+    "src/secret-bindings.ts",
+    "src/mcp-analytics.ts"
   ],
   "include": ["**/*.ts", "**/*.tsx", "vite.config.ts"],
   "compilerOptions": {

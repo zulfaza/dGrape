@@ -29,6 +29,8 @@ export default defineConfig({
       // Convex sends it to read secretRef values. The values are the
       // undeclared SECRET_REF_* Worker secrets; see docs/deployment.md.
       SECRET_BINDING_TOKEN: bindings.secret(),
+      // Optional. Without it, /mcp sends no analytics; see src/mcp-analytics.ts.
+      POSTHOG_PROJECT_KEY: bindings.secret(),
     },
   },
 })
