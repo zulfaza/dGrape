@@ -36,9 +36,9 @@ Test wrong-account claims, code expiry, brute force, fast polling, concurrent co
 
 The user agreed to accept this decision after the flow was implemented and tested. The implementation differs from the proposal as follows:
 
-- Tables: `agentRegistrations`, `agentClaimAttempts`, and `agentGrants`. The `agentGrants` table holds the access tokens; there is no separate `agentCredentials` table.
+- Tables: `agentRegistrations`, `agentClaimAttempts`, and `agentGrants`. The `agentGrants` table stores access-token digests and grant metadata; there is no separate `agentCredentials` table.
 - States: `pending`, `claimed`, and `revoked`. A pending registration expires by time; there is no stored `denied` or `expired` state.
 - Lifetimes: one code and claim link stay valid for 10 minutes. The claim window is 24 hours, and the agent can get a new code in that window. The minimum poll interval is 5 seconds. Access tokens stay valid for 1 hour. Identity assertions stay valid for 30 days.
 - Only a workspace owner can confirm a claim. A role change replaces the membership row, and this stops all tokens from a registration that was claimed before the change.
 
-Code: `convex/agentIdentityHttp.ts`, `convex/agentRegistrations.ts`, `convex/lib/agentAuthDiscovery.ts`, `convex/lib/identityAssertion.ts`, `convex/lib/agentGrant.ts`, and `src/routes/claim.tsx`. Tests: `convex/agentAuth.test.ts` covers the validation list above over HTTP, with a controlled clock.
+Code: `convex/agentIdentityHttp.ts`, `convex/agentRegistrations.ts`, `convex/lib/agentAuthDiscovery.ts`, `convex/lib/identityAssertion.ts`, `convex/lib/agentGrant.ts`, and `src/routes/claim.tsx`. Tests: `convex/agentAuth.test.ts` covers the validation list above. It calls the HTTP endpoints, and it calls the claim confirmation action directly with a test identity and a stub WorkOS user lookup. The clock is controlled.
