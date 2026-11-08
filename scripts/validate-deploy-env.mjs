@@ -9,6 +9,7 @@ const required = [
   "WORKOS_API_KEY",
   "WORKOS_COOKIE_PASSWORD",
   "WORKOS_REDIRECT_URI",
+  "SECRET_BINDING_TOKEN",
   "GITHUB_ENV",
 ]
 for (const name of required) {
@@ -23,6 +24,10 @@ if (!process.env.CONVEX_DEPLOY_KEY.startsWith(`prod:${deployment}|`)) {
 }
 if (process.env.WORKOS_REDIRECT_URI !== "https://dfe.makarima.dev/callback") {
   throw new Error("WorkOS redirect must match the production callback")
+}
+// The Worker rejects shorter tokens (src/secret-bindings.ts).
+if (process.env.SECRET_BINDING_TOKEN.length < 32) {
+  throw new Error("SECRET_BINDING_TOKEN must have at least 32 characters")
 }
 console.log(`target: prod (${deployment}); Worker: dfe`)
 appendFileSync(

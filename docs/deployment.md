@@ -40,6 +40,7 @@ Do not remove the guard until an owner completes and verifies this setup:
 | Secret | `WORKOS_API_KEY` | Production WorkOS API key |
 | Secret | `WORKOS_COOKIE_PASSWORD` | Existing production cookie encryption password |
 | Secret | `WORKOS_REDIRECT_URI` | `https://dfe.makarima.dev/callback` |
+| Secret | `SECRET_BINDING_TOKEN` | At least 32 random characters. Convex sends it to the Worker to read secretRef values. Use the same value in Convex |
 
 4. Verify existing resources before enabling. The Worker and its custom domain
    must already exist. Review the account-scoped Workers Scripts edit permission
@@ -52,6 +53,10 @@ Do not remove the guard until an owner completes and verifies this setup:
    `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `APP_ORIGIN=https://dfe.makarima.dev`,
    `AGENT_AUTH_CODE_KEY`, `AGENT_AUTH_SIGNING_KEY`, and the artifact component's
    `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
+   For connector credentials (ADR 0007), also set
+   `SECRET_VAULT_PROVIDER=cloudflare`, `SECRET_BINDING_TOKEN` (the same value
+   as the GitHub environment secret), and `CONNECTOR_ALLOWED_ORIGINS`. See
+   "Connector credentials" below.
    `CONVEX_SITE_URL` is provided by Convex. Check existing auth/agent and artifact
    setup docs for key formats. Verify WorkOS allows the production callback.
    This workflow does not set Convex runtime variables or run data migrations.
@@ -65,6 +70,42 @@ Do not remove the guard until an owner completes and verifies this setup:
    any secret-bearing step starts. Do not approve it without production release
    authorization. A missing environment can be auto-created without protection;
    its name alone is not an approval gate.
+
+## Connector credentials
+
+Connector credentials (secretRefs) are Cloudflare Worker secrets on `dfe`
+(ADR 0007). Convex runs connector requests, so it reads each value from the
+Worker at `APP_ORIGIN` + `/internal/secrets/resolve` with
+`SECRET_BINDING_TOKEN`. The Worker gives only `SECRET_REF_*` secrets.
+
+| Runtime | Name | Value/purpose |
+| --- | --- | --- |
+| Convex | `SECRET_VAULT_PROVIDER` | `cloudflare`. Without it, or without the next two settings, every credential call fails |
+| Convex | `APP_ORIGIN` | `https://dfe.makarima.dev`, the Worker origin (also used by agent auth) |
+| Convex | `SECRET_BINDING_TOKEN` | Same value as the Worker secret |
+| Convex | `CONNECTOR_ALLOWED_ORIGINS` | Comma-separated HTTPS origins that HTTP connections can call, without paths or trailing slashes. Empty denies all. GitHub connections do not need it |
+| Worker | `SECRET_BINDING_TOKEN` | Declared in `cloudflare.config.ts`; the deploy uploads it |
+| Worker | `SECRET_REF_<NAME>` | One secret for each credential. Not declared; `cf deploy` keeps them |
+
+Users cannot type credential values in settings with this backend. To add
+one, the workspace owner and an operator do these steps:
+
+1. In settings, the owner adds a credential. It stays pending.
+2. The operator reads the pending reference's `state.name` (a UUID) in the
+   Convex dashboard data view, table `secretRefs`. Read only; do not edit.
+3. The binding name is `SECRET_REF_` and the UUID in upper case, with `_` in
+   place of `-`. Example: `0f8b2c4e-1a2b-…` becomes `SECRET_REF_0F8B2C4E_1A2B_…`.
+4. The operator adds a Worker secret with that name on `dfe`: Workers →
+   `dfe` → Settings → Variables and Secrets, or `cf workers secrets update`.
+   Adding a Worker secret deploys a new Worker version.
+5. In settings, the owner saves an empty value. The credential becomes ready.
+
+To rotate, start the rotation in settings and add the new binding. Then
+delete the old binding and save an empty value. To delete, start the deletion
+in settings, delete the binding, and save an empty value again. Each step
+fails until the old binding is gone. A Worker holds at most 128 variables and
+secrets (Workers paid plan), so this backend suits a single owner.
+Deleting a binding does not revoke the token with its provider.
 
 ## Release procedure after setup
 
