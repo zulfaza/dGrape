@@ -32,3 +32,15 @@ Verify discovery, registration, human authorization where required, scoped MCP/A
 ## Implementation evidence (2026-11-08)
 
 The user-claimed `service_auth` flow is implemented as [0009](0009-user-claimed-agent-authorization.md) describes. `convex/agentAuth.test.ts` verifies discovery, registration, human confirmation, scoped API access, expiry, revocation, and discovery/document consistency. Anonymous and agent-verified registration are not implemented, and the discovery documents do not advertise them.
+
+## Protocol check (2026-11-08)
+
+The implementation was compared with the published protocol: the apps guide, the auth.md file format, the user-claimed flow, and changelog v0.6.0 (2026-06-10). The registration, claim, token, revocation, and assertion formats agree. These differences remain:
+
+- Metadata does not advertise `events_endpoint` or `events_supported`. The protocol uses them for provider Security Event Tokens, which only agent-verified registration needs. Advertise them only with that feature.
+- A claim token that was already used gets `invalid_grant`. The protocol does not say what a used claim token returns. Its lookup rule gives `expired_token` for an absent or expired registration.
+- The protocol documents `/agent/identity/claim` as anonymous-only, but changelog v0.4.0 also allows it for email registrations. This service accepts it for `service_auth`, because the claim window is longer than one code.
+- The protocol's minimum implementation records an audit event for every state change, for example `registration.created`, `token.issued`, and `token.revoked`. This service records only claim and registration revocation. Audit events belong to a workspace, so a pending registration has no workspace to record against. Follow-up: decide whether to record token issue and revocation.
+- The protocol gives HTTP statuses for few errors. The statuses this service uses for `/agent/identity/claim` (400, 409, 410, 429) are its own choice.
+
+Sources: https://workos.com/auth-md/docs/apps , https://workos.com/auth-md/docs/auth-md , https://workos.com/auth-md/docs/flows/claimed , https://github.com/workos/auth.md/blob/main/CHANGELOG.md .
