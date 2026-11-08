@@ -221,15 +221,16 @@ function attemptToken(verificationUri: string) {
   return token
 }
 
-/** Collects everything the functions write to the console. */
+/**
+ * Silences the console and returns a reader for everything written to it
+ * since, as JSON, so object arguments keep their contents.
+ */
 function captureLogs() {
-  const lines: Array<string> = []
   const levels = ["debug", "info", "log", "warn", "error"] as const
-  for (const level of levels)
-    vi.spyOn(console, level).mockImplementation((...args: Array<string>) => {
-      lines.push(args.map(String).join(" "))
-    })
-  return lines
+  const spies = levels.map((level) =>
+    vi.spyOn(console, level).mockImplementation(() => undefined)
+  )
+  return () => JSON.stringify(spies.map((spy) => spy.mock.calls))
 }
 
 /** Every stored row that the auth.md flow writes, as JSON. */
@@ -405,7 +406,7 @@ describe("auth.md service_auth registration", () => {
       tokens.identity_assertion,
     ]) {
       expect(rows).not.toContain(secret)
-      expect(logs.join("\n")).not.toContain(secret)
+      expect(logs()).not.toContain(secret)
     }
   })
 
