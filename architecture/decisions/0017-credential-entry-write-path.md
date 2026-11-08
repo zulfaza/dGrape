@@ -38,12 +38,15 @@ The deploy config binds N secrets, `CRED_SLOT_01` to `CRED_SLOT_N`. Start with N
 Convex keeps one record for each slot. The record holds the Cloudflare secret ID and a state. The secret ID stays in internal queries only. The states are:
 
 - `free`: the slot holds the placeholder.
-- `writing`: one reference and revision hold a write lease.
+- `writing`: one reference and revision hold a write lease. The slot was `free`.
 - `bound`: the slot holds the value of one ready reference and revision.
+- `refreshing`: a `bound` slot. One refresh holds a write lease.
 - `clearing`: one claim holds a lease to write the placeholder.
-- `unknown`: a write gave no clear result. Use and reuse are not permitted. Only a clear write can change this state.
+- `retired`: a write has no known result. The slot is never used or reused again.
 
 Each state change is one Convex mutation. The mutation checks the expected state, reference, revision and lease. Thus only one write can occur on a slot at a time.
+
+The `PATCH` API has no revision check. A write that timed out can still complete later and overwrite a newer value. Thus each uncertain result retires the slot: a timeout, a lost response, or an expired `writing`, `refreshing` or `clearing` lease. A retired slot stays in the deploy config but has no further use. The operator adds new slots with a deploy when the free count is low. The settings page shows the free count.
 
 The slot value is a JSON envelope: `{ ref, revision, credential }`. Before each use, the Worker compares `ref` and `revision` with the Convex record. If they do not match, the Worker stops the request with a fixed safe error. Thus a slow request cannot use a credential of a different reference.
 
@@ -53,26 +56,26 @@ The slot value is a JSON envelope: `{ ref, revision, credential }`. Before each 
 2. A Convex mutation sets a `free` slot to `writing` for the reference and revision. The mutation gets metadata only.
 3. The Worker calls `PATCH` on the slot. The Cloudflare token is the Worker secret binding `SECRETS_STORE_TOKEN`.
 4. If the `PATCH` succeeds, one mutation sets the slot to `bound` and the reference to ready. The mutation checks the lease first.
-5. If the `PATCH` fails with a clear error, the slot goes back to `free` and the reference stays pending. If the result is not clear (a timeout), the slot goes to `unknown`.
+5. If the `PATCH` fails with a clear Cloudflare error response, the slot goes back to `free` and the reference stays pending. Any other result retires the slot, and the reference stays pending. The user can submit again into a different slot.
 
 Convex never calls the Cloudflare API. Convex never holds the token or the value. The Worker does not log request bodies, callback URLs or provider responses.
 
 ### Use path
 
-Convex calls an internal Worker route. A shared secret binding on both sides authenticates the call. The call contains the connection ID, route, query, cursor, limits and the run principal. The call does not contain a slot, a destination or a credential. The Worker gets the slot, revision, destination and grants from Convex through an internal query. Then it makes the request. The current checks stay: membership, grants, origin policy, no redirects, cursor rules, credential echo checks and the response field mapping. The Worker returns only mapped scalar rows and fixed safe errors.
+Convex calls an internal Worker route. The Worker calls back to a Convex HTTP route that returns metadata only. One service token authenticates both directions. This is the pattern of `RECIPE_DISPATCH_TOKEN` today: a Worker secret binding, and the same value in a Convex environment variable. The token gives no access to credentials. The call contains the connection ID, route, query, cursor, limits and the run principal. The run principal comes from trusted Convex code, never from a public caller. The call does not contain a slot, a destination or a credential. The Convex HTTP route checks the token, then runs an internal query for the slot, revision, destination and grants. Then the Worker makes the request. The current checks stay: membership, grants, origin policy, no redirects, cursor rules, credential echo checks and the response field mapping. The Worker returns only mapped scalar rows and fixed safe errors.
 
 ### OAuth
 
 1. The Worker makes a server-side OAuth transaction. The transaction is bound to the session, workspace, connection, provider, redirect URI and revision. It has a short expiry and uses PKCE with `S256`. The PKCE verifier stays on the server.
 2. The callback consumes the transaction in one mutation. A second use fails.
 3. The Worker writes the refresh token, the access token and its expiry to the slot through the write path.
-4. A refresh before a run uses the same write path and lease.
+4. A refresh before a run first sets the slot from `bound` to `refreshing`, with the expected reference and revision. This lease is taken before the provider refresh call, so two refresh calls cannot occur at the same time. On success, the Worker writes the new tokens and the slot goes back to `bound`. On a clear provider or Cloudflare error, the slot goes back to `bound` and the reference is marked "reconnect needed". Any other result retires the slot and marks the reference "reconnect needed".
 5. Disconnect first sets the reference to `deleting`. This stops new use. Then the Worker calls the provider revocation endpoint, sets the slot to `clearing`, writes the placeholder and sets the slot to `free`. A failure keeps the reference in `deleting`, and the user can try again.
 6. Each OAuth client secret is a binding that the operator sets.
 
 ### Cleanup
 
-A cleanup job claims a slot only when its record is `bound` to a deleted reference, or is `unknown` with an expired lease. It sets the slot to `clearing` with a new lease, writes the placeholder, and sets the slot to `free`. It never claims a slot in `writing`.
+A cleanup job claims a slot only when it is `bound` to a deleted reference. It sets the slot to `clearing` with a new lease, writes the placeholder, and sets the slot to `free`. A clear error sets the slot back to `bound` for a later try. Any other result retires the slot. The job also retires each slot with an expired `writing`, `refreshing` or `clearing` lease. It never claims a slot with an active lease.
 
 ## Decision needed from the user
 
@@ -92,7 +95,7 @@ The recommendation is A on a dedicated account. Use B until the user approves A.
 
 ## Consequences
 
-The app depends on a beta product. The slot count limits the number of stored credentials. If an attacker gets control of the Worker, the attacker gets the Secrets Store write rights of the account. When a slot is cleared, the provider token stays valid. Only the OAuth disconnect step revokes it.
+The app depends on a beta product. The slot count limits the number of stored credentials. Retired slots reduce this count until the operator adds slots. If an attacker gets control of the Worker, the attacker gets the Secrets Store write rights of the account. When a slot is cleared, the provider token stays valid. Only the OAuth disconnect step revokes it.
 
 ## Validation and revisit
 
