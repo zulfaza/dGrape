@@ -959,6 +959,83 @@ describe("authenticated HTTP settings recovery", () => {
     ).toBe("ready")
     vi.restoreAllMocks()
   })
+  it("finishes save, rotation and deletion only as the operator changes Cloudflare bindings", async () => {
+    vi.stubEnv("SECRET_VAULT_PROVIDER", "cloudflare")
+    vi.stubEnv("APP_ORIGIN", "https://dfe.example.com")
+    vi.stubEnv("SECRET_BINDING_TOKEN", "fixture-binding-token-0123456789abcdef")
+    const bindings = new Map<string, string>()
+    vi.stubGlobal(
+      "fetch",
+      async (url: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(url, init)
+        if (request.url !== "https://dfe.example.com/internal/secrets/resolve")
+          throw new Error("Unexpected request")
+        const { name } = Schema.decodeUnknownSync(SecretBindingRequest)(
+          await request.json()
+        )
+        const value = bindings.get(name)
+        return Response.json(
+          value === undefined ? { found: false } : { found: true, value }
+        )
+      }
+    )
+    let now = Date.now()
+    vi.spyOn(Date, "now").mockImplementation(() => now)
+    const t = convexTest(schema, modules)
+    const owner = t.withIdentity({ tokenIdentifier: "owner" })
+    const workspaceId = await owner.mutation(api.workspaces.create, {
+      name: "Bindings",
+    })
+    const secretRef = await owner.mutation(api.secrets.prepare, {
+      workspaceId,
+      label: "API",
+      private: false,
+    })
+    const state = async () =>
+      (await owner.query(internal.secrets.metadata, { secretRef })).state
+    const post = async (revision: number, value: string) => {
+      const response = await owner.fetch("/settings/secrets", {
+        method: "POST",
+        body: JSON.stringify({ secretRef, revision, value }),
+      })
+      // A failed save holds the write lease; let it expire for the retry.
+      now += 61000
+      return response.status
+    }
+    const first = await state()
+    if (first.kind !== "pending") throw new Error("Expected pending")
+    expect(await post(1, token)).toBe(400)
+    expect(await post(1, "")).toBe(400)
+    bindings.set(first.name, token)
+    expect(await post(1, "")).toBe(200)
+    expect((await state()).kind).toBe("ready")
+
+    await owner.mutation(api.secrets.rotate, { secretRef, revision: 1 })
+    const rotated = await state()
+    if (rotated.kind !== "pending") throw new Error("Expected pending")
+    bindings.set(rotated.name, "new-private-token")
+    expect(await post(2, "")).toBe(400)
+    expect((await state()).kind).toBe("pending")
+    bindings.delete(first.name)
+    expect(await post(2, "")).toBe(200)
+    expect((await state()).kind).toBe("ready")
+
+    await owner.mutation(api.secrets.beginDelete, { secretRef, revision: 2 })
+    const revision = (
+      await owner.query(internal.secrets.metadata, { secretRef })
+    ).revision
+    expect(await post(revision, "")).toBe(400)
+    expect((await state()).kind).toBe("deleting")
+    bindings.delete(rotated.name)
+    expect(await post(revision, "")).toBe(200)
+    expect(
+      (await owner.query(api.secrets.list, { workspaceId, paginationOpts }))
+        .page[0]?.status
+    ).toBe("deleted")
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
   it("cancels an empty pending reference and rejects unauthenticated ingress", async () => {
     const t = convexTest(schema, modules)
     expect(
