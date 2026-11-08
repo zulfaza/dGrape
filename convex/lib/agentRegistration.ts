@@ -23,11 +23,25 @@ export const MAX_CLAIM_ATTEMPTS = 10
 /** Pending registrations allowed for one email at a time. */
 export const MAX_PENDING_PER_EMAIL = 5
 
+/**
+ * The trusted agent provider that registered an agent-verified
+ * (`identity_assertion`) registration, and its opaque user identifier.
+ * Absent for `service_auth` registrations.
+ */
+export const providerBindingValidator = v.object({
+  issuer: v.string(),
+  subject: v.string(),
+})
+
 const common = {
-  /** The lowercased email the agent gave as `login_hint`. */
+  /**
+   * The lowercased email: the `login_hint` of a service_auth registration,
+   * or the verified email in the provider's assertion.
+   */
   loginHint: v.string(),
   claimTokenDigest: v.string(),
   claimExpiresAt: v.number(),
+  provider: v.optional(providerBindingValidator),
 }
 
 export const agentRegistrationValidator = v.union(
@@ -57,6 +71,16 @@ export const agentRegistrationValidator = v.union(
 )
 
 export type AgentRegistration = Infer<typeof agentRegistrationValidator>
+
+/** The fields every registration state keeps, for a state change. */
+export function commonFields(registration: AgentRegistration) {
+  return {
+    loginHint: registration.loginHint,
+    claimTokenDigest: registration.claimTokenDigest,
+    claimExpiresAt: registration.claimExpiresAt,
+    provider: registration.provider,
+  }
+}
 
 export const agentClaimAttemptValidator = v.object({
   registrationId: v.id("agentRegistrations"),

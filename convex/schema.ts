@@ -93,6 +93,12 @@ export default defineSchema({
       "loginHint",
       "status",
       "claimExpiresAt",
+    ])
+    .index("by_providerIssuer_and_providerSubject_and_status_and_loginHint", [
+      "provider.issuer",
+      "provider.subject",
+      "status",
+      "loginHint",
     ]),
   agentClaimAttempts: defineTable(agentClaimAttemptValidator)
     .index("by_attemptTokenDigest", ["attemptTokenDigest"])
