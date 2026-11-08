@@ -60,6 +60,12 @@ Do not remove the guard until an owner completes and verifies this setup:
    `CONVEX_SITE_URL` is provided by Convex. Check existing auth/agent and artifact
    setup docs for key formats. Verify WorkOS allows the production callback.
    This workflow does not set Convex runtime variables or run data migrations.
+   `AGENT_AUTH_TRUSTED_ISSUERS` is optional and stays unset in production
+   until an agent provider is verified. It is a JSON array of
+   `{ issuer, display_name, jwks_uri, client_id? }` with https URLs (see
+   `convex/lib/trustedIssuers.ts`). When it has an entry, discovery and
+   `/auth.md` advertise agent-verified registration and provider security
+   events. Add only an issuer whose keys and revocation events you verified.
 6. Coordinate with the secrets/connectors and recipes/Workflow/Cron owners
    before enabling. Add any new Worker runtime secrets to both the preflight
    and JSON secret upload; add bindings/triggers in the owned Cloudflare config.

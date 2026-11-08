@@ -7,13 +7,21 @@ import {
 } from "./agentRegistration"
 import { OFFERED_SCOPES, SCOPE_DESCRIPTIONS } from "./agentScope"
 import { ASSERTION_LIFETIME_SECONDS } from "./identityAssertion"
+import {
+  ID_JAG_ASSERTION_TYPE,
+  MAX_AUTH_AGE_SECONDS,
+} from "./providerAssertion"
+import { SUPPORTED_EVENTS } from "./securityEvents"
+import { trustedIssuers } from "./trustedIssuers"
 
 /**
  * auth.md discovery documents. The structured metadata and the /auth.md
  * text are built from the same configuration and constants, so they cannot
  * describe different endpoints or lifetimes. Advertise only what this
  * service accepts: service_auth registration, the claim grant, and the
- * JWT-bearer grant.
+ * JWT-bearer grant. Agent-verified registration (`identity_assertion`) and
+ * provider security events are advertised only when at least one issuer is
+ * in AGENT_AUTH_TRUSTED_ISSUERS.
  */
 
 export const CLAIM_GRANT = "urn:workos:agent-auth:grant-type:claim"
@@ -31,6 +39,7 @@ export function endpoints() {
     claim: `${base}/agent/identity/claim`,
     token: `${base}/oauth2/token`,
     revoke: `${base}/oauth2/revoke`,
+    events: `${base}/agent/event/notify`,
     jwks: `${base}/.well-known/jwks.json`,
     skill: `${base}/auth.md`,
     protectedResource: `${base}/.well-known/oauth-protected-resource`,
@@ -48,9 +57,19 @@ export function protectedResourceMetadata(resource: string) {
   }
 }
 
+/** True when some agent provider is trusted for agent-verified registration. */
+export function agentVerifiedEnabled() {
+  return trustedIssuers().length > 0
+}
+
 /** RFC 8414 metadata with the auth.md `agent_auth` block. */
 export function authorizationServerMetadata() {
   const e = endpoints()
+  const agentAuth = {
+    skill: e.skill,
+    identity_endpoint: e.identity,
+    claim_endpoint: e.claim,
+  }
   return {
     issuer: issuer(),
     token_endpoint: e.token,
@@ -58,14 +77,106 @@ export function authorizationServerMetadata() {
     jwks_uri: e.jwks,
     grant_types_supported: [JWT_BEARER_GRANT, CLAIM_GRANT],
     scopes_supported: OFFERED_SCOPES,
-    agent_auth: {
-      skill: e.skill,
-      identity_endpoint: e.identity,
-      claim_endpoint: e.claim,
-      identity_types_supported: ["service_auth"],
-    },
+    agent_auth: agentVerifiedEnabled()
+      ? {
+          ...agentAuth,
+          events_endpoint: e.events,
+          identity_types_supported: ["service_auth", "identity_assertion"],
+          identity_assertion: {
+            assertion_types_supported: [ID_JAG_ASSERTION_TYPE],
+          },
+          events_supported: SUPPORTED_EVENTS,
+        }
+      : { ...agentAuth, identity_types_supported: ["service_auth"] },
   }
 }
+
+const pickServiceAuthOnly = `This service accepts only \`service_auth\`: you name your user's email, and
+your user confirms on our site. Anonymous and agent-verified registration
+are not supported.`
+
+const pickWithAssertion = `This service accepts two methods:
+
+- \`identity_assertion\` (agent-verified): your agent provider signs an
+  identity assertion (ID-JAG) for your user. Use it if your provider is one
+  that this service trusts. Your user confirms once on our site; after that,
+  registration needs no confirmation.
+- \`service_auth\`: you name your user's email, and your user confirms on
+  our site each time.
+
+Anonymous registration is not supported. If your provider is not trusted,
+you get \`invalid_issuer\`: use \`service_auth\`.`
+
+/** The auth.md section for agent-verified registration. */
+function assertionSection(identity: string) {
+  const maxAgeMinutes = MAX_AUTH_AGE_SECONDS / 60
+  return `## 3b. Register with an identity assertion
+
+Get an ID-JAG from your provider with \`aud\` set to ${issuer()}, then:
+
+\`\`\`http
+POST ${identity}
+Content-Type: application/json
+
+{
+  "type": "identity_assertion",
+  "assertion_type": "${ID_JAG_ASSERTION_TYPE}",
+  "assertion": "eyJ…"
+}
+\`\`\`
+
+Each assertion works once. The assertion must have a verified email, and
+your user must have signed in at the provider in the last ${maxAgeMinutes}
+minutes.
+
+The first time, the response is \`401\` with
+\`WWW-Authenticate: AgentAuth error="interaction_required"\`. Its body has
+the same fields as the \`service_auth\` response in section 3, with
+\`"registration_type": "identity_assertion"\`. Do the claim in section 4.
+
+When your user already confirmed this agent provider for this email, the
+response is \`200\`:
+
+\`\`\`json
+{
+  "registration_id": "…",
+  "registration_type": "identity_assertion",
+  "identity_assertion": "…",
+  "assertion_expires": "…",
+  "scopes": ["data.read"]
+}
+\`\`\`
+
+There is no access token in this response. Exchange \`identity_assertion\`
+as in section 5.
+
+`
+}
+
+/** The auth.md error rows for agent-verified registration. */
+function assertionErrors(identity: string) {
+  return [
+    ["interaction_required", "Do the claim in section 4. The status is `401`."],
+    [
+      "login_required",
+      "Ask your user to sign in at your provider again. The status is `401`.",
+    ],
+    ["invalid_issuer", "Your provider is not trusted. Use `service_auth`."],
+    ["invalid_signature", "Get a new assertion from your provider."],
+    ["invalid_audience", `Set \`aud\` to ${issuer()}.`],
+    ["invalid_client_id", "Get a new assertion from your provider."],
+    ["expired", "Get a new assertion from your provider."],
+    ["replay_detected", "Get a new assertion. Each one works once."],
+    ["missing_verified_email", "Your provider must verify your user's email."],
+  ]
+    .map(([error, action]) => `| \`${error}\` | ${identity} | ${action} |\n`)
+    .join("")
+}
+
+const providerRevocation = `
+Your agent provider can also revoke all registrations linked to your user's
+identity at that provider. After that, register again.
+`
 
 /** The agent-facing /auth.md document. */
 export function authMd() {
@@ -75,6 +186,7 @@ export function authMd() {
   const hours = CLAIM_WINDOW_MS / 3_600_000
   const tokenSeconds = ACCESS_TOKEN_LIFETIME_MS / 1000
   const assertionDays = ASSERTION_LIFETIME_SECONDS / 86_400
+  const verified = agentVerifiedEnabled()
   const scopes = OFFERED_SCOPES.map(
     (scope) => `- \`${scope}\`: ${SCOPE_DESCRIPTIONS[scope]}`
   ).join("\n")
@@ -100,9 +212,7 @@ this file disagree, the metadata is correct.
 
 ## 2. Pick a method
 
-This service accepts only \`service_auth\`: you name your user's email, and
-your user confirms on our site. Anonymous and agent-verified registration
-are not supported.
+${verified ? pickWithAssertion : pickServiceAuthOnly}
 
 ## 3. Register
 
@@ -133,7 +243,7 @@ Content-Type: application/json
 Keep \`claim_token\` secret. One email can have at most 5 registrations
 waiting at a time.
 
-## 4. Claim
+${verified ? assertionSection(e.identity) : ""}## 4. Claim
 
 Show your user one message: "Open this link, sign in, and enter this
 6-digit code: 123456", with \`verification_uri\`. Never ask the user to send
@@ -210,7 +320,7 @@ ${scopes}
 | Error | Endpoint | What to do |
 | --- | --- | --- |
 | \`anonymous_not_enabled\` | ${e.identity} | Use \`service_auth\`. |
-| \`invalid_login_hint\` | ${e.identity} | Send your user's email. |
+${verified ? assertionErrors(e.identity) : ""}| \`invalid_login_hint\` | ${e.identity} | Send your user's email. |
 | \`invalid_request\` | any | Fix the request body. |
 | \`rate_limited\` | ${e.identity}, ${e.claim} | Finish or wait for a pending registration, or register again. |
 | \`invalid_claim_token\` | ${e.claim} | Send the claim token and email you registered with. |
@@ -236,7 +346,7 @@ token=<access_token>&token_type_hint=access_token
 The response is always \`200\`. Your user can revoke the whole registration
 in DFE. After that, the assertion and every token issued to it stop
 working.
-
+${verified ? providerRevocation : ""}
 ## Contact
 
 ${app}
