@@ -22,6 +22,7 @@ Accepted means the user has selected the stated direction, not that it is implem
 | [0014](0014-working-set-visual-hierarchy.md) | Proposed | Refine the sample around a working set, clearer type, and functional geometry |
 | [0015](0015-component-feedback-and-shared-geometry.md) | Accepted | Share geometry, use one action toast, provide chart tooltips, and use neutral dark surfaces |
 | [0016](0016-segmented-tabs-and-stacked-toasts.md) | Accepted | Use shared rounded sliding tabs and shadcn Sonner notification stacks |
+| [0017](0017-credential-entry-write-path.md) | Proposed | Write user credentials to Cloudflare Secrets Store slots |
 
 ## Working with ADRs
 
