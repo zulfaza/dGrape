@@ -64,15 +64,20 @@ saved query revisions. Each name is a lowercase identifier. Save and publish
 check each binding like other query bindings. Agent credentials need
 `data.read` as well as `pages.write` to save live bindings.
 
-The frame has only the `allow-scripts` sandbox token, so the report runs in an
-opaque origin with no cookies, storage, popups, forms or top navigation. The
-first document policy allows inline scripts and styles and `data:` images, and
-denies all connections, fonts, media, frames, workers, forms and base URLs.
-Authored HTML is not sanitized: the sandbox and the policy contain it.
+The report runs in an inner frame inside an outer frame that holds no script.
+Both frames have only the `allow-scripts` sandbox token, so the report runs in
+an opaque origin with no cookies, storage, popups, forms or top navigation.
+The policy of both documents allows inline scripts and styles and `data:`
+images, and denies all connections, fonts, media, frames, workers, forms and
+base URLs. The inner `srcdoc` document inherits the outer policy, and its
+`frame-src 'none'` stops the report from navigating its frame to any URL.
+Authored HTML is not sanitized: the sandboxes and the policies contain it.
 
-The parent writes a random nonce into the frame bootstrap. It transfers one
-MessageChannel port only to the first hello from its own frame window with that
-nonce, and it ignores all other window messages. Each port request names a
+The parent writes a random nonce into the report bootstrap. The bootstrap
+makes the MessageChannel and sends one port with its hello to the app window.
+The parent accepts only the first hello from the report window with that nonce
+and one port, and ignores all other window messages. The port stays with the
+report document, so no other document can get it. Each port request names a
 binding. The parent parses it, allows only declared names, and permits a burst
 of 10 requests, then 1 each second, with at most 4 pending. It then calls
 `pages.bridgeQuery`, which checks membership on each call. Viewers can read
@@ -80,14 +85,12 @@ only the revision that viewers see. Writers can also read other revisions.
 A result has at most 200 rows and 256 KB, and holds only result field values:
 no record metadata (record, collection or query IDs) and no secret reference
 fields. Record reference fields keep their values, which are record IDs, as in
-other page blocks. The frame
-receives no credentials.
+other page blocks. The report receives no credentials.
 
-Known limit: the sandbox cannot stop a report from navigating its own frame,
-and a navigation URL can carry data that the report read. The parent stops the
-bridge when the frame loads a second document, but that cannot recall data
-that already left. So only a person or credential that can already read the
-workspace data can save live bindings. Browser checks on 2026-11-08 confirmed
-blocked cookie, storage, parent document and fetch access, an unknown binding
-refusal, the rate and pending limits, and the bridge stop after navigation.
-This evidence does not change the ADR status.
+Known limit: a content policy does not control all channels. For example,
+browsers do not let a policy block WebRTC connections. So a report can still
+send data that it read out of the frame. Thus only a person or credential that
+can already read the workspace data can save live bindings. Browser checks on
+2026-11-08 confirmed blocked cookie, storage, parent document and fetch
+access, a blocked frame navigation, an unknown binding refusal, and the rate
+and pending limits. This evidence does not change the ADR status.
