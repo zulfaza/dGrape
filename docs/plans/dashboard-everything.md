@@ -224,7 +224,7 @@ Vault also supports local envelope encryption where ciphertext is stored in our 
 
 ## Follow-up: auth.md agent registration
 
-User explicitly requested auth.md support and then clarified to add it to the plan only. No registration endpoints, public discovery files, tokens, or deployed configuration are implemented by this document. The future implementation must deliver a working protocol, not merely a Markdown file advertising nonexistent endpoints.
+Status (2026-11-08): the user-claimed service_auth flow is implemented and verified. See [ADR 0009](../../architecture/decisions/0009-user-claimed-agent-authorization.md) for the shipped choices and `convex/agentAuth.test.ts` for the acceptance checks. Agent-verified registration (see the end of this section) is not implemented. The text below is the original design.
 
 ### Proposed initial flow
 

@@ -28,3 +28,7 @@ Agent onboarding adds protocol state, consent, security tests, and revocation re
 ## Validation and revisit
 
 Verify discovery, registration, human authorization where required, scoped MCP/API access, expiry, revocation, and discovery/document consistency. Pin/recheck the evolving protocol before implementation. Source: [auth.md apps guide](https://workos.com/auth-md/docs/apps).
+
+## Implementation evidence (2026-11-08)
+
+The user-claimed `service_auth` flow is implemented as [0009](0009-user-claimed-agent-authorization.md) describes. `convex/agentAuth.test.ts` verifies discovery, registration, human confirmation, scoped API access, expiry, revocation, and discovery/document consistency. Anonymous and agent-verified registration are not implemented, and the discovery documents do not advertise them.
