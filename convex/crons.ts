@@ -24,4 +24,11 @@ crons.interval(
   {}
 )
 
+crons.interval(
+  "prune expired assertion jti values",
+  { hours: 1 },
+  internal.assertionReplays.prune,
+  {}
+)
+
 export default crons

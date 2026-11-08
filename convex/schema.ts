@@ -10,6 +10,7 @@ import {
   agentClaimAttemptValidator,
   agentRegistrationValidator,
 } from "./lib/agentRegistration"
+import { assertionReplayValidator } from "./lib/assertionReplay"
 import {
   collectionDefinitionValidator,
   indexValueValidator,
@@ -96,6 +97,10 @@ export default defineSchema({
   agentClaimAttempts: defineTable(agentClaimAttemptValidator)
     .index("by_attemptTokenDigest", ["attemptTokenDigest"])
     .index("by_registrationId", ["registrationId"]),
+  /** Used `jti` values of provider JWTs; see convex/lib/assertionReplay.ts. */
+  assertionReplays: defineTable(assertionReplayValidator)
+    .index("by_issuer_and_jti", ["issuer", "jti"])
+    .index("by_expiresAt", ["expiresAt"]),
   /** Uploads waiting for their file; see convex/lib/artifacts.ts. */
   artifactUploads: defineTable({
     workspaceId: v.id("workspaces"),
