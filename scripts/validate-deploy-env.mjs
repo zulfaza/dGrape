@@ -10,6 +10,7 @@ const required = [
   "WORKOS_COOKIE_PASSWORD",
   "WORKOS_REDIRECT_URI",
   "SECRET_BINDING_TOKEN",
+  "RECIPE_DISPATCH_TOKEN",
   "GITHUB_ENV",
 ]
 for (const name of required) {
