@@ -48,7 +48,7 @@ Each state change is one Convex mutation. The mutation checks the expected state
 
 The `PATCH` API has no revision check. A write that timed out can still complete later and overwrite a newer value. Thus each uncertain result retires the slot: a timeout, a lost response, or an expired `writing`, `refreshing` or `clearing` lease. A retired slot stays in the deploy config but has no further use. The operator adds new slots with a deploy when the free count is low. The settings page shows the free count.
 
-The slot value is a JSON envelope: `{ ref, revision, credential }`. Before each use, the Worker compares `ref` and `revision` with the Convex record. If they do not match, the Worker stops the request with a fixed safe error. Thus a slow request cannot use a credential of a different reference.
+The slot value is a JSON envelope: `{ ref, revision, version, credential }`. `version` is a counter in the Convex slot record. Each successful write increases it by one, in the same mutation that ends the lease. Before each use, the Worker compares `ref`, `revision` and `version` with the Convex record. If they do not match, the Worker stops the request with a fixed safe error and can try again later. Thus a slow request cannot use a credential of a different reference, and no request uses a value that a newer write replaced.
 
 ### Write path
 
@@ -69,7 +69,7 @@ Convex calls an internal Worker route. The Worker calls back to a Convex HTTP ro
 1. The Worker makes a server-side OAuth transaction. The transaction is bound to the session, workspace, connection, provider, redirect URI and revision. It has a short expiry and uses PKCE with `S256`. The PKCE verifier stays on the server.
 2. The callback consumes the transaction in one mutation. A second use fails.
 3. The Worker writes the refresh token, the access token and its expiry to the slot through the write path.
-4. A refresh before a run first sets the slot from `bound` to `refreshing`, with the expected reference and revision. This lease is taken before the provider refresh call, so two refresh calls cannot occur at the same time. On success, the Worker writes the new tokens and the slot goes back to `bound`. On a clear provider or Cloudflare error, the slot goes back to `bound` and the reference is marked "reconnect needed". Any other result retires the slot and marks the reference "reconnect needed".
+4. A refresh before a run first sets the slot from `bound` to `refreshing`, with the expected reference and revision. This lease is taken before the provider refresh call, so two refresh calls cannot occur at the same time. After it gets the lease, the Worker reads the envelope and checks its `version`. If the value is old, the Worker releases the lease and tries again later, with no provider call. On success, the Worker writes the new tokens with the next `version`, and one mutation sets that `version` and returns the slot to `bound`. On a clear provider or Cloudflare error, the slot goes back to `bound` and the reference is marked "reconnect needed". Any other result retires the slot and marks the reference "reconnect needed".
 5. Disconnect first sets the reference to `deleting`. This stops new use. Then the Worker calls the provider revocation endpoint, sets the slot to `clearing`, writes the placeholder and sets the slot to `free`. A failure keeps the reference in `deleting`, and the user can try again.
 6. Each OAuth client secret is a binding that the operator sets.
 
