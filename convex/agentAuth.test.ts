@@ -112,6 +112,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.useRealTimers()
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
@@ -220,6 +221,17 @@ function attemptToken(verificationUri: string) {
   return token
 }
 
+/** Collects everything the functions write to the console. */
+function captureLogs() {
+  const lines: Array<string> = []
+  const levels = ["debug", "info", "log", "warn", "error"] as const
+  for (const level of levels)
+    vi.spyOn(console, level).mockImplementation((...args: Array<string>) => {
+      lines.push(args.map(String).join(" "))
+    })
+  return lines
+}
+
 /** Every stored row that the auth.md flow writes, as JSON. */
 function storedRows(t: ReturnType<typeof convexTest>) {
   return t.run(async (ctx) =>
@@ -307,6 +319,7 @@ describe("auth.md service_auth registration", () => {
   it("runs register, claim, token, API call, assertion exchange, and revoke", async () => {
     const { t, ada, bearer, form, register, poll, confirm, workspaceId } =
       await setup()
+    const logs = captureLogs()
     const { claimToken, userCode, attemptToken, body } = await register()
     expect(body.registration_type).toBe("service_auth")
     expect(body.claim.interval).toBe(5)
@@ -390,8 +403,10 @@ describe("auth.md service_auth registration", () => {
       tokens.access_token,
       second.access_token,
       tokens.identity_assertion,
-    ])
+    ]) {
       expect(rows).not.toContain(secret)
+      expect(logs.join("\n")).not.toContain(secret)
+    }
   })
 
   it("revoking the registration stops its tokens and its assertion", async () => {
