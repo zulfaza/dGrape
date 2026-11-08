@@ -87,10 +87,14 @@ Worker at `APP_ORIGIN` + `/internal/secrets/resolve` with
 | Worker | `SECRET_BINDING_TOKEN` | Declared in `cloudflare.config.ts`; the deploy uploads it |
 | Worker | `SECRET_REF_<NAME>` | One secret for each credential. Not declared; `cf deploy` keeps them |
 
-Users cannot type credential values in settings with this backend. To add
-one, the workspace owner and an operator do these steps:
+Users cannot store credential values through settings with this backend.
+Never type a real credential in the settings form. To add one, the workspace
+owner and an operator do these steps:
 
-1. In settings, the owner adds a credential. It stays pending.
+1. In settings, the owner enters a name and a placeholder such as `pending`
+   in "API key or token", then selects **Store credential**. The save fails
+   with an error, and the credential stays pending. The failed save holds a
+   60-second write lease.
 2. The operator reads the pending reference's `state.name` (a UUID) in the
    Convex dashboard data view, table `secretRefs`. Read only; do not edit.
 3. The binding name is `SECRET_REF_` and the UUID in upper case, with `_` in
@@ -98,12 +102,13 @@ one, the workspace owner and an operator do these steps:
 4. The operator adds a Worker secret with that name on `dfe`: Workers →
    `dfe` → Settings → Variables and Secrets, or `cf workers secrets update`.
    Adding a Worker secret deploys a new Worker version.
-5. In settings, the owner saves an empty value. The credential becomes ready.
+5. After the lease expires, the owner leaves the pending credential's field
+   empty and selects **Save**. The credential becomes ready.
 
 To rotate, start the rotation in settings and add the new binding. Then
 delete the old binding and save an empty value. To delete, start the deletion
-in settings, delete the binding, and save an empty value again. Each step
-fails until the old binding is gone. A Worker holds at most 128 variables and
+in settings, delete the binding, and retry the deletion. Each step fails until
+the old binding is gone. After a failed save, wait 60 seconds before the retry. A Worker holds at most 128 variables and
 secrets (Workers paid plan), so this backend suits a single owner.
 Deleting a binding does not revoke the token with its provider.
 
