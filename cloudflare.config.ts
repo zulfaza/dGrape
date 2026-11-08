@@ -26,6 +26,9 @@ export default defineConfig({
       WORKOS_API_KEY: bindings.secret(),
       WORKOS_REDIRECT_URI: bindings.secret(),
       WORKOS_COOKIE_PASSWORD: bindings.secret(),
+      // Convex sends it to read secretRef values. The values are the
+      // undeclared SECRET_REF_* Worker secrets; see docs/deployment.md.
+      SECRET_BINDING_TOKEN: bindings.secret(),
     },
   },
 })
