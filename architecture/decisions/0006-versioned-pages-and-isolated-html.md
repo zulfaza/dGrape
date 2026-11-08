@@ -78,7 +78,9 @@ of 10 requests, then 1 each second, with at most 4 pending. It then calls
 `pages.bridgeQuery`, which checks membership on each call. Viewers can read
 only the revision that viewers see. Writers can also read other revisions.
 A result has at most 200 rows and 256 KB, and holds only result field values:
-no record, collection or query IDs, and no secret reference fields. The frame
+no record metadata (record, collection or query IDs) and no secret reference
+fields. Record reference fields keep their values, which are record IDs, as in
+other page blocks. The frame
 receives no credentials.
 
 Known limit: the sandbox cannot stop a report from navigating its own frame,

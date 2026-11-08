@@ -454,7 +454,9 @@ function LiveHtmlReport({
       <p className="text-xs text-muted-foreground">
         Live report. It reads data when it opens.
       </p>
+      {/* A new page revision can bind other queries: start a new session. */}
       <LiveHtmlFrame
+        key={JSON.stringify([pageId, revision, blockIndex])}
         html={html}
         title={`${title} live report`}
         bindings={bindings}
