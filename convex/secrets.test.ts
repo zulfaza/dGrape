@@ -4,13 +4,22 @@ import type { Json } from "effect/Schema"
 import { describe, expect, it, vi } from "vitest"
 import { convexTest } from "convex-test"
 import rateLimiterTest from "@convex-dev/rate-limiter/test"
-import { Clock, Duration, Effect, Layer, Redacted, Result } from "effect"
+import {
+  Clock,
+  Duration,
+  Effect,
+  Layer,
+  Redacted,
+  Result,
+  Schema,
+} from "effect"
 import schema from "./schema"
 import * as secretServices from "./lib/secretService"
 import { api, internal } from "./_generated/api"
 import {
   SecretService,
   SecretFailure,
+  cloudflareSecretLayer,
   type SecretStore,
 } from "./lib/secretService"
 import {
@@ -20,6 +29,7 @@ import {
   type ConnectorConfig,
   type PageRequest,
 } from "./lib/connectorFetch"
+import { SecretBindingRequest } from "./lib/secretBindings"
 import {
   checkRoute,
   type ConnectorRoute,
@@ -472,6 +482,83 @@ describe("provider-independent connector boundary", () => {
   })
 })
 
+describe("Cloudflare secret bindings", () => {
+  const name = "0f8b2c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f"
+  const scope = { workspaceId: "w", userId: null }
+  const bindingToken = "fixture-binding-token-0123456789abcdef"
+  function store(reply: (body: typeof SecretBindingRequest.Type) => Response) {
+    const requests: { url: string; auth: string | null }[] = []
+    const transport: typeof fetch = async (url, init) => {
+      const request = new Request(url, init)
+      requests.push({
+        url: request.url,
+        auth: request.headers.get("Authorization"),
+      })
+      return reply(
+        Schema.decodeUnknownSync(SecretBindingRequest)(await request.json())
+      )
+    }
+    const run = <A>(
+      use: (service: SecretStore) => Effect.Effect<A, SecretFailure>
+    ) =>
+      Effect.runPromise(
+        Effect.flatMap(SecretService, use).pipe(
+          Effect.provide(
+            cloudflareSecretLayer(
+              "https://dfe.example.com",
+              bindingToken,
+              transport
+            )
+          )
+        )
+      )
+    return { requests, run }
+  }
+  it("reads a binding value from the Worker", async () => {
+    const { requests, run } = store((body) =>
+      Response.json(
+        body.name === name ? { found: true, value: token } : { found: false }
+      )
+    )
+    const found = await run((service) => service.find(scope, name))
+    expect(found?.id).toBe("SECRET_REF_0F8B2C4E_1A2B_4C3D_8E9F_0A1B2C3D4E5F")
+    expect(found && Redacted.value(found.value)).toBe(token)
+    expect(requests).toEqual([
+      {
+        url: "https://dfe.example.com/internal/secrets/resolve",
+        auth: `Bearer ${bindingToken}`,
+      },
+    ])
+  })
+  it("cannot write, and removes only a deleted binding", async () => {
+    let present = true
+    const { requests, run } = store(() =>
+      Response.json(present ? { found: true, value: token } : { found: false })
+    )
+    await expect(
+      run((service) => service.put(scope, name, Redacted.make(token)))
+    ).rejects.toThrow("Add the credential as a Cloudflare Worker secret")
+    await expect(run((service) => service.remove(scope, name))).rejects.toThrow(
+      "Delete the Worker secret first"
+    )
+    present = false
+    await run((service) => service.remove(scope, name))
+    expect(requests).toHaveLength(2)
+  })
+  it("fails on a bad name or Worker error without calling or leaking", async () => {
+    const failing = store(() => new Response(token, { status: 500 }))
+    await expect(
+      failing.run((service) => service.find(scope, "API_KEY"))
+    ).rejects.toThrow("Secret storage is unavailable")
+    expect(failing.requests).toHaveLength(0)
+    const error = await failing
+      .run((service) => service.find(scope, name))
+      .catch(String)
+    expect(error).toContain("Secret storage is unavailable")
+    expect(error).not.toContain(token)
+  })
+})
+
 describe("connector response mapping and pagination", () => {
   const route = config.routes[0]
   if (!route) throw new Error("Invalid fixture")
@@ -870,6 +957,83 @@ describe("authenticated HTTP settings recovery", () => {
     expect(
       (await owner.query(internal.secrets.metadata, { secretRef })).state.kind
     ).toBe("ready")
+    vi.restoreAllMocks()
+  })
+  it("finishes save, rotation and deletion only as the operator changes Cloudflare bindings", async () => {
+    vi.stubEnv("SECRET_VAULT_PROVIDER", "cloudflare")
+    vi.stubEnv("APP_ORIGIN", "https://dfe.example.com")
+    vi.stubEnv("SECRET_BINDING_TOKEN", "fixture-binding-token-0123456789abcdef")
+    const bindings = new Map<string, string>()
+    vi.stubGlobal(
+      "fetch",
+      async (url: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(url, init)
+        if (request.url !== "https://dfe.example.com/internal/secrets/resolve")
+          throw new Error("Unexpected request")
+        const { name } = Schema.decodeUnknownSync(SecretBindingRequest)(
+          await request.json()
+        )
+        const value = bindings.get(name)
+        return Response.json(
+          value === undefined ? { found: false } : { found: true, value }
+        )
+      }
+    )
+    let now = Date.now()
+    vi.spyOn(Date, "now").mockImplementation(() => now)
+    const t = convexTest(schema, modules)
+    const owner = t.withIdentity({ tokenIdentifier: "owner" })
+    const workspaceId = await owner.mutation(api.workspaces.create, {
+      name: "Bindings",
+    })
+    const secretRef = await owner.mutation(api.secrets.prepare, {
+      workspaceId,
+      label: "API",
+      private: false,
+    })
+    const state = async () =>
+      (await owner.query(internal.secrets.metadata, { secretRef })).state
+    const post = async (revision: number, value: string) => {
+      const response = await owner.fetch("/settings/secrets", {
+        method: "POST",
+        body: JSON.stringify({ secretRef, revision, value }),
+      })
+      // A failed save holds the write lease; let it expire for the retry.
+      now += 61000
+      return response.status
+    }
+    const first = await state()
+    if (first.kind !== "pending") throw new Error("Expected pending")
+    expect(await post(1, token)).toBe(400)
+    expect(await post(1, "")).toBe(400)
+    bindings.set(first.name, token)
+    expect(await post(1, "")).toBe(200)
+    expect((await state()).kind).toBe("ready")
+
+    await owner.mutation(api.secrets.rotate, { secretRef, revision: 1 })
+    const rotated = await state()
+    if (rotated.kind !== "pending") throw new Error("Expected pending")
+    bindings.set(rotated.name, "new-private-token")
+    expect(await post(2, "")).toBe(400)
+    expect((await state()).kind).toBe("pending")
+    bindings.delete(first.name)
+    expect(await post(2, "")).toBe(200)
+    expect((await state()).kind).toBe("ready")
+
+    await owner.mutation(api.secrets.beginDelete, { secretRef, revision: 2 })
+    const revision = (
+      await owner.query(internal.secrets.metadata, { secretRef })
+    ).revision
+    expect(await post(revision, "")).toBe(400)
+    expect((await state()).kind).toBe("deleting")
+    bindings.delete(rotated.name)
+    expect(await post(revision, "")).toBe(200)
+    expect(
+      (await owner.query(api.secrets.list, { workspaceId, paginationOpts }))
+        .page[0]?.status
+    ).toBe("deleted")
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
     vi.restoreAllMocks()
   })
   it("cancels an empty pending reference and rejects unauthenticated ingress", async () => {
