@@ -174,8 +174,8 @@ function assertionErrors(identity: string) {
 }
 
 const providerRevocation = `
-Your agent provider can also revoke all registrations of your user. After
-that, register again.
+Your agent provider can also revoke all registrations linked to your user's
+identity at that provider. After that, register again.
 `
 
 /** The agent-facing /auth.md document. */
