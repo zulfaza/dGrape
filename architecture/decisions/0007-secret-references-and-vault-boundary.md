@@ -24,7 +24,7 @@ The user selected Cloudflare Worker secret bindings as the production secret bac
 - Each secretRef value is a `SECRET_REF_*` secret on Worker `dfe`. The name comes from the reference's server-generated object name. An operator adds and deletes these secrets. Users do not store values through settings.
 - Convex runs connector requests. Its SecretService adapter reads one value from the Worker endpoint `/internal/secrets/resolve` with the `SECRET_BINDING_TOKEN` bearer token. The Worker gives only `SECRET_REF_*` secrets.
 - The adapter cannot write. Rotation and deletion finish only after the operator deletes the old secret.
-- A Worker holds at most 128 variables and secrets. This backend suits the single-owner first milestone. Multi-tenant, user-entered credentials need a new decision.
+- On the Workers Paid plan, each Worker can hold up to 128 variables, including secrets (64 on the Free plan). This backend suits the single-owner first milestone. Multi-tenant, user-entered credentials need a new decision.
 
 docs/deployment.md lists the settings and operator steps.
 
