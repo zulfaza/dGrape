@@ -359,7 +359,7 @@ function Guide() {
               </Section>
 
               <Section id="access" number={4} title="Keep control of access">
-                <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-[8rem_1fr]">
+                <dl className="grid gap-x-8 gap-y-1 sm:grid-cols-[8rem_1fr] sm:gap-y-3 [&>dd]:mb-3 sm:[&>dd]:mb-0">
                   <dt className="font-medium text-foreground">Connections</dt>
                   <dd>
                     Disconnect an agent or revoke a credential. Its access stops
