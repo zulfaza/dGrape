@@ -11,9 +11,13 @@ It uses local demonstration data and does not need WorkOS or Convex credentials.
 `pnpm design-system:export` also builds the portable
 [interactive specimen](./architecture/design/showcase.html).
 
+The [`dfe` agent skill](./skills/dfe/SKILL.md) tells an agent how to use the
+DFE MCP server. Install it with `npx skills add zulfaza/dGrape --skill dfe`.
+
 ![DFE sloth](./public/favicon.svg)
 
 DFE (Dashboard for Everything) is being rebuilt as an agent-first workspace for flexible data, API aggregation, deterministic jobs, artifacts, and dashboards. The name is provisional; the intended production domain is `dfe.makarima.dev`. The current runnable design-system sample uses local demonstration data.
+
 ## The flow
 
 1. **Drop your CV** — paste your resume or profile; skills, history and strengths get indexed.
