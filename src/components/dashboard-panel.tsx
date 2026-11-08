@@ -1,7 +1,7 @@
 import { useQuery } from "convex/react"
 import { Match } from "effect"
 import { Clock, TriangleAlert } from "lucide-react"
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -166,7 +166,18 @@ function LivePanel({
   live: LiveAddress
   controls: PanelControls
 }) {
-  const result = useQuery(api.pages.liveBlock, live)
+  const fetched = useQuery(api.pages.liveBlock, live)
+  // A save moves the panel to a new revision with the same block. Keep the
+  // last result on screen while the new address loads, so it does not flash,
+  // but only for the same page and the same block content.
+  const key = JSON.stringify([live.pageId, { ...block, layout: null }])
+  const [last, setLast] = useState<{
+    key: string
+    result: NonNullable<typeof fetched>
+  } | null>(null)
+  if (fetched !== undefined && (last?.result !== fetched || last.key !== key))
+    setLast({ key, result: fetched })
+  const result = fetched ?? (last?.key === key ? last.result : undefined)
   const frame = (status: ReactNode, children: ReactNode) => (
     <PanelFrame
       label={block.title}
