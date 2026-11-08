@@ -107,12 +107,24 @@ function pageDefinition<
           title: v.string(),
           artifactId,
         }),
-        /** Static HTML snapshot artifact, shown in a sandboxed opaque-origin frame. */
+        /**
+         * HTML report artifact in a sandboxed opaque-origin frame. Without
+         * `live` it is a static, script-free snapshot. With `live`, its
+         * scripts run and can read only the named `bindings` through the
+         * parent bridge (pages.bridgeQuery).
+         */
         v.object({
           kind: v.literal("htmlReport"),
           ...panel,
           title: v.string(),
           artifactId,
+          live: v.optional(
+            v.object({
+              bindings: v.array(
+                v.object({ name: v.string(), queryId, revision: v.number() })
+              ),
+            })
+          ),
         })
       )
     ),
@@ -132,6 +144,11 @@ export const agentPageDefinitionValidator = pageDefinition(
 export type AgentPageDefinition = Infer<typeof agentPageDefinitionValidator>
 export type PageBlock = PageDefinition["blocks"][number]
 export type PageDefinition = Infer<typeof pageDefinitionValidator>
+
+/** The most query bindings that one live HTML report can read. */
+export const MAX_BRIDGE_BINDINGS = 5
+/** A binding name: lowercase, starts with a letter, at most 32 characters. */
+const BRIDGE_NAME = /^[a-z][a-z0-9_]{0,31}$/
 
 export function validatePage(definition: PageDefinition) {
   if (!definition.title.trim() || definition.title.length > 100)
@@ -153,7 +170,11 @@ export function validatePage(definition: PageDefinition) {
     if (block.kind === "markdown") continue
     if (!block.title.trim() || block.title.length > 100)
       throw new Error(`${at}: block title must be 1 to 100 characters`)
-    if (block.kind === "artifact" || block.kind === "htmlReport") continue
+    if (block.kind === "artifact") continue
+    if (block.kind === "htmlReport") {
+      if (block.live) validateBridgeBindings(block.live.bindings, at)
+      continue
+    }
     if (block.kind === "chart") validateChart(block.chart, at)
     if (
       !Number.isSafeInteger(block.binding.revision) ||
@@ -168,6 +189,26 @@ export function validatePage(definition: PageDefinition) {
     )
       throw new Error(`${at}: tables require 1 to 20 unique fields`)
   }
+}
+
+function validateBridgeBindings(
+  bindings: { name: string; revision: number }[],
+  at: string
+) {
+  if (bindings.length < 1 || bindings.length > MAX_BRIDGE_BINDINGS)
+    throw new Error(
+      `${at}: live reports require 1 to ${MAX_BRIDGE_BINDINGS} bindings`
+    )
+  for (const binding of bindings) {
+    if (!BRIDGE_NAME.test(binding.name))
+      throw new Error(
+        `${at}: binding name "${binding.name}" must match ${BRIDGE_NAME.source}`
+      )
+    if (!Number.isSafeInteger(binding.revision) || binding.revision < 1)
+      throw new Error(`${at}: query revision must be a positive integer`)
+  }
+  if (new Set(bindings.map((b) => b.name)).size !== bindings.length)
+    throw new Error(`${at}: binding names must be unique`)
 }
 
 function validateLayout({ x, y, w, h }: PanelLayout, at: string) {

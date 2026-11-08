@@ -7,6 +7,7 @@ import { Schema } from "effect"
 import * as Exports from "./lib/agentExportTransport"
 import * as Pages from "./lib/agentPageTransport"
 import type { PageBlock } from "./lib/pageDomain"
+import type { Id } from "./_generated/dataModel"
 const modules = import.meta.glob("./**/*.ts")
 
 async function fixture() {
@@ -964,3 +965,164 @@ test("workspace exports keep every definition version and stable IDs, without us
     body: { error: expect.stringContaining("jobs.read") },
   })
 }, 30_000)
+
+test("live HTML reports read only declared bindings, with membership and revision checks", async () => {
+  const { t, owner, other, workspaceId, otherWorkspaceId } = await fixture()
+  const viewer = t.withIdentity({ tokenIdentifier: "viewer" })
+  const fields = [
+    {
+      id: "amount",
+      label: "Amount",
+      type: "number" as const,
+      indexed: true as const,
+    },
+    { id: "token", label: "Token", type: "secretRef" as const },
+  ]
+  const { collectionId, artifactId, staticId, foreignQueryId } = await t.run(
+    async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        workspaceId,
+        userId: "viewer",
+        role: "viewer",
+      })
+      const collectionId = await ctx.db.insert("collections", {
+        workspaceId,
+        name: "Numbers",
+        definition: { version: 1, fields },
+      })
+      const recordId = await ctx.db.insert("collectionRecords", {
+        collectionId,
+        schemaVersion: 1,
+        revision: 1,
+        values: { amount: 7, token: "SECRET_REF_ID" },
+      })
+      await ctx.db.insert("recordIndexEntries", {
+        collectionId,
+        recordId,
+        fieldId: "amount",
+        value: 7,
+      })
+      const foreignCollectionId = await ctx.db.insert("collections", {
+        workspaceId: otherWorkspaceId,
+        name: "Foreign",
+        definition: { version: 1, fields },
+      })
+      const foreignQueryId = await ctx.db.insert("queryDefinitions", {
+        workspaceId: otherWorkspaceId,
+        collectionId: foreignCollectionId,
+        name: "Foreign",
+        revision: 1,
+      })
+      // No report data timestamp: a live report reads data at view time.
+      const artifactId = await ctx.db.insert("artifacts", {
+        workspaceId,
+        key: "live",
+        name: "live.html",
+        size: 5,
+        contentType: "text/html",
+        createdBy: { kind: "user", userId: "owner" },
+      })
+      const staticId = await ctx.db.insert("artifacts", {
+        workspaceId,
+        key: "static",
+        name: "static.html",
+        size: 5,
+        contentType: "text/html",
+        createdBy: { kind: "user", userId: "owner" },
+        dataTimestamp: 1000,
+      })
+      return { collectionId, artifactId, staticId, foreignQueryId }
+    }
+  )
+  const saved = await owner.mutation(api.savedQueries.save, {
+    collectionId,
+    name: "Amounts",
+    query: { fieldId: "amount", order: "asc" },
+  })
+  const report = (
+    bindings: { name: string; queryId: typeof foreignQueryId }[]
+  ) =>
+    ({
+      kind: "htmlReport",
+      title: "Live",
+      artifactId,
+      live: {
+        bindings: bindings.map((b) => ({ ...b, revision: saved.revision })),
+      },
+    }) satisfies PageBlock
+  const save = (blocks: PageBlock[], pageId?: Id<"pages">) =>
+    owner.mutation(api.pages.save, {
+      workspaceId,
+      pageId,
+      expectedRevision: pageId ? 1 : undefined,
+      definition: { title: "Live", blocks },
+    })
+  await expect(
+    save([report([{ name: "Bad-Name", queryId: saved.queryId }])])
+  ).rejects.toThrow("must match")
+  await expect(
+    save([
+      report([
+        { name: "amounts", queryId: saved.queryId },
+        { name: "amounts", queryId: saved.queryId },
+      ]),
+    ])
+  ).rejects.toThrow("unique")
+  await expect(
+    save([report([{ name: "foreign", queryId: foreignQueryId }])])
+  ).rejects.toThrow('Binding "foreign": Query is unavailable')
+  const page = await save([
+    report([{ name: "amounts", queryId: saved.queryId }]),
+    { kind: "htmlReport", title: "Static", artifactId: staticId },
+  ])
+  await owner.mutation(api.pages.publish, {
+    ...page,
+    expectedRevision: 1,
+    expectedPublishedRevision: null,
+  })
+  const read = { pageId: page.pageId, revision: 1, blockIndex: 0 }
+  const amounts = await viewer.query(api.pages.bridgeQuery, {
+    ...read,
+    name: "amounts",
+  })
+  // Secret reference fields and record metadata never reach the frame.
+  expect(amounts).toEqual({
+    problem: null,
+    result: {
+      kind: "records",
+      fields: [{ id: "amount", label: "Amount", type: "number" }],
+      rows: [{ amount: 7 }],
+      completeness: "complete",
+      evaluatedAt: expect.any(Number),
+      dataAsOf: null,
+    },
+  })
+  expect(JSON.stringify(amounts)).not.toContain("SECRET_REF_ID")
+  expect(
+    (await owner.query(api.pages.bridgeQuery, { ...read, name: "other" }))
+      .problem
+  ).toContain('no binding "other"')
+  expect(
+    (
+      await owner.query(api.pages.bridgeQuery, {
+        ...read,
+        blockIndex: 1,
+        name: "amounts",
+      })
+    ).problem
+  ).toBe("Live report is unavailable")
+  await expect(
+    other.query(api.pages.bridgeQuery, { ...read, name: "amounts" })
+  ).rejects.toThrow("Workspace access denied")
+
+  // A viewer reads only the revision that viewers see; a writer can preview.
+  await save(
+    [report([{ name: "amounts", queryId: saved.queryId }])],
+    page.pageId
+  )
+  const draft = { ...read, revision: 2, name: "amounts" }
+  await expect(viewer.query(api.pages.bridgeQuery, draft)).rejects.toThrow(
+    "not visible to your role"
+  )
+  expect((await owner.query(api.pages.bridgeQuery, draft)).problem).toBeNull()
+})

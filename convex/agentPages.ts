@@ -31,24 +31,45 @@ function resolvePageIds(
 ): PageDefinition {
   const blocks = definition.blocks.map((block, index): PageBlock => {
     const at = `Block ${index + 1} (${block.kind})`
-    if (block.kind === "markdown") return block
-    if (block.kind === "artifact" || block.kind === "htmlReport") {
-      const artifactId = ctx.db.normalizeId("artifacts", block.artifactId)
+    const queryIdOf = (raw: string) => {
+      const queryId = ctx.db.normalizeId("queryDefinitions", raw)
+      if (!queryId)
+        throw new Error(
+          `${at}: "${raw}" is not a saved query ID. Use queries_list to find one.`
+        )
+      return queryId
+    }
+    const artifactIdOf = (raw: string) => {
+      const artifactId = ctx.db.normalizeId("artifacts", raw)
       if (!artifactId)
         throw new Error(
-          `${at}: "${block.artifactId}" is not an artifact ID. Use artifacts_list to find one.`
+          `${at}: "${raw}" is not an artifact ID. Use artifacts_list to find one.`
         )
-      return { ...block, artifactId }
+      return artifactId
     }
-    const queryId = ctx.db.normalizeId(
-      "queryDefinitions",
-      block.binding.queryId
-    )
-    if (!queryId)
-      throw new Error(
-        `${at}: "${block.binding.queryId}" is not a saved query ID. Use queries_list to find one.`
-      )
-    return { ...block, binding: { ...block.binding, queryId } }
+    if (block.kind === "markdown") return block
+    if (block.kind === "artifact")
+      return { ...block, artifactId: artifactIdOf(block.artifactId) }
+    if (block.kind === "htmlReport") {
+      const { live, ...rest } = block
+      const artifactId = artifactIdOf(block.artifactId)
+      return live
+        ? {
+            ...rest,
+            artifactId,
+            live: {
+              bindings: live.bindings.map((binding) => ({
+                ...binding,
+                queryId: queryIdOf(binding.queryId),
+              })),
+            },
+          }
+        : { ...rest, artifactId }
+    }
+    return {
+      ...block,
+      binding: { ...block.binding, queryId: queryIdOf(block.binding.queryId) },
+    }
   })
   return { title: definition.title, blocks }
 }
