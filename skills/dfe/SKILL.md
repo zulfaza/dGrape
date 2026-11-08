@@ -24,7 +24,7 @@ Do not write the token in chat, in a report, or in a file in a repository.
 ## Rules
 
 - **Pagination.** List tools return `isDone` and `continueCursor`. While `isDone` is false, call again with `cursor` (recipe tools: `paginationOpts: { numItems, cursor }`, first cursor `null`). Do not report a total from one page.
-- **Idempotency.** Send an `idempotencyKey` on each write you can retry. Use a stable source ID (for example `import:<source>:<id>`). The same key with other input fails. `recipes_trigger` needs a key.
+- **Idempotency.** Send an `idempotencyKey` on each write you can retry. Use a new key for each intended change, and reuse it only to retry that change. For most writes, the same key with other input fails. `records_create` is different: the same key returns the existing record and does not compare the values, so use a stable source ID (for example `import:<source>:<id>`). `recipes_trigger` needs a key.
 - **Optimistic revisions.** Updates and deletes need the current value: `expectedRevision` (records, saved queries, pages, schedules), `expectedVersion` (schemas), `expectedPublishedRevision` (pages). When the call fails because the object changed, read it again, then decide again. Do not retry with the new number blindly.
 - **Values.** Key record values by field `id`, not label. Money is `integer` minor units plus a separate currency field. Dates are `YYYY-MM-DD`. Timestamps are integer milliseconds UTC.
 - **Destructive tools.** `records_delete`, `migrations_start`, `pages_publish`, `recipes_trigger`, `recipes_schedule` and `schedules_update` change live state. Tell the user what will change and get approval first, unless the user already asked for that exact change.

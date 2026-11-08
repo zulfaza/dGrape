@@ -7,10 +7,10 @@ A page shows blocks. A live block reads one revision of a saved query. Queries a
 `queries_save` with `collectionId`, `name`, and `query`:
 
 - `fieldId`: an indexed field. `order`: `"asc"` or `"desc"`.
-- `where`: `{ eq }`, `{ lower?, upper? }`, or `{ in: [values] }` (1 to 20 values).
+- `where`: `{ eq }`, `{ lower?, upper? }`, or `{ in: [values] }` (1 to 20 values). On a `multiSelect` field, `where` must be `{ eq: option }`.
 - `filters` (optional, up to 5): `{ fieldId, op, value }` with `eq`, `neq`, `lt`, `lte`, `gt`, `gte`, or `{ fieldId, op: "in", values }`. They apply after the indexed read, so a page of results can be short.
 - `select` (optional): 1 to 50 field ids.
-- `aggregate` (optional): `{ measures, groupBy? }`. Measures: `{ op: "count" }` or `{ op: "sum" | "average" | "min" | "max", fieldId }`. `groupBy: { fieldId, bucket? }` with bucket `day`, `week`, `month`, `year` (UTC). Result fields: the group field, `count`, and `<op>_<fieldId>`.
+- `aggregate` (optional, not with `select`): `{ measures, groupBy? }`. Measures: `{ op: "count" }` or `{ op: "sum" | "average" | "min" | "max", fieldId }`. `groupBy: { fieldId, bucket? }` with bucket `day`, `week`, `month`, `year` (UTC). Result fields: the group field, `count`, and `<op>_<fieldId>`.
 
 To change a query, pass `queryId` and `expectedRevision`. Keep the returned `queryId` and `revision`.
 
@@ -29,7 +29,7 @@ To change a query, pass `queryId` and `expectedRevision`. Keep the returned `que
    - `{ "kind": "metric", "title", "binding": {...}, "field", "unit", "operation": "sum" | "count" }`
    - `{ "kind": "chart", "title", "binding": {...}, "chart": { "type": "bar" | "line" | "area" | "pie", "labelField", "valueField", "unit" } }`
    - Scatter: `"chart": { "type": "scatter", "labelField", "xField", "xUnit", "valueField", "unit" }`
-   - `{ "kind": "artifact" | "htmlReport", "title", "artifactId" }`
+   - `{ "kind": "artifact" | "htmlReport", "title", "artifactId" }`. An `htmlReport` needs an HTML artifact with a report data timestamp. MCP cannot set it: a person sets it in the dashboard.
    - Optional `layout: { x, y, w, h }` on a 12-column grid. Panels must not overlap.
 3. `pages_get` with the draft `revision`. Each `bindings` entry must be `null`.
 4. Show the user the plan. Then `pages_publish` with `revision`, `expectedRevision`, and `expectedPublishedRevision` (`null` when never published). To roll back, publish an earlier revision.
