@@ -255,7 +255,8 @@ function Guide() {
               </h1>
               <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
                 Make a workspace, connect the agent you already use, and tell it
-                what to track. You approve each step.
+                what to track. You choose the workspace and approve your agent’s
+                access.
               </p>
             </div>
             <Mascot
@@ -309,7 +310,8 @@ function Guide() {
                       <p>
                         Your agent replies with a link and a code. Open the
                         link, sign in with the email that you gave your agent,
-                        choose the workspace and the access, and type the code.
+                        choose the workspace, select{" "}
+                        <UiName>Read and write</UiName>, and type the code.
                       </p>
                       <Handshake />
                     </div>
@@ -322,8 +324,9 @@ function Guide() {
                           <UiName>Connections</UiName>.
                         </li>
                         <li>
-                          Choose the access and the number of days (1 to 30).
-                          Then select <UiName>Create credential</UiName>.
+                          Select <UiName>Read and write</UiName> and the number
+                          of days (1 to 30). Then select{" "}
+                          <UiName>Create credential</UiName>.
                         </li>
                         <li>
                           Copy the credential at once. You cannot see it again.
@@ -366,7 +369,10 @@ function Guide() {
                     at once.
                   </dd>
                   <dt className="font-medium text-foreground">Members</dt>
-                  <dd>Invite people as viewers, editors, or owners.</dd>
+                  <dd>
+                    Invite people as viewers or editors. You can make a member
+                    an owner later.
+                  </dd>
                   <dt className="font-medium text-foreground">Activity</dt>
                   <dd>See the changes that you and your agents made.</dd>
                 </dl>
