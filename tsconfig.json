@@ -2,7 +2,8 @@
   "exclude": [
     "tools/oxlint/anti-slop",
     "src/worker.ts",
-    "src/recipe-workflow.ts"
+    "src/recipe-workflow.ts",
+    "src/secret-bindings.ts"
   ],
   "include": ["**/*.ts", "**/*.tsx", "vite.config.ts"],
   "compilerOptions": {
