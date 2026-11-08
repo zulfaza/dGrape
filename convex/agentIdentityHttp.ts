@@ -1,5 +1,5 @@
 import { Option, Schema } from "effect"
-import { httpAction } from "./_generated/server"
+import { httpAction, type ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import {
   keyedDigest,
@@ -29,6 +29,13 @@ import {
   parseLoginHint,
 } from "./lib/agentRegistration"
 import { OFFERED_SCOPES } from "./lib/agentScope"
+import {
+  ID_JAG_ASSERTION_TYPE,
+  MAX_AUTH_AGE_SECONDS,
+  verifyProviderAssertion,
+  type AssertionFailure,
+} from "./lib/providerAssertion"
+import { trustedIssuers } from "./lib/trustedIssuers"
 
 /**
  * auth.md registration endpoint (`POST /agent/identity`). This service
@@ -56,7 +63,16 @@ export function oauthError(status: number, error: string, description: string) {
 const RegisterRequest = Schema.Struct({
   type: Schema.optionalKey(Schema.Unknown),
   login_hint: Schema.optionalKey(Schema.Unknown),
+  assertion_type: Schema.optionalKey(Schema.Unknown),
+  assertion: Schema.optionalKey(Schema.Unknown),
 })
+
+/** The fields of an agent-verified registration request. */
+const AssertionRequest = Schema.Struct({
+  assertion_type: Schema.Literal(ID_JAG_ASSERTION_TYPE),
+  assertion: Schema.NonEmptyString,
+})
+const decodeAssertionRequest = Schema.decodeUnknownOption(AssertionRequest)
 
 /** The fields `POST /agent/identity/claim` reads. Other fields are ignored. */
 const NewClaimRequest = Schema.Struct({
@@ -91,6 +107,8 @@ export const register = httpAction(async (ctx, request) => {
       "anonymous_not_enabled",
       'This service does not accept anonymous registration. Use "service_auth".'
     )
+  if (body.type === "identity_assertion")
+    return registerWithAssertion(ctx, decodeAssertionRequest(body))
   if (body.type !== "service_auth")
     return oauthError(400, "invalid_request", 'Set "type" to "service_auth".')
   const loginHint = isText(body.login_hint)
@@ -102,40 +120,190 @@ export const register = httpAction(async (ctx, request) => {
       "invalid_login_hint",
       "Set login_hint to the email address of the user you act for."
     )
-  const claimToken = randomToken("clm")
-  const attemptToken = randomToken("cat")
-  const userCode = randomUserCode()
+  const claim = newClaimSecrets()
   try {
     const result = await ctx.runMutation(internal.agentRegistrations.register, {
       loginHint,
+      ...(await claim.digests()),
+    })
+    if (result.status === "rate_limited") return tooManyPending()
+    return Response.json(pendingRegistration("service_auth", result, claim), {
+      headers: noStore,
+    })
+  } catch {
+    return oauthError(503, "temporarily_unavailable", "Try again later.")
+  }
+})
+
+/** A new claim token, claim attempt token, and user code. */
+function newClaimSecrets() {
+  const claimToken = randomToken("clm")
+  const attemptToken = randomToken("cat")
+  const userCode = randomUserCode()
+  return {
+    claimToken,
+    attemptToken,
+    userCode,
+    /** The digests that the registration mutations store. */
+    digests: async () => ({
       claimTokenDigest: await sha256(claimToken),
       attemptTokenDigest: await sha256(attemptToken),
       userCodeDigest: await keyedDigest(codeKey(), userCode),
       now: Date.now(),
-    })
-    if (result.status === "rate_limited")
-      return oauthError(
-        429,
-        "rate_limited",
-        "This email has too many registrations waiting. Finish or wait for one of them."
+    }),
+  }
+}
+
+function tooManyPending() {
+  return oauthError(
+    429,
+    "rate_limited",
+    "This email has too many registrations waiting. Finish or wait for one of them."
+  )
+}
+
+/** The registration and claim fields of a pending registration. */
+function pendingRegistration(
+  type: "service_auth" | "identity_assertion",
+  result: { registrationId: string; claimExpiresAt: number },
+  claim: ReturnType<typeof newClaimSecrets>
+) {
+  return {
+    registration_id: result.registrationId,
+    registration_type: type,
+    claim_url: endpoints().claim,
+    claim_token: claim.claimToken,
+    claim_token_expires: new Date(result.claimExpiresAt).toISOString(),
+    post_claim_scopes: OFFERED_SCOPES,
+    claim: claimBlock(claim.attemptToken, claim.userCode),
+  }
+}
+
+/** A 401 with the auth.md `AgentAuth` challenge. */
+function agentAuthChallenge(
+  error: "interaction_required" | "login_required",
+  description: string,
+  body: { max_age: number } | ReturnType<typeof pendingRegistration>,
+  maxAge?: number
+) {
+  const params = [
+    `error="${error}"`,
+    ...(maxAge === undefined ? [] : [`max_age="${maxAge}"`]),
+    `error_description="${description}"`,
+  ]
+  return Response.json(
+    { error, error_description: description, ...body },
+    {
+      status: 401,
+      headers: {
+        ...noStore,
+        "Access-Control-Expose-Headers": "WWW-Authenticate",
+        "WWW-Authenticate": `AgentAuth ${params.join(", ")}`,
+      },
+    }
+  )
+}
+
+/** Descriptions of the refused provider assertions, by auth.md error code. */
+const ASSERTION_ERRORS: Record<
+  Exclude<AssertionFailure, "login_required">,
+  string
+> = {
+  invalid_request: "The assertion is malformed or misses a required claim.",
+  invalid_issuer: "This service does not trust the assertion issuer.",
+  invalid_signature: "The assertion signature could not be verified.",
+  expired: "The assertion expired. Get a new one from your provider.",
+  invalid_audience:
+    "Set the assertion audience to the issuer in /.well-known/oauth-authorization-server.",
+  invalid_client_id: "The assertion client_id is not the trusted provider.",
+  missing_verified_email: "The assertion needs a verified email.",
+}
+
+/**
+ * Agent-verified registration (`type: "identity_assertion"`). A trusted
+ * provider's ID-JAG names the user. The first time, the user confirms on the
+ * claim page, as in service_auth; after that, the same provider user gets
+ * the linked registration's identity assertion at once.
+ */
+async function registerWithAssertion(
+  ctx: ActionCtx,
+  request: Option.Option<typeof AssertionRequest.Type>
+) {
+  if (trustedIssuers().length === 0)
+    return oauthError(
+      400,
+      "identity_assertion_not_enabled",
+      'This service trusts no agent provider. Use "service_auth".'
+    )
+  if (Option.isNone(request))
+    return oauthError(
+      400,
+      "invalid_request",
+      `Send assertion_type "${ID_JAG_ASSERTION_TYPE}" and the assertion.`
+    )
+  const now = Date.now()
+  const verified = await verifyProviderAssertion(
+    request.value.assertion,
+    issuer(),
+    now
+  )
+  if (verified.status === "invalid") {
+    if (verified.error === "login_required")
+      return agentAuthChallenge(
+        "login_required",
+        "The user signed in at the provider too long ago. Ask the user to sign in again.",
+        { max_age: MAX_AUTH_AGE_SECONDS },
+        MAX_AUTH_AGE_SECONDS
       )
-    const siteUrl = issuer()
+    return oauthError(400, verified.error, ASSERTION_ERRORS[verified.error])
+  }
+  const { identity } = verified
+  const claim = newClaimSecrets()
+  try {
+    const result = await ctx.runMutation(
+      internal.agentRegistrations.registerVerified,
+      {
+        issuer: identity.provider.issuer,
+        subject: identity.subject,
+        email: identity.email,
+        jti: identity.jti,
+        replayExpiresAt: identity.replayExpiresAt,
+        ...(await claim.digests()),
+      }
+    )
+    if (result.status === "replay_detected")
+      return oauthError(
+        400,
+        "replay_detected",
+        "This assertion was already used. Get a new one from your provider."
+      )
+    if (result.status === "rate_limited") return tooManyPending()
+    if (result.status === "registered")
+      return agentAuthChallenge(
+        "interaction_required",
+        "The user must confirm this agent once. Show them the claim link and code.",
+        pendingRegistration("identity_assertion", result, claim)
+      )
+    const signed = await signAssertion(
+      issuer(),
+      result.registrationId,
+      identity.email,
+      now
+    )
     return Response.json(
       {
         registration_id: result.registrationId,
-        registration_type: "service_auth",
-        claim_url: `${siteUrl}/agent/identity/claim`,
-        claim_token: claimToken,
-        claim_token_expires: new Date(result.claimExpiresAt).toISOString(),
-        post_claim_scopes: OFFERED_SCOPES,
-        claim: claimBlock(attemptToken, userCode),
+        registration_type: "identity_assertion",
+        identity_assertion: signed.assertion,
+        assertion_expires: new Date(signed.expiresAt).toISOString(),
+        scopes: result.scopes,
       },
       { headers: noStore }
     )
   } catch {
     return oauthError(503, "temporarily_unavailable", "Try again later.")
   }
-})
+}
 
 /** The claim link and code for one claim attempt, as auth.md returns them. */
 function claimBlock(attemptToken: string, userCode: string) {

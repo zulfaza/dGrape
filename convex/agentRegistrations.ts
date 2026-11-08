@@ -25,7 +25,10 @@ import {
   MAX_CODE_TRIES,
   MAX_PENDING_PER_EMAIL,
   POLL_INTERVAL_SECONDS,
+  commonFields,
+  providerBindingValidator,
 } from "./lib/agentRegistration"
+import { recordJti } from "./lib/assertionReplay"
 
 /**
  * auth.md registration state changes. convex/http.ts calls these after it
@@ -43,49 +46,121 @@ const registerResult = v.union(
   })
 )
 
+/** The new claim token, first claim attempt, and time of a registration. */
+const startArgs = v.object({
+  claimTokenDigest: v.string(),
+  attemptTokenDigest: v.string(),
+  userCodeDigest: v.string(),
+  now: v.number(),
+})
+
+/**
+ * Creates a pending registration for `email` with its first claim attempt,
+ * unless the email already has too many pending registrations.
+ */
+async function startRegistration(
+  ctx: MutationCtx,
+  email: string,
+  provider: Infer<typeof providerBindingValidator> | undefined,
+  args: Infer<typeof startArgs>
+): Promise<Infer<typeof registerResult>> {
+  const open = await ctx.db
+    .query("agentRegistrations")
+    .withIndex("by_loginHint_and_status_and_claimExpiresAt", (q) =>
+      q
+        .eq("loginHint", email)
+        .eq("status", "pending")
+        .gt("claimExpiresAt", args.now)
+    )
+    .take(MAX_PENDING_PER_EMAIL)
+  if (open.length >= MAX_PENDING_PER_EMAIL) return { status: "rate_limited" }
+  const claimExpiresAt = args.now + CLAIM_WINDOW_MS
+  const attemptExpiresAt = args.now + CLAIM_ATTEMPT_MS
+  const registrationId = await ctx.db.insert("agentRegistrations", {
+    status: "pending",
+    loginHint: email,
+    claimTokenDigest: args.claimTokenDigest,
+    claimExpiresAt,
+    provider,
+  })
+  await ctx.db.insert("agentClaimAttempts", {
+    registrationId,
+    attemptTokenDigest: args.attemptTokenDigest,
+    userCodeDigest: args.userCodeDigest,
+    expiresAt: attemptExpiresAt,
+    failedTries: 0,
+    state: "open",
+  })
+  return {
+    status: "registered",
+    registrationId,
+    claimExpiresAt,
+    attemptExpiresAt,
+  }
+}
+
 /** Starts a service_auth registration with its first claim attempt. */
 export const register = internalMutation({
-  args: {
-    loginHint: v.string(),
-    claimTokenDigest: v.string(),
-    attemptTokenDigest: v.string(),
-    userCodeDigest: v.string(),
-    now: v.number(),
-  },
+  args: { loginHint: v.string(), ...startArgs.fields },
   returns: registerResult,
-  handler: async (ctx, args): Promise<Infer<typeof registerResult>> => {
-    const open = await ctx.db
+  handler: async (ctx, { loginHint, ...args }) =>
+    startRegistration(ctx, loginHint, undefined, args),
+})
+
+const registerVerifiedResult = v.union(
+  registerResult,
+  v.object({ status: v.literal("replay_detected") }),
+  v.object({
+    status: v.literal("linked"),
+    registrationId: v.id("agentRegistrations"),
+    scopes: v.array(agentScopeValidator),
+  })
+)
+
+/** How many claimed registrations of one provider user to look through. */
+const MAX_LINKED_REGISTRATIONS = 20
+
+/**
+ * Agent-verified registration, after convex/agentIdentityHttp.ts has
+ * verified the provider's assertion. It records the assertion's `jti`, so
+ * the assertion works once. When the same provider user already linked a
+ * registration for the same email, the agent gets that registration.
+ * Otherwise the user must confirm on the claim page first: this service
+ * never binds an agent to an account only because the emails match.
+ */
+export const registerVerified = internalMutation({
+  args: {
+    issuer: v.string(),
+    subject: v.string(),
+    email: v.string(),
+    jti: v.string(),
+    replayExpiresAt: v.number(),
+    ...startArgs.fields,
+  },
+  returns: registerVerifiedResult,
+  handler: async (
+    ctx,
+    { issuer, subject, email, jti, replayExpiresAt, ...args }
+  ): Promise<Infer<typeof registerVerifiedResult>> => {
+    if (!(await recordJti(ctx, issuer, jti, replayExpiresAt)))
+      return { status: "replay_detected" }
+    const linked = await ctx.db
       .query("agentRegistrations")
-      .withIndex("by_loginHint_and_status_and_claimExpiresAt", (q) =>
-        q
-          .eq("loginHint", args.loginHint)
-          .eq("status", "pending")
-          .gt("claimExpiresAt", args.now)
+      .withIndex("by_providerIssuer_and_providerSubject", (q) =>
+        q.eq("provider.issuer", issuer).eq("provider.subject", subject)
       )
-      .take(MAX_PENDING_PER_EMAIL)
-    if (open.length >= MAX_PENDING_PER_EMAIL) return { status: "rate_limited" }
-    const claimExpiresAt = args.now + CLAIM_WINDOW_MS
-    const attemptExpiresAt = args.now + CLAIM_ATTEMPT_MS
-    const registrationId = await ctx.db.insert("agentRegistrations", {
-      status: "pending",
-      loginHint: args.loginHint,
-      claimTokenDigest: args.claimTokenDigest,
-      claimExpiresAt,
-    })
-    await ctx.db.insert("agentClaimAttempts", {
-      registrationId,
-      attemptTokenDigest: args.attemptTokenDigest,
-      userCodeDigest: args.userCodeDigest,
-      expiresAt: attemptExpiresAt,
-      failedTries: 0,
-      state: "open",
-    })
-    return {
-      status: "registered",
-      registrationId,
-      claimExpiresAt,
-      attemptExpiresAt,
-    }
+      .order("desc")
+      .take(MAX_LINKED_REGISTRATIONS)
+    const registration = linked.find(
+      (r) => r.status === "claimed" && r.loginHint === email
+    )
+    if (registration?.status === "claimed")
+      return {
+        status: "linked",
+        registrationId: registration._id,
+        scopes: [...grantedScopes(registration.scope)],
+      }
+    return startRegistration(ctx, email, { issuer, subject }, args)
   },
 })
 
@@ -196,10 +271,8 @@ export const completeClaim = internalMutation({
     if (!member) return "no_workspace_access"
     await ctx.db.patch(attempt._id, { state: "completed" })
     await ctx.db.replace(registration._id, {
+      ...commonFields(registration),
       status: "claimed",
-      loginHint: registration.loginHint,
-      claimTokenDigest: registration.claimTokenDigest,
-      claimExpiresAt: registration.claimExpiresAt,
       owner: args.owner,
       workspaceId: args.workspaceId,
       scope: scopes,
@@ -567,10 +640,8 @@ export const revokeRegistration = mutation({
     )
       throw new Error("Agent not found")
     await ctx.db.replace(registration._id, {
+      ...commonFields(registration),
       status: "revoked",
-      loginHint: registration.loginHint,
-      claimTokenDigest: registration.claimTokenDigest,
-      claimExpiresAt: registration.claimExpiresAt,
       owner: registration.owner,
       workspaceId: registration.workspaceId,
       revokedAt: Date.now(),
