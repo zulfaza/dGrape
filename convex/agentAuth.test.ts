@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { convexTest } from "convex-test"
 import { Schema } from "effect"
-import { exportJWK, generateKeyPair } from "jose"
+import { SignJWT, exportJWK, generateKeyPair } from "jose"
 import schema from "./schema"
 import { api } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
@@ -72,6 +72,9 @@ async function read<S extends Schema.Codec<unknown, unknown>>(
   return Schema.decodeUnknownSync(schema)(body)
 }
 
+/** The key in AGENT_AUTH_SIGNING_KEY, to sign test assertions. */
+let signingKey: CryptoKey
+
 /** WorkOS users by ID, as the stubbed user API returns them. */
 const workosUsers = new Map<string, { email: string; verified: boolean }>()
 
@@ -79,6 +82,7 @@ beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] })
   vi.setSystemTime(T0)
   const { privateKey } = await generateKeyPair("ES256", { extractable: true })
+  signingKey = privateKey
   vi.stubEnv("CONVEX_SITE_URL", SITE)
   vi.stubEnv("APP_ORIGIN", APP)
   vi.stubEnv("AGENT_AUTH_CODE_KEY", "test-code-key-".repeat(4))
@@ -214,6 +218,18 @@ function attemptToken(verificationUri: string) {
   const token = url.searchParams.get("claim_attempt_token")
   if (!token) throw new Error("No claim_attempt_token in verification_uri")
   return token
+}
+
+/** Every stored row that the auth.md flow writes, as JSON. */
+function storedRows(t: ReturnType<typeof convexTest>) {
+  return t.run(async (ctx) =>
+    JSON.stringify([
+      await ctx.db.query("agentRegistrations").collect(),
+      await ctx.db.query("agentClaimAttempts").collect(),
+      await ctx.db.query("agentGrants").collect(),
+      await ctx.db.query("auditEvents").collect(),
+    ])
+  )
 }
 
 function advance(ms: number) {
@@ -360,18 +376,17 @@ describe("auth.md service_auth registration", () => {
       (await form("/oauth2/revoke", { token: "f".repeat(64) })).status
     ).toBe(200)
 
-    // Only digests of tokens and codes reach the database.
-    const rows = await t.run(async (ctx) =>
-      JSON.stringify([
-        await ctx.db.query("agentRegistrations").collect(),
-        await ctx.db.query("agentClaimAttempts").collect(),
-        await ctx.db.query("agentGrants").collect(),
-      ])
+    // Only digests of tokens and codes reach the database. A 6-digit code
+    // can occur in a timestamp, so check the code field itself.
+    const rows = await storedRows(t)
+    const attempts = await t.run((ctx) =>
+      ctx.db.query("agentClaimAttempts").collect()
     )
+    for (const attempt of attempts)
+      expect(attempt.userCodeDigest).toMatch(/^[a-f0-9]{64}$/)
     for (const secret of [
       claimToken,
       attemptToken,
-      userCode,
       tokens.access_token,
       second.access_token,
       tokens.identity_assertion,
@@ -380,7 +395,7 @@ describe("auth.md service_auth registration", () => {
   })
 
   it("revoking the registration stops its tokens and its assertion", async () => {
-    const { ada, bearer, form, register, poll, confirm, workspaceId } =
+    const { t, ada, bearer, form, register, poll, confirm, workspaceId } =
       await setup()
     const { claimToken, userCode, attemptToken } = await register()
     await confirm(ada, attemptToken, userCode)
@@ -406,6 +421,69 @@ describe("auth.md service_auth registration", () => {
         })
       )
     ).toEqual({ status: 400, error: "invalid_grant" })
+    const rows = await storedRows(t)
+    for (const secret of [
+      claimToken,
+      attemptToken,
+      tokens.access_token,
+      tokens.identity_assertion,
+    ])
+      expect(rows).not.toContain(secret)
+  })
+
+  it("stops the assertion when it expires", async () => {
+    const { ada, form, register, poll, confirm } = await setup()
+    const { claimToken, userCode, attemptToken } = await register()
+    await confirm(ada, attemptToken, userCode)
+    const { identity_assertion } = await read(
+      await poll(claimToken),
+      ClaimTokens
+    )
+    const exchange = () =>
+      form("/oauth2/token", {
+        grant_type: JWT_BEARER_GRANT,
+        assertion: identity_assertion,
+      })
+    advance(30 * 24 * 60 * 60 * 1000 - 60_000)
+    expect((await exchange()).status).toBe(200)
+    advance(60_000)
+    expect(await errorCode(await exchange())).toEqual({
+      status: 400,
+      error: "invalid_grant",
+    })
+  })
+
+  it("keeps the token in the workspace the user chose", async () => {
+    const { t, ada, bearer, register, poll, confirm, workspaceId } =
+      await setup()
+    const { claimToken, userCode, attemptToken } = await register()
+    await confirm(ada, attemptToken, userCode)
+    const { access_token } = await read(await poll(claimToken), ClaimTokens)
+    const [own, foreign] = await t.run(async (ctx) => {
+      // Ada also owns the other workspace, so only the grant keeps it out.
+      const elsewhere = await ctx.db.insert("workspaces", { name: "Ada 2" })
+      await ctx.db.insert("workspaceMembers", {
+        workspaceId: elsewhere,
+        userId: "ada",
+        role: "owner",
+      })
+      return Promise.all(
+        [workspaceId, elsewhere].map((id) =>
+          ctx.db.insert("collections", {
+            workspaceId: id,
+            name: "Notes",
+            definition: {
+              version: 1,
+              fields: [{ id: "title", label: "Title", type: "text" }],
+            },
+          })
+        )
+      )
+    })
+    const describe = (id: string) =>
+      bearer(`/agent/collections/describe?collectionId=${id}`, access_token)
+    expect((await describe(own)).status).toBe(200)
+    expect((await describe(foreign)).status).toBe(403)
   })
 
   it("gives only the scopes the user chose", async () => {
@@ -425,21 +503,32 @@ describe("auth.md service_auth registration", () => {
     expect(await write.text()).toContain("data.write")
   })
 
-  it("stops the token when the user loses the workspace", async () => {
-    const { t, ada, bearer, register, poll, confirm, workspaceId } =
+  it("stops the registration when the user's role changes", async () => {
+    const { ada, eve, bearer, form, register, poll, confirm, workspaceId } =
       await setup()
     const { claimToken, userCode, attemptToken } = await register()
     await confirm(ada, attemptToken, userCode)
-    const { access_token } = await read(await poll(claimToken), ClaimTokens)
-    await t.run(async (ctx) => {
-      const member = await ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_workspace_user", (q) =>
-          q.eq("workspaceId", workspaceId).eq("userId", "ada")
-        )
-        .unique()
-      if (member) await ctx.db.patch(member._id, { role: "viewer" })
+    const tokens = await read(await poll(claimToken), ClaimTokens)
+    const setRole = (role: "owner" | "viewer") =>
+      eve.mutation(api.members.setRole, { workspaceId, userId: "ada", role })
+    advance(1_000)
+    await setRole("viewer")
+    expect((await bearer("/agent/workspace", tokens.access_token)).status).toBe(
+      403
+    )
+    // Getting the role back does not bring back access the user approved
+    // under the old role.
+    advance(1_000)
+    await setRole("owner")
+    expect((await bearer("/agent/workspace", tokens.access_token)).status).toBe(
+      403
+    )
+    const exchanged = await form("/oauth2/token", {
+      grant_type: JWT_BEARER_GRANT,
+      assertion: tokens.identity_assertion,
     })
+    // The exchange still issues a token, but the token gets no access.
+    const { access_token } = await read(exchanged, ExchangedTokens)
     expect((await bearer("/agent/workspace", access_token)).status).toBe(403)
   })
 
@@ -456,25 +545,40 @@ describe("auth.md service_auth registration", () => {
     const claims = Schema.decodeUnknownSync(Schema.fromJsonString(JsonObject))(
       atob(payload.replace(/-/g, "+").replace(/_/g, "/"))
     )
+    const exchange = (assertion: string) =>
+      form("/oauth2/token", { grant_type: JWT_BEARER_GRANT, assertion })
+    // Signed with the real key, so only the audience is wrong.
+    const signed = (audience: string) =>
+      new SignJWT({ email: EMAIL, email_verified: true })
+        .setProtectedHeader({
+          alg: "ES256",
+          typ: "oauth-id-jag+jwt",
+          kid: "test",
+        })
+        .setIssuer(SITE)
+        .setAudience(audience)
+        .setSubject(Schema.decodeUnknownSync(Schema.String)(claims.sub))
+        .setIssuedAt()
+        .setExpirationTime("1h")
+        .sign(signingKey)
+    expect((await exchange(await signed(SITE))).status).toBe(200)
+    expect(
+      await errorCode(await exchange(await signed("https://other.example")))
+    ).toEqual({ status: 400, error: "invalid_grant" })
     const encode = (json: string) =>
       btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
     const resigned = (changes: Readonly<Record<string, string>>) =>
       `${header}.${encode(JSON.stringify({ ...claims, ...changes }))}.${signature}`
     const forged = [
-      resigned({ aud: "https://other.example" }),
       resigned({ sub: "someone-else" }),
       `${encode(JSON.stringify({ alg: "none", typ: "oauth-id-jag+jwt" }))}.${payload}.`,
       "not-a-jwt",
     ]
     for (const assertion of forged)
-      expect(
-        await errorCode(
-          await form("/oauth2/token", {
-            grant_type: JWT_BEARER_GRANT,
-            assertion,
-          })
-        )
-      ).toEqual({ status: 400, error: "invalid_grant" })
+      expect(await errorCode(await exchange(assertion))).toEqual({
+        status: 400,
+        error: "invalid_grant",
+      })
     // A new signing key makes old assertions invalid.
     const { privateKey } = await generateKeyPair("ES256", { extractable: true })
     vi.stubEnv(
