@@ -36,6 +36,11 @@ import {
   type AssertionFailure,
 } from "./lib/providerAssertion"
 import { trustedIssuers } from "./lib/trustedIssuers"
+import {
+  SET_CONTENT_TYPE,
+  verifySecurityEvent,
+  type SetFailure,
+} from "./lib/securityEvents"
 
 /**
  * auth.md registration endpoint (`POST /agent/identity`). This service
@@ -518,6 +523,49 @@ export const revoke = httpAction(async (ctx, request) => {
       digest: await sha256(value),
     })
   return new Response(null, { status: 200, headers: noStore })
+})
+
+/** An RFC 8935 error response. */
+function setError(err: SetFailure, description: string) {
+  return Response.json(
+    { err, description },
+    { status: 400, headers: { "Cache-Control": "no-store" } }
+  )
+}
+
+/**
+ * `POST /agent/event/notify`: Security Event Tokens (RFC 8935 push) from a
+ * trusted agent provider. The SET's signature authenticates it. The
+ * assertion-revoked event revokes every registration of that provider user.
+ * Other events are accepted and ignored (RFC 8417).
+ */
+export const securityEvent = httpAction(async (ctx, request) => {
+  const contentType = request.headers.get("Content-Type") ?? ""
+  if (contentType.split(";")[0]?.trim().toLowerCase() !== SET_CONTENT_TYPE)
+    return setError("invalid_request", `Send Content-Type ${SET_CONTENT_TYPE}.`)
+  const text = await request.text()
+  if (new TextEncoder().encode(text).length > 16 * 1024)
+    return setError("invalid_request", "The SET is too large.")
+  const now = Date.now()
+  const verified = await verifySecurityEvent(text.trim(), issuer(), now)
+  if (verified.status === "invalid")
+    return setError(verified.error, "The SET was not accepted.")
+  try {
+    if (verified.revokesAssertions)
+      await ctx.runMutation(internal.agentRegistrations.revokeByProvider, {
+        issuer: verified.provider.issuer,
+        subject: verified.subject,
+        jti: verified.jti,
+        replayExpiresAt: verified.replayExpiresAt,
+        now,
+      })
+  } catch {
+    return new Response(null, {
+      status: 503,
+      headers: { "Retry-After": "60" },
+    })
+  }
+  return new Response(null, { status: 202 })
 })
 
 /** `GET /.well-known/jwks.json`: the key that signs identity assertions. */

@@ -655,3 +655,64 @@ export const revokeRegistration = mutation({
     return null
   },
 })
+
+const providerRevokeResult = v.union(
+  v.literal("duplicate"),
+  v.object({ status: v.literal("done"), revoked: v.number() })
+)
+
+/**
+ * Handles a provider's assertion-revoked security event. Every registration
+ * that the provider user registered stops working: a claimed one is
+ * revoked, with its access tokens (see convex/lib/agentGrant.ts), and a
+ * pending one expires, so nobody can claim it. A repeated event (same
+ * `jti`) changes nothing.
+ */
+export const revokeByProvider = internalMutation({
+  args: {
+    issuer: v.string(),
+    subject: v.string(),
+    jti: v.string(),
+    replayExpiresAt: v.number(),
+    now: v.number(),
+  },
+  returns: providerRevokeResult,
+  handler: async (ctx, args): Promise<Infer<typeof providerRevokeResult>> => {
+    if (!(await recordJti(ctx, args.issuer, args.jti, args.replayExpiresAt)))
+      return "duplicate"
+    let revoked = 0
+    const registrations = ctx.db
+      .query("agentRegistrations")
+      .withIndex("by_providerIssuer_and_providerSubject", (q) =>
+        q
+          .eq("provider.issuer", args.issuer)
+          .eq("provider.subject", args.subject)
+      )
+    for await (const registration of registrations) {
+      if (registration.status === "pending") {
+        if (registration.claimExpiresAt > args.now)
+          await ctx.db.patch(registration._id, { claimExpiresAt: args.now })
+        continue
+      }
+      if (registration.status !== "claimed") continue
+      await ctx.db.replace(registration._id, {
+        ...commonFields(registration),
+        status: "revoked",
+        owner: registration.owner,
+        workspaceId: registration.workspaceId,
+        revokedAt: args.now,
+      })
+      await recordAuditEvent(
+        ctx,
+        registration.workspaceId,
+        { kind: "provider", issuer: args.issuer },
+        {
+          operation: "agentRegistration.revoke",
+          registrationId: registration._id,
+        }
+      )
+      revoked++
+    }
+    return { status: "done", revoked }
+  },
+})
