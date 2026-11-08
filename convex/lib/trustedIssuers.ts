@@ -1,4 +1,5 @@
 import { Option, Schema } from "effect"
+import { env } from "../_generated/server"
 
 /**
  * The pinned trust registry for agent-verified auth.md registration. Only an
@@ -94,7 +95,7 @@ export function parseTrustedIssuers(
 
 /** The configured trusted issuers. Empty unless an operator adds one. */
 export function trustedIssuers() {
-  return parseTrustedIssuers(process.env.AGENT_AUTH_TRUSTED_ISSUERS)
+  return parseTrustedIssuers(env.AGENT_AUTH_TRUSTED_ISSUERS)
 }
 
 /** The trusted issuer whose `issuer` is exactly `iss`, or null. */

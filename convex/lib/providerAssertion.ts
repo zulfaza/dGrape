@@ -72,9 +72,15 @@ const decodeClaims = Schema.decodeUnknownOption(
     jti: Schema.NonEmptyString.check(Schema.isMaxLength(MAX_JTI_LENGTH)),
     iat: Schema.Number,
     exp: Schema.Number,
-    /** When the user last signed in at the provider, in seconds. */
-    auth_time: Schema.Number,
   })
+)
+
+/**
+ * When the user last signed in at the provider, in seconds. Without it,
+ * the agent must ask the user to sign in again (`login_required`).
+ */
+const decodeAuthTime = Schema.decodeUnknownOption(
+  Schema.Struct({ auth_time: Schema.Number })
 )
 
 /** auth.md needs a verified email or phone; this service needs the email. */
@@ -157,7 +163,7 @@ export async function verifyProviderAssertion(
   }
   const claims = decodeClaims(payload)
   if (Option.isNone(claims)) return invalid("invalid_request")
-  const { sub, jti, iat, exp, auth_time: authTime } = claims.value
+  const { sub, jti, iat, exp } = claims.value
   if (exp - iat > MAX_ASSERTION_LIFETIME_SECONDS)
     return invalid("invalid_request")
   if (payload.client_id !== provider.clientId)
@@ -167,6 +173,9 @@ export async function verifyProviderAssertion(
     ? parseLoginHint(verifiedEmail.value.email)
     : null
   if (!email) return invalid("missing_verified_email")
+  const authTimeClaim = decodeAuthTime(payload)
+  if (Option.isNone(authTimeClaim)) return invalid("login_required")
+  const authTime = authTimeClaim.value.auth_time
   const nowSeconds = now / 1000
   if (authTime > nowSeconds + CLOCK_SKEW_SECONDS)
     return invalid("invalid_request")
