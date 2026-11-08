@@ -15,6 +15,7 @@ function actorLabel(actor: AuditActor, byViewer: boolean) {
   const owner = byViewer ? "Your" : "A member's"
   if (actor.kind === "user") return byViewer ? "You" : "A member"
   if (actor.kind === "scheduler") return "A schedule"
+  if (actor.kind === "provider") return "An agent provider"
   return actor.registrationId
     ? `${owner} connected agent`
     : `${owner} agent token`

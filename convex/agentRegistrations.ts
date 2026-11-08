@@ -655,3 +655,99 @@ export const revokeRegistration = mutation({
     return null
   },
 })
+
+/** Registrations per provider revocation transaction. */
+const PROVIDER_REVOKE_BATCH = 100
+
+const providerRevokeArgs = v.object({
+  issuer: v.string(),
+  subject: v.string(),
+  /** Only registrations created up to this time are affected. */
+  cutoff: v.number(),
+  now: v.number(),
+})
+
+/**
+ * Revokes one page of a provider user's registrations made up to `cutoff`,
+ * then schedules the next page. The index sorts by status, so claimed
+ * registrations come first. A claimed registration is revoked, with its
+ * access tokens (see convex/lib/agentGrant.ts). A pending one expires, so
+ * nobody can claim it.
+ */
+async function revokeProviderPage(
+  ctx: MutationCtx,
+  args: Infer<typeof providerRevokeArgs>,
+  cursor: string | null
+) {
+  const page = await ctx.db
+    .query("agentRegistrations")
+    .withIndex(
+      "by_providerIssuer_and_providerSubject_and_status_and_loginHint",
+      (q) =>
+        q
+          .eq("provider.issuer", args.issuer)
+          .eq("provider.subject", args.subject)
+    )
+    .paginate({ numItems: PROVIDER_REVOKE_BATCH, cursor })
+  for (const registration of page.page) {
+    if (registration._creationTime > args.cutoff) continue
+    if (registration.status === "pending") {
+      if (registration.claimExpiresAt > args.now)
+        await ctx.db.patch(registration._id, { claimExpiresAt: args.now })
+      continue
+    }
+    if (registration.status !== "claimed") continue
+    await ctx.db.replace(registration._id, {
+      ...commonFields(registration),
+      status: "revoked",
+      owner: registration.owner,
+      workspaceId: registration.workspaceId,
+      revokedAt: args.now,
+    })
+    await recordAuditEvent(
+      ctx,
+      registration.workspaceId,
+      { kind: "provider", issuer: args.issuer },
+      {
+        operation: "agentRegistration.revoke",
+        registrationId: registration._id,
+      }
+    )
+  }
+  if (!page.isDone)
+    await ctx.scheduler.runAfter(
+      0,
+      internal.agentRegistrations.revokeByProviderPage,
+      { ...args, cursor: page.continueCursor }
+    )
+}
+
+/**
+ * Handles a provider's assertion-revoked security event: every
+ * registration that the provider user made before the event stops working.
+ * A repeated event (same `jti`) changes nothing.
+ */
+export const revokeByProvider = internalMutation({
+  args: {
+    ...providerRevokeArgs.fields,
+    jti: v.string(),
+    replayExpiresAt: v.number(),
+  },
+  returns: v.union(v.literal("duplicate"), v.literal("started")),
+  handler: async (ctx, { jti, replayExpiresAt, ...args }) => {
+    if (!(await recordJti(ctx, args.issuer, jti, replayExpiresAt)))
+      return "duplicate"
+    await revokeProviderPage(ctx, args, null)
+    return "started"
+  },
+})
+
+/** The next page of a provider revocation. */
+export const revokeByProviderPage = internalMutation({
+  args: { ...providerRevokeArgs.fields, cursor: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { cursor, ...args }) => {
+    await revokeProviderPage(ctx, args, cursor)
+    return null
+  },
+})

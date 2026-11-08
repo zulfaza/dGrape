@@ -28,6 +28,7 @@ const Actor = Schema.Union([
     kind: Schema.Literal("scheduler"),
     scheduleId: Schema.String,
   }),
+  Schema.Struct({ kind: Schema.Literal("provider"), issuer: Schema.String }),
 ])
 
 /** The operation name and the IDs, revisions and flags of the change. */

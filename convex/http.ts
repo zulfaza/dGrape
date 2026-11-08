@@ -34,6 +34,7 @@ import {
   register as registerAgent,
   revoke as revokeAgentToken,
   token as agentToken,
+  securityEvent as agentSecurityEvent,
 } from "./agentIdentityHttp"
 import {
   parseAddField,
@@ -597,6 +598,11 @@ http.route({
   handler: protectedResource,
 })
 http.route({ path: "/auth.md", method: "GET", handler: skill })
+http.route({
+  path: "/agent/event/notify",
+  method: "POST",
+  handler: agentSecurityEvent,
+})
 type Credential = {
   grantId: Id<"agentGrants">
   workspaceId: Id<"workspaces">

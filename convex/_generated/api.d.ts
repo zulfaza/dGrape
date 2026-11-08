@@ -82,6 +82,7 @@ import type * as lib_schemaMigrationRuns from "../lib/schemaMigrationRuns.js";
 import type * as lib_schemaMigrations from "../lib/schemaMigrations.js";
 import type * as lib_secretDomain from "../lib/secretDomain.js";
 import type * as lib_secretService from "../lib/secretService.js";
+import type * as lib_securityEvents from "../lib/securityEvents.js";
 import type * as lib_sourceSync from "../lib/sourceSync.js";
 import type * as lib_trustedIssuers from "../lib/trustedIssuers.js";
 import type * as lib_valueGuards from "../lib/valueGuards.js";
@@ -188,6 +189,7 @@ declare const fullApi: ApiFromModules<{
   "lib/schemaMigrations": typeof lib_schemaMigrations;
   "lib/secretDomain": typeof lib_secretDomain;
   "lib/secretService": typeof lib_secretService;
+  "lib/securityEvents": typeof lib_securityEvents;
   "lib/sourceSync": typeof lib_sourceSync;
   "lib/trustedIssuers": typeof lib_trustedIssuers;
   "lib/valueGuards": typeof lib_valueGuards;

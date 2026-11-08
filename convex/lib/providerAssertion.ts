@@ -31,7 +31,7 @@ export const CLOCK_SKEW_SECONDS = 60
 const MAX_ASSERTION_LIFETIME_SECONDS = 10 * 60
 /** How long ago the user may have last signed in at the provider. */
 export const MAX_AUTH_AGE_SECONDS = 60 * 60
-const MAX_JTI_LENGTH = 256
+export const MAX_JTI_LENGTH = 256
 
 /** Why an assertion was refused, as the auth.md error code. */
 export type AssertionFailure =
@@ -103,7 +103,7 @@ function providerKeys(jwksUri: string) {
 }
 
 /** Maps a jose verification error to an auth.md error code. */
-function verificationFailure(error: Error): AssertionFailure {
+function verificationFailure(error: Error): JwtFailure {
   if (error instanceof errors.JWTExpired) return "expired"
   if (error instanceof errors.JWTClaimValidationFailed)
     return error.claim === "aud" ? "invalid_audience" : "invalid_request"
@@ -112,6 +112,64 @@ function verificationFailure(error: Error): AssertionFailure {
   // A bad signature, an unknown `kid`, a disallowed algorithm, or a key set
   // that could not be fetched.
   return "invalid_signature"
+}
+
+/** Why a provider JWT failed the checks that every provider JWT gets. */
+export type JwtFailure = Extract<
+  AssertionFailure,
+  | "invalid_request"
+  | "invalid_issuer"
+  | "invalid_signature"
+  | "expired"
+  | "invalid_audience"
+>
+
+/**
+ * Verifies a JWT that a trusted provider signed for this service
+ * (`audience`): issuer in the registry, signature with a pinned key, `typ`,
+ * `aud`, `exp`, and an `iat` at most `maxAgeSeconds` old and not in the
+ * future. `now` is in milliseconds.
+ */
+export async function verifyTrustedJwt(
+  jwt: string,
+  options: { audience: string; typ: string; maxAgeSeconds: number; now: number }
+): Promise<
+  | { status: "valid"; provider: TrustedIssuer; payload: JWTPayload }
+  | { status: "invalid"; error: JwtFailure }
+> {
+  let unverified: JWTPayload
+  try {
+    unverified = decodeJwt(jwt)
+  } catch {
+    return { status: "invalid", error: "invalid_request" }
+  }
+  const issuer = decodeIssuer(unverified)
+  const provider = Option.isSome(issuer)
+    ? findTrustedIssuer(issuer.value.iss)
+    : null
+  if (!provider) return { status: "invalid", error: "invalid_issuer" }
+  try {
+    const { payload } = await jwtVerify(jwt, providerKeys(provider.jwksUri), {
+      issuer: provider.issuer,
+      audience: options.audience,
+      typ: options.typ,
+      algorithms: ALGORITHMS,
+      clockTolerance: CLOCK_SKEW_SECONDS,
+      // Also rejects an `iat` in the future.
+      maxTokenAge: options.maxAgeSeconds,
+      requiredClaims: ["sub", "jti", "iat"],
+      currentDate: new Date(options.now),
+    })
+    return { status: "valid", provider, payload }
+  } catch (error) {
+    return {
+      status: "invalid",
+      error:
+        error instanceof Error
+          ? verificationFailure(error)
+          : "invalid_signature",
+    }
+  }
 }
 
 /**
@@ -127,40 +185,14 @@ export async function verifyProviderAssertion(
     status: "invalid",
     error,
   })
-  let unverified: JWTPayload
-  try {
-    unverified = decodeJwt(assertion)
-  } catch {
-    return invalid("invalid_request")
-  }
-  const issuer = decodeIssuer(unverified)
-  const provider = Option.isSome(issuer)
-    ? findTrustedIssuer(issuer.value.iss)
-    : null
-  if (!provider) return invalid("invalid_issuer")
-  let payload: JWTPayload
-  try {
-    const verified = await jwtVerify(
-      assertion,
-      providerKeys(provider.jwksUri),
-      {
-        issuer: provider.issuer,
-        audience,
-        typ: ID_JAG_TYPE,
-        algorithms: ALGORITHMS,
-        clockTolerance: CLOCK_SKEW_SECONDS,
-        // Also rejects an `iat` in the future.
-        maxTokenAge: MAX_ASSERTION_LIFETIME_SECONDS,
-        requiredClaims: ["sub", "jti", "iat", "exp"],
-        currentDate: new Date(now),
-      }
-    )
-    payload = verified.payload
-  } catch (error) {
-    return invalid(
-      error instanceof Error ? verificationFailure(error) : "invalid_signature"
-    )
-  }
+  const verified = await verifyTrustedJwt(assertion, {
+    audience,
+    typ: ID_JAG_TYPE,
+    maxAgeSeconds: MAX_ASSERTION_LIFETIME_SECONDS,
+    now,
+  })
+  if (verified.status === "invalid") return invalid(verified.error)
+  const { provider, payload } = verified
   const claims = decodeClaims(payload)
   if (Option.isNone(claims)) return invalid("invalid_request")
   const { sub, jti, iat, exp } = claims.value

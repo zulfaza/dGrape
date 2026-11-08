@@ -32,8 +32,9 @@ const agentActor = v.object({
 })
 
 /**
- * Who made a change: a signed-in user, an agent credential, or a recipe
- * schedule that started a run.
+ * Who made a change: a signed-in user, an agent credential, a recipe
+ * schedule that started a run, or a trusted agent provider that revoked
+ * its user's agent registrations.
  */
 export const auditActorValidator = v.union(
   userActor,
@@ -41,6 +42,11 @@ export const auditActorValidator = v.union(
   v.object({
     kind: v.literal("scheduler"),
     scheduleId: v.id("recipeSchedules"),
+  }),
+  v.object({
+    kind: v.literal("provider"),
+    /** The issuer from AGENT_AUTH_TRUSTED_ISSUERS. */
+    issuer: v.string(),
   })
 )
 export type AuditActor = Infer<typeof auditActorValidator>
