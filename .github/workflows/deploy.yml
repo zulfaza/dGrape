@@ -24,9 +24,9 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   deploy:
-    # Disabled until an owner configures and verifies environment protection.
-    # See docs/deployment.md. Enabling this requires a separate reviewed change.
-    if: ${{ false && github.ref == 'refs/heads/main' && inputs.target == 'production' }}
+    # Manual runs from main only. The production environment's required
+    # reviewers gate every secret-bearing step. See docs/deployment.md.
+    if: ${{ github.ref == 'refs/heads/main' && inputs.target == 'production' }}
     needs: validate
     environment: production
     runs-on: ubuntu-latest
