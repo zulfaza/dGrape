@@ -77,6 +77,14 @@ Convex calls an internal Worker route. The Worker calls back to a Convex HTTP ro
 
 A cleanup job claims a slot only when it is `bound` to a deleted reference. It sets the slot to `clearing` with a new lease, writes the placeholder, and sets the slot to `free`. A clear error sets the slot back to `bound` for a later try. Any other result retires the slot. The job also retires each slot with an expired `writing`, `refreshing` or `clearing` lease. It never claims a slot with an active lease.
 
+The mutation that retires a slot also sets the state of its reference:
+
+- An expired `writing` lease: the reference stays pending. The user submits again into a different slot.
+- An expired `refreshing` lease: the reference is marked "reconnect needed".
+- An expired `clearing` lease of a disconnect: the reference becomes a deleted tombstone. The provider revocation came before the clear, so the token in the slot is already revoked. For an API key with no revocation, the settings page tells the user to revoke the key with the provider.
+
+A retired slot can still hold an old value. When the operator removes retired slots from the deploy config, the operator also deletes their secrets from the store.
+
 ## Decision needed from the user
 
 This design gives the production Worker a token that can create, change, delete and bind **every** Secrets Store secret in the account. This includes the secrets of other projects. Cloudflare has no narrower scope. Approve one of these before implementation:
