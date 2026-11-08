@@ -55,6 +55,7 @@ jobs:
           WORKOS_COOKIE_PASSWORD: ${{ secrets.WORKOS_COOKIE_PASSWORD }}
           WORKOS_REDIRECT_URI: ${{ secrets.WORKOS_REDIRECT_URI }}
           SECRET_BINDING_TOKEN: ${{ secrets.SECRET_BINDING_TOKEN }}
+          RECIPE_DISPATCH_TOKEN: ${{ secrets.RECIPE_DISPATCH_TOKEN }}
       - name: Deploy Convex production backend
         run: pnpm exec convex deploy --typecheck enable
         env:
@@ -72,13 +73,17 @@ jobs:
           WORKOS_COOKIE_PASSWORD: ${{ secrets.WORKOS_COOKIE_PASSWORD }}
           WORKOS_REDIRECT_URI: ${{ secrets.WORKOS_REDIRECT_URI }}
           SECRET_BINDING_TOKEN: ${{ secrets.SECRET_BINDING_TOKEN }}
+          RECIPE_DISPATCH_TOKEN: ${{ secrets.RECIPE_DISPATCH_TOKEN }}
         shell: bash
         run: |
           secret_file="$RUNNER_TEMP/worker-secrets.json"
           trap 'rm -f "$secret_file"' EXIT
           node --input-type=module - "$secret_file" <<'JS'
           import { writeFileSync } from "node:fs"
-          const names = ["WORKOS_CLIENT_ID", "WORKOS_API_KEY", "WORKOS_COOKIE_PASSWORD", "WORKOS_REDIRECT_URI", "SECRET_BINDING_TOKEN"]
-          writeFileSync(process.argv[2], JSON.stringify(Object.fromEntries(names.map(name => [name, process.env[name]]))), { mode: 0o600 })
+          const names = ["WORKOS_CLIENT_ID", "WORKOS_API_KEY", "WORKOS_COOKIE_PASSWORD", "WORKOS_REDIRECT_URI", "SECRET_BINDING_TOKEN", "RECIPE_DISPATCH_TOKEN"]
+          const secrets = Object.fromEntries(names.map(name => [name, process.env[name]]))
+          // The recipe runner calls the backend that this run deployed (set by the preflight).
+          secrets.RECIPE_CONVEX_SITE_URL = process.env.VITE_CONVEX_SITE_URL
+          writeFileSync(process.argv[2], JSON.stringify(secrets), { mode: 0o600 })
           JS
           pnpm exec cf deploy --prebuilt --mode production --worker dfe --provision=false --secrets-file "$secret_file"

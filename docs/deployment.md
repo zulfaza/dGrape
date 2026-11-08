@@ -41,6 +41,7 @@ Do not remove the guard until an owner completes and verifies this setup:
 | Secret | `WORKOS_COOKIE_PASSWORD` | Existing production cookie encryption password |
 | Secret | `WORKOS_REDIRECT_URI` | `https://dfe.makarima.dev/callback` |
 | Secret | `SECRET_BINDING_TOKEN` | At least 32 random characters. Convex sends it to the Worker to read secretRef values. Use the same value in Convex |
+| Secret | `RECIPE_DISPATCH_TOKEN` | At least 32 random characters. The Worker recipe runner sends it to Convex. Use the same value in Convex. The deploy also sets the Worker's `RECIPE_CONVEX_SITE_URL` to the deployment's `.convex.site` URL |
 
 4. Verify existing resources before enabling. The Worker and its custom domain
    must already exist. Review the account-scoped Workers Scripts edit permission
@@ -53,6 +54,8 @@ Do not remove the guard until an owner completes and verifies this setup:
    `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `APP_ORIGIN=https://dfe.makarima.dev`,
    `AGENT_AUTH_CODE_KEY`, `AGENT_AUTH_SIGNING_KEY`, and the artifact component's
    `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
+   For the recipe runner, set `RECIPE_DISPATCH_TOKEN` (the same value as the
+   GitHub environment secret).
    For connector credentials (ADR 0007), also set
    `SECRET_VAULT_PROVIDER=cloudflare`, `SECRET_BINDING_TOKEN` (the same value
    as the GitHub environment secret), and `CONNECTOR_ALLOWED_ORIGINS`. See
