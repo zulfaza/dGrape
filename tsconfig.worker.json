@@ -1,6 +1,10 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/worker.ts", "src/recipe-workflow.ts"],
+  "include": [
+    "src/worker.ts",
+    "src/recipe-workflow.ts",
+    "src/secret-bindings.ts"
+  ],
   "exclude": [],
   "compilerOptions": {
     "lib": ["ES2022"],
