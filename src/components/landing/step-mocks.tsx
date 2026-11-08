@@ -58,7 +58,7 @@ function useSequence(length: number, active: boolean) {
   return reduced ? length : step
 }
 
-function MockWindow({
+export function MockWindow({
   title,
   dark = false,
   children,
