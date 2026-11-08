@@ -11,10 +11,10 @@ It uses local demonstration data and does not need WorkOS or Convex credentials.
 `pnpm design-system:export` also builds the portable
 [interactive specimen](./architecture/design/showcase.html).
 
-The [`dfe` agent skill](./skills/dfe/SKILL.md) tells an agent how to use the
-DFE MCP server. It works with any agent. Install it with
-`npx skills add zulfaza/dGrape --skill dfe`, or give the agent the file as
-instructions.
+The [`dfe` agent skill](./skills/dfe/SKILL.md) tells any agent how to use the
+DFE MCP server. Install it with `npx skills add zulfaza/dGrape --skill dfe`, or
+give the agent the file as instructions. To set up the server, see the `/guide`
+page.
 
 ![DFE sloth](./public/favicon.svg)
 

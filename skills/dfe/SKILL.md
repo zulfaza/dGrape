@@ -9,39 +9,11 @@ DFE is a data workspace for agents. The MCP server gives you typed collections, 
 
 ## Connect
 
-Any MCP client that supports the streamable HTTP transport and a custom header can connect. Each client needs the same two values:
-
-- URL: `https://<dfe-origin>/mcp`
-- Header: `Authorization: Bearer <token>` (the token is 64 hex characters)
-
-Get a token in one of two ways:
-
-- **Dashboard.** The user opens agent access in the DFE dashboard, selects the scopes and an expiry, and copies the token.
-- **Agent registration.** Read `https://<dfe-api-origin>/auth.md` and do its steps. The user confirms the request in the browser, and you get an `access_token`. The `authorization_servers` value in `https://<dfe-origin>/.well-known/oauth-protected-resource/mcp` gives the API origin.
-
-Add the server with the MCP configuration of your client. Name the server `dfe`. Examples:
-
-- Claude Code: `claude mcp add --transport http dfe https://<dfe-origin>/mcp --header "Authorization: Bearer <token>"`
-- A JSON `mcpServers` file (Cursor, Claude Desktop, and others):
-
-  ```json
-  {
-    "mcpServers": {
-      "dfe": {
-        "url": "https://<dfe-origin>/mcp",
-        "headers": { "Authorization": "Bearer <token>" }
-      }
-    }
-  }
-  ```
-
-- Codex (`~/.codex/config.toml`): `[mcp_servers.dfe]` with `url = "https://<dfe-origin>/mcp"` and `bearer_token_env_var = "DFE_TOKEN"`.
-
-For other clients, read their MCP documentation. Then restart the session so the tools load, and call `capabilities_list`.
+To set up the MCP server or get a token, read the setup guide: `https://<dfe-origin>/guide#agent` (for example https://dfe.makarima.dev/guide#agent). The guide always has the current steps.
 
 Some clients add a prefix to tool names (for example `mcp__dfe__records_list`). This skill uses the names without a prefix.
 
-Keep the token in the client configuration or an environment variable. Do not write it in chat, in a report, or in a file in a repository. To change scopes, the user makes a new credential and revokes the old one.
+Do not write the token in chat, in a report, or in a file in a repository.
 
 ## Start every task
 
