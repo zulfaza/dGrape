@@ -30,6 +30,7 @@ import {
 } from "./lib/agentRegistration"
 import { OFFERED_SCOPES } from "./lib/agentScope"
 import {
+  CLOCK_SKEW_SECONDS,
   ID_JAG_ASSERTION_TYPE,
   MAX_AUTH_AGE_SECONDS,
   verifyProviderAssertion,
@@ -555,6 +556,9 @@ export const securityEvent = httpAction(async (ctx, request) => {
       await ctx.runMutation(internal.agentRegistrations.revokeByProvider, {
         issuer: verified.provider.issuer,
         subject: verified.subject,
+        // Allow for the provider's clock, so the event covers every
+        // registration that existed when the provider revoked.
+        cutoff: verified.issuedAt + CLOCK_SKEW_SECONDS * 1000,
         jti: verified.jti,
         replayExpiresAt: verified.replayExpiresAt,
         now,

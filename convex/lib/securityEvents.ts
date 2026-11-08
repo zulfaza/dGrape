@@ -21,8 +21,13 @@ export const ASSERTION_REVOKED_EVENT =
 /** The events this service acts on. It ignores other events. */
 export const SUPPORTED_EVENTS = [ASSERTION_REVOKED_EVENT]
 
-/** How old a SET may be. It bounds how long a `jti` stays recorded. */
-const MAX_SET_AGE_SECONDS = 60 * 60
+/**
+ * How old a SET may be when it arrives, so a provider can deliver it after
+ * an outage. It bounds how long a `jti` stays recorded. A SET acts only on
+ * registrations made before its `iat`, so a late or repeated SET cannot
+ * revoke a newer link.
+ */
+const MAX_SET_AGE_SECONDS = 7 * 24 * 60 * 60
 
 /** RFC 8935 error codes. */
 export type SetFailure =
@@ -45,7 +50,11 @@ const decodeSetClaims = Schema.decodeUnknownOption(
     sub: Schema.NonEmptyString,
     jti: Schema.NonEmptyString.check(Schema.isMaxLength(MAX_JTI_LENGTH)),
     iat: Schema.Number,
-    events: Schema.Record(Schema.String, Schema.Unknown),
+    /** RFC 8417: each event value is a JSON object. */
+    events: Schema.Record(
+      Schema.String,
+      Schema.Record(Schema.String, Schema.Unknown)
+    ),
   })
 )
 
@@ -56,6 +65,8 @@ export type VerifiedSet =
       /** The provider's opaque user identifier. */
       subject: string
       jti: string
+      /** When the provider issued the event, in milliseconds. */
+      issuedAt: number
       replayExpiresAt: number
       /** True when the SET has the assertion-revoked event. */
       revokesAssertions: boolean
@@ -85,6 +96,7 @@ export async function verifySecurityEvent(
     provider: verified.provider,
     subject: sub,
     jti,
+    issuedAt: iat * 1000,
     replayExpiresAt: (iat + MAX_SET_AGE_SECONDS + CLOCK_SKEW_SECONDS) * 1000,
     revokesAssertions: Object.hasOwn(events, ASSERTION_REVOKED_EVENT),
   }
