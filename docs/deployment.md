@@ -12,12 +12,13 @@ Convex files. The full `pnpm check` fails on 28 existing files as of main
 has no comparison base and runs the other checks; the selected main commit
 must already have passed PR CI.
 
-## Production is disabled
+## Production setup
 
-`deploy.yml` has only a manual trigger and a literal `false` job guard. Pushes
-and merges cannot deploy. At inspection, this repository had no GitHub
-environments and no main branch protection. No settings were changed.
-Do not remove the guard until an owner completes and verifies this setup:
+`deploy.yml` has only a manual trigger from main. Pushes and merges cannot
+deploy. Each run waits for approval on the `production` environment before
+any secret-bearing step starts. The job guard had a literal `false` until
+#141 removed it. An owner must complete and verify this setup before the
+first run:
 
 1. In Settings → Environments, create `production`. Require reviewers, prevent
    self-review, and disable administrator bypass. Restrict deployment branches
@@ -71,8 +72,8 @@ Do not remove the guard until an owner completes and verifies this setup:
    and JSON secret upload; add bindings/triggers in the owned Cloudflare config.
    Pre-provision new resources through a separately authorized change. Verify
    secret service credentials on their actual runtime (Worker or Convex).
-7. In a separate reviewed PR, remove only `false &&` from the deploy guard.
-   Verify the first manual run waits for a different reviewer's approval before
+7. #141 removed `false &&` from the deploy guard. Verify the first manual
+   run waits for a different reviewer's approval before
    any secret-bearing step starts. Do not approve it without production release
    authorization. A missing environment can be auto-created without protection;
    its name alone is not an approval gate.
